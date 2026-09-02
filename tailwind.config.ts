@@ -9,6 +9,10 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["Valley Sans", "Inter", "sans-serif"],
+        heading: ["Valley Sans", "Inter", "sans-serif"],
+      },
       colors: {
         // --- AutoBlockPlanner AI Color Palette ---
         // Primary — AI Signal Green (Operational, Optimized, Safe, Live)

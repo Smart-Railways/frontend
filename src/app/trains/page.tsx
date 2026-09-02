@@ -443,19 +443,6 @@ export default function TrainsPage() {
               <div className="text-[11px] text-slate-400 mt-1">Throughput duration</div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-gradient-to-br from-[#0d1527] to-[#070b13] border border-[#172642]">
-              <div className="flex items-center justify-between text-slate-400 mb-1">
-                <span className="text-xs font-semibold uppercase tracking-wider">Section Active Status</span>
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              </div>
-              <div className="text-sm font-bold text-emerald-400 flex items-center gap-1.5 mt-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                {currentSection?.status ? "Operational (Kavach)" : "Section Blocked"}
-              </div>
-              <div className="text-[11px] text-slate-400 mt-1">
-                {currentSection?.distance || 0} km distance
-              </div>
-            </div>
           </section>
 
           {/* Trains Table Section */}
