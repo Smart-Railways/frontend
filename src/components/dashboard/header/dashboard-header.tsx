@@ -8,6 +8,7 @@ import {
   Moon,
   ChevronDown,
 } from "lucide-react";
+import { LiveClock } from "@/components/ui/live-clock";
 
 export function DashboardHeader() {
   const [isDark, setIsDark] = useState(true);
@@ -48,11 +49,7 @@ export function DashboardHeader() {
       {/* Right Actions: Time, Notifications, Theme, User */}
       <div className="flex items-center gap-4">
         {/* Date & Time */}
-        <div className="hidden lg:flex items-center gap-2 text-xs font-medium text-slate-300 bg-[#0d1527] px-3 py-1.5 rounded-lg border border-[#172642]">
-          <span>02 Sep 2026</span>
-          <span className="text-slate-600">|</span>
-          <span className="text-blue-400 font-mono">11:24 AM</span>
-        </div>
+        <LiveClock className="hidden lg:flex" />
 
         {/* Notifications */}
         <button

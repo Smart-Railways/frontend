@@ -6,8 +6,14 @@ import {
   getRailwaySectionById,
   getAssets,
   getAssetById,
+  createAsset,
+  updateAsset,
+  deleteAsset,
   getMaintenanceTasks,
   getMaintenanceTaskById,
+  createMaintenanceTask,
+  updateMaintenanceTask,
+  deleteMaintenanceTask,
   getTrains,
   getTrainById,
   getTrainMovements,
@@ -19,6 +25,10 @@ import {
   getFeasibleWindows,
 } from "@/actions";
 import {
+  CreateAssetInput,
+  UpdateAssetInput,
+  CreateMaintenanceTaskInput,
+  UpdateMaintenanceTaskInput,
   CreateTrainMovementInput,
   ConflictCheckInput,
   FeasibleWindowsInput,
@@ -80,6 +90,49 @@ export function useAsset(id?: number | string | null) {
   });
 }
 
+export function useCreateAsset() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: CreateAssetInput) => {
+      const res = await createAsset(data);
+      if (!res.success) throw new Error(res.error || "Failed to create asset");
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["assets"] });
+    },
+  });
+}
+
+export function useUpdateAsset() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number | string; data: CreateAssetInput }) => {
+      const res = await updateAsset(id, data);
+      if (!res.success) throw new Error(res.error || `Failed to update asset #${id}`);
+      return res.data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["assets"] });
+      queryClient.invalidateQueries({ queryKey: ["assets", variables.id] });
+    },
+  });
+}
+
+export function useDeleteAsset() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number | string) => {
+      const res = await deleteAsset(id);
+      if (!res.success) throw new Error(res.error || `Failed to delete asset #${id}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["assets"] });
+    },
+  });
+}
+
 // ==========================================
 // Maintenance Tasks Queries
 // ==========================================
@@ -105,6 +158,49 @@ export function useMaintenanceTask(id?: number | string | null) {
       return res.data ?? null;
     },
     enabled: !!id,
+  });
+}
+
+export function useCreateMaintenanceTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: CreateMaintenanceTaskInput) => {
+      const res = await createMaintenanceTask(data);
+      if (!res.success) throw new Error(res.error || "Failed to create maintenance task");
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["maintenance-tasks"] });
+    },
+  });
+}
+
+export function useUpdateMaintenanceTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number | string; data: CreateMaintenanceTaskInput }) => {
+      const res = await updateMaintenanceTask(id, data);
+      if (!res.success) throw new Error(res.error || `Failed to update maintenance task #${id}`);
+      return res.data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["maintenance-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["maintenance-tasks", variables.id] });
+    },
+  });
+}
+
+export function useDeleteMaintenanceTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number | string) => {
+      const res = await deleteMaintenanceTask(id);
+      if (!res.success) throw new Error(res.error || `Failed to delete maintenance task #${id}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["maintenance-tasks"] });
+    },
   });
 }
 

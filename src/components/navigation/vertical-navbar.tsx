@@ -7,6 +7,7 @@ import {
   Route,
   Train,
   Building2,
+  Wrench,
   Bell,
   Settings,
   ShieldCheck,
@@ -31,12 +32,13 @@ export function VerticalNavbar({
   const pathname = usePathname();
 
   const currentActiveTab =
-    activeTab || (pathname === "/trains" ? "trains" : pathname === "/" ? "routes" : "routes");
+    activeTab || (pathname === "/maintenance" ? "maintenance" : pathname === "/assets" ? "assets" : pathname === "/trains" ? "trains" : pathname === "/" ? "routes" : "routes");
 
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, href: "/" },
-    { id: "routes", label: "Routes", icon: Route, href: "/" },
     { id: "trains", label: "Trains", icon: Train, href: "/trains" },
+    { id: "assets", label: "Assets", icon: Building2, href: "/assets" },
+    { id: "maintenance", label: "Maintenance", icon: Wrench, href: "/maintenance" },
   ];
 
   return (
@@ -122,49 +124,7 @@ export function VerticalNavbar({
           })}
         </nav>
       </div>
-
-      {/* Bottom Network Safety & User Badge */}
-      <div className="p-3 border-t border-[#172642]/80 space-y-3">
-        {!collapsed ? (
-          <div className="p-3 rounded-xl bg-gradient-to-br from-[#0d1527] to-[#09101d] border border-[#172642] text-white">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
-                Kavach 4.0
-              </span>
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.9)] animate-pulse"></span>
-              <span className="text-[10px] text-emerald-300 font-medium">
-                Collision Shield Active
-              </span>
-            </div>
-          </div>
-        ) : (
-          <div className="flex justify-center">
-            <div className="p-2 rounded-xl bg-[#0d1527] border border-emerald-500/30 text-emerald-400" title="Kavach Active">
-              <ShieldCheck className="w-4 h-4" />
-            </div>
-          </div>
-        )}
-
-        {/* User Profile Mini Bar */}
-        <div className={`flex items-center gap-2.5 ${collapsed ? "justify-center" : "px-1"}`}>
-          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-700 to-indigo-600 flex items-center justify-center text-xs font-bold text-white shadow-md border border-blue-400/30 flex-shrink-0">
-            IR
-          </div>
-          {!collapsed && (
-            <div className="overflow-hidden">
-              <span className="text-xs font-bold text-white block truncate">
-                Central Operations
-              </span>
-              <span className="text-[10px] text-slate-400 font-medium block truncate">
-                Rail Bhavan, New Delhi
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
+     
     </aside>
   );
 }

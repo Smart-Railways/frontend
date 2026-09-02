@@ -5,7 +5,8 @@ import { VerticalNavbar } from "@/components/navigation/vertical-navbar";
 import { HorizontalRouteSelector } from "@/components/route-selector/horizontal-route-selector";
 import { IndiaRailwayMap } from "@/components/map/india-railway-map";
 import { NotificationPanel } from "@/components/notifications/notification-panel";
-import { Route, Clock } from "lucide-react";
+import { Route } from "lucide-react";
+import { LiveClock } from "@/components/ui/live-clock";
 
 export default function Home() {
   // Default premier corridor: New Delhi (NDLS) to Mumbai Central (MMCT)
@@ -35,7 +36,12 @@ export default function Home() {
     }
   };
 
-  const handleSelectCorridorFromNotification = (stationId?: string) => {
+  const handleSelectCorridorFromNotification = (stationId?: string, originId?: string) => {
+    if (originId && stationId) {
+      setSourceId(originId);
+      setTargetId(stationId);
+      return;
+    }
     if (!stationId) return;
     // Set as destination from current origin
     if (stationId !== sourceId) {
@@ -73,21 +79,14 @@ export default function Home() {
                   </h1>
                 </div>
               </div>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-slate-400 mt-3">
                 Pan-India corridor planning, automated block scheduling, and real-time network pathfinder.
               </p>
             </div>
 
             {/* Quick System Badges */}
             <div className="flex items-center gap-3">
-             
-
-              <div className="flex items-center gap-2 text-xs font-semibold text-slate-300 bg-[#0d1527] px-3.5 py-1.5 rounded-xl border border-[#172642]">
-                <Clock className="w-3.5 h-3.5 text-blue-400" />
-                <span>02 Sep 2026</span>
-                <span className="text-slate-600">|</span>
-                <span className="text-blue-400 font-mono">11:24 AM</span>
-              </div>
+              <LiveClock />
             </div>
           </header>
 

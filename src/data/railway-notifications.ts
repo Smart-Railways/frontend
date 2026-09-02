@@ -8,6 +8,11 @@ export interface RailwayNotification {
   corridorOrStation: string;
   stationId?: string;
   isRead?: boolean;
+  taskCode?: string;
+  scheduledWindow?: string;
+  status?: "SCHEDULED" | "PENDING" | "IN_PROGRESS" | "COMPLETED";
+  durationMinutes?: number;
+  scheduledDate?: string;
 }
 
 export const INITIAL_NOTIFICATIONS: RailwayNotification[] = [
@@ -20,6 +25,11 @@ export const INITIAL_NOTIFICATIONS: RailwayNotification[] = [
     timestamp: "10 mins ago",
     corridorOrStation: "Kanpur – Prayagraj",
     stationId: "cnb",
+    taskCode: "TMS-842",
+    scheduledWindow: "02:00 AM – 05:30 AM",
+    status: "SCHEDULED",
+    durationMinutes: 210,
+    scheduledDate: "Today",
     isRead: false,
   },
   {
@@ -64,6 +74,27 @@ export const INITIAL_NOTIFICATIONS: RailwayNotification[] = [
     timestamp: "2 hours ago",
     corridorOrStation: "Bhopal – Nagpur",
     stationId: "bpl",
+    taskCode: "TMS-319",
+    scheduledWindow: "01:30 AM – 04:30 AM",
+    status: "SCHEDULED",
+    durationMinutes: 180,
+    scheduledDate: "Tomorrow",
+    isRead: true,
+  },
+  {
+    id: "notif-6",
+    title: "S&T Relay Testing Schedule",
+    description: "Scheduled interlocking relay test and route locking inspection on Down Loop Line.",
+    category: "maintenance",
+    severity: "low",
+    timestamp: "3 hours ago",
+    corridorOrStation: "Pt. Deen Dayal Upadhyaya",
+    stationId: "ddu",
+    taskCode: "TMS-108",
+    scheduledWindow: "11:00 PM – 01:00 AM",
+    status: "SCHEDULED",
+    durationMinutes: 120,
+    scheduledDate: "Tonight",
     isRead: true,
   },
 ];
