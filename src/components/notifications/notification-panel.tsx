@@ -9,7 +9,6 @@ import {
   CheckCircle2,
   X,
   MapPin,
-  Filter,
   CheckCheck,
 } from "lucide-react";
 import {
@@ -43,7 +42,7 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
     return n.category === filter;
   });
 
-  const getCategoryBadge = (category: string, severity: string) => {
+  const getCategoryBadge = (category: string) => {
     switch (category) {
       case "critical":
         return {
@@ -94,16 +93,6 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
           </div>
         </div>
 
-        {unreadCount > 0 && (
-          <button
-            onClick={handleMarkAllRead}
-            title="Mark all as read"
-            className="text-[11px] font-semibold text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
-          >
-            <CheckCheck className="w-3.5 h-3.5" />
-            <span>Mark read</span>
-          </button>
-        )}
       </div>
 
       {/* Filter Tabs */}
@@ -142,8 +131,7 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
           </div>
         ) : (
           filteredNotifications.map((notif) => {
-            const badge = getCategoryBadge(notif.category, notif.severity);
-            const Icon = badge.icon;
+            const badge = getCategoryBadge(notif.category);
 
             return (
               <div

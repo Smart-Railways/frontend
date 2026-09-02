@@ -53,7 +53,7 @@ export function Sparkline({
   const pathD = `M ${points.join(" L ")}`;
   const areaD = `${pathD} L ${width - padding},${height} L ${padding},${height} Z`;
 
-  const { stroke, fill } = COLOR_MAP[color];
+  const { stroke } = COLOR_MAP[color];
 
   return (
     <svg

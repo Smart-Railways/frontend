@@ -10,10 +10,11 @@ import {
   Bell,
   Settings,
   ShieldCheck,
-  Activity,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+
+import { usePathname } from "next/navigation";
 
 interface VerticalNavbarProps {
   activeTab?: string;
@@ -22,25 +23,20 @@ interface VerticalNavbarProps {
 }
 
 export function VerticalNavbar({
-  activeTab = "routes",
+  activeTab,
   onTabChange,
   unreadCount = 3,
 }: VerticalNavbarProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const pathname = usePathname();
+
+  const currentActiveTab =
+    activeTab || (pathname === "/trains" ? "trains" : pathname === "/" ? "routes" : "routes");
 
   const navItems = [
-    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, href: "#" },
-    { id: "routes", label: "Routes", icon: Route, href: "#", active: true },
-    { id: "trains", label: "Trains", icon: Train, href: "#" },
-    { id: "stations", label: "Stations", icon: Building2, href: "#" },
-    {
-      id: "notifications",
-      label: "Notifications",
-      icon: Bell,
-      href: "#",
-      badge: unreadCount > 0 ? unreadCount : undefined,
-    },
-    { id: "settings", label: "Settings", icon: Settings, href: "#" },
+    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, href: "/" },
+    { id: "routes", label: "Routes", icon: Route, href: "/" },
+    { id: "trains", label: "Trains", icon: Train, href: "/trains" },
   ];
 
   return (
@@ -52,7 +48,7 @@ export function VerticalNavbar({
       {/* Top Brand / Logo */}
       <div>
         <div className="h-16 flex items-center justify-between px-4 border-b border-[#172642]">
-          <div className="flex items-center gap-3 overflow-hidden">
+          <Link href="/" className="flex items-center gap-3 overflow-hidden cursor-pointer">
             <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-900 border border-blue-400/30 shadow-lg shadow-blue-950/60 flex-shrink-0">
               <Train className="w-5 h-5 text-white" />
               <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
@@ -76,7 +72,7 @@ export function VerticalNavbar({
                 </span>
               </div>
             )}
-          </div>
+          </Link>
 
           {/* Collapse toggle button */}
           <button
@@ -96,11 +92,12 @@ export function VerticalNavbar({
         <nav className="p-3 space-y-1.5">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isCurrent = (activeTab || "routes") === item.id;
+            const isCurrent = currentActiveTab === item.id;
 
             return (
-              <button
+              <Link
                 key={item.id}
+                href={item.href}
                 onClick={() => onTabChange?.(item.id)}
                 title={collapsed ? item.label : undefined}
                 className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-xs font-semibold transition-all group ${
@@ -120,19 +117,7 @@ export function VerticalNavbar({
                   {!collapsed && <span>{item.label}</span>}
                 </div>
 
-                {/* Badge indicator */}
-                {item.badge !== undefined && (
-                  <span
-                    className={`flex items-center justify-center font-bold rounded-full ${
-                      collapsed
-                        ? "w-2 h-2 bg-red-500"
-                        : "text-[10px] px-2 py-0.5 bg-red-500/20 text-red-400 border border-red-500/40"
-                    }`}
-                  >
-                    {!collapsed && item.badge}
-                  </span>
-                )}
-              </button>
+              </Link>
             );
           })}
         </nav>

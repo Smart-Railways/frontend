@@ -6,7 +6,6 @@ import {
   Bell,
   Sun,
   Moon,
-  Sparkles,
   ChevronDown,
 } from "lucide-react";
 

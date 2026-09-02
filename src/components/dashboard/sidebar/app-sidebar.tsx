@@ -46,10 +46,10 @@ const NAV_ITEMS: NavItem[] = [
   { id: "historical-data", label: "Historical Data", href: "/historical", icon: History },
 ];
 
-const SECONDARY_ITEMS: NavItem[] = [
-  { id: "settings", label: "Settings", href: "/settings", icon: Settings },
-  { id: "support", label: "Support", href: "/support", icon: HelpCircle },
-];
+// const SECONDARY_ITEMS: NavItem[] = [
+//   { id: "settings", label: "Settings", href: "/settings", icon: Settings },
+//   { id: "support", label: "Support", href: "/support", icon: HelpCircle },
+// ];
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -100,7 +100,7 @@ export function AppSidebar() {
         </div>
 
         {/* Secondary Navigation */}
-        {SECONDARY_ITEMS.map((item) => {
+        {/* {SECONDARY_ITEMS.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href;
 
@@ -118,7 +118,7 @@ export function AppSidebar() {
               <span>{item.label}</span>
             </Link>
           );
-        })}
+        })} */}
       </div>
 
       {/* System Health Card with Live Train Graphic */}

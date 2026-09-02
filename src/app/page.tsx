@@ -5,17 +5,7 @@ import { VerticalNavbar } from "@/components/navigation/vertical-navbar";
 import { HorizontalRouteSelector } from "@/components/route-selector/horizontal-route-selector";
 import { IndiaRailwayMap } from "@/components/map/india-railway-map";
 import { NotificationPanel } from "@/components/notifications/notification-panel";
-import {
-  Train,
-  Route,
-  Activity,
-  Layers,
-  Sparkles,
-  Calendar,
-  Clock,
-  Radio,
-  Share2,
-} from "lucide-react";
+import { Route, Clock } from "lucide-react";
 
 export default function Home() {
   // Default premier corridor: New Delhi (NDLS) to Mumbai Central (MMCT)
@@ -90,13 +80,7 @@ export default function Home() {
 
             {/* Quick System Badges */}
             <div className="flex items-center gap-3">
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0d1527] border border-[#172642] text-xs">
-                <span className="text-slate-400 font-medium">AI Dispatcher</span>
-                <span className="flex items-center gap-1 text-emerald-400 font-bold bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-500/30">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                  Active
-                </span>
-              </div>
+             
 
               <div className="flex items-center gap-2 text-xs font-semibold text-slate-300 bg-[#0d1527] px-3.5 py-1.5 rounded-xl border border-[#172642]">
                 <Clock className="w-3.5 h-3.5 text-blue-400" />

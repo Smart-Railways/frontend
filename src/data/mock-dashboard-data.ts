@@ -4,7 +4,6 @@ import {
   NetworkCorridor,
   AIRecommendation,
   CriticalAlert,
-  MaintenanceBlock,
   DisruptionSummary,
   OptimizationImpactStat,
   AIEngineStatus,
