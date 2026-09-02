@@ -1,9 +1,141 @@
-import Image from "next/image";
+"use client";
+
+import React, { useState } from "react";
+import { VerticalNavbar } from "@/components/navigation/vertical-navbar";
+import { HorizontalRouteSelector } from "@/components/route-selector/horizontal-route-selector";
+import { IndiaRailwayMap } from "@/components/map/india-railway-map";
+import { NotificationPanel } from "@/components/notifications/notification-panel";
+import {
+  Train,
+  Route,
+  Activity,
+  Layers,
+  Sparkles,
+  Calendar,
+  Clock,
+  Radio,
+  Share2,
+} from "lucide-react";
 
 export default function Home() {
+  // Default premier corridor: New Delhi (NDLS) to Mumbai Central (MMCT)
+  const [sourceId, setSourceId] = useState<string>("ndls");
+  const [targetId, setTargetId] = useState<string>("mmct");
+  const [activeNavTab, setActiveNavTab] = useState<string>("routes");
+
+  const handleSwapStations = () => {
+    const temp = sourceId;
+    setSourceId(targetId);
+    setTargetId(temp);
+  };
+
+  const handleClearRoute = () => {
+    setSourceId("");
+    setTargetId("");
+  };
+
+  const handleSelectStationFromMap = (stationId: string) => {
+    if (!sourceId) {
+      setSourceId(stationId);
+    } else if (!targetId && stationId !== sourceId) {
+      setTargetId(stationId);
+    } else {
+      // Re-assign target
+      setTargetId(stationId);
+    }
+  };
+
+  const handleSelectCorridorFromNotification = (stationId?: string) => {
+    if (!stationId) return;
+    // Set as destination from current origin
+    if (stationId !== sourceId) {
+      setTargetId(stationId);
+    } else {
+      setSourceId("ndls");
+      setTargetId(stationId);
+    }
+  };
+
   return (
-    <div className='text-red-900 bg-amber-500'>
-      Hi there testing page
+    <div className="min-h-screen bg-[#070b13] text-slate-100 flex flex-col font-sans selection:bg-emerald-500/30 selection:text-emerald-200">
+      {/* 1. Left Fixed Vertical Navbar */}
+      <VerticalNavbar
+        activeTab={activeNavTab}
+        onTabChange={setActiveNavTab}
+        unreadCount={4}
+      />
+
+      {/* Main App Container with Left Navbar Offset & Right Notification Panel */}
+      <div className="flex-1 flex pl-20 lg:pl-64">
+        {/* 2. Center Content Area (Main Focus: India Railway Map & Selector) */}
+        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-7 flex flex-col space-y-5 overflow-y-auto max-w-[1500px] mx-auto w-full">
+          
+          {/* Top Operational Header */}
+          <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#172642]/60">
+            <div>
+              <div className="flex items-center gap-2.5">
+                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 shadow-sm shadow-emerald-950">
+                  <Route className="w-4 h-4" />
+                </div>
+                <div>
+                  <h1 className="text-lg sm:text-xl font-extrabold text-white tracking-tight">
+                    Railway Route Dashboard
+                  </h1>
+                </div>
+              </div>
+              <p className="text-xs text-slate-400 mt-1">
+                Pan-India corridor planning, automated block scheduling, and real-time network pathfinder.
+              </p>
+            </div>
+
+            {/* Quick System Badges */}
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0d1527] border border-[#172642] text-xs">
+                <span className="text-slate-400 font-medium">AI Dispatcher</span>
+                <span className="flex items-center gap-1 text-emerald-400 font-bold bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-500/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Active
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-300 bg-[#0d1527] px-3.5 py-1.5 rounded-xl border border-[#172642]">
+                <Clock className="w-3.5 h-3.5 text-blue-400" />
+                <span>02 Sep 2026</span>
+                <span className="text-slate-600">|</span>
+                <span className="text-blue-400 font-mono">11:24 AM</span>
+              </div>
+            </div>
+          </header>
+
+          {/* 3. Horizontal From -> To Dropdown Selector */}
+          <section aria-label="Route Selector">
+            <HorizontalRouteSelector
+              sourceId={sourceId}
+              targetId={targetId}
+              onSourceChange={setSourceId}
+              onTargetChange={setTargetId}
+              onSwap={handleSwapStations}
+              onClear={handleClearRoute}
+            />
+          </section>
+
+          {/* 4. Center Stage: India Railway Map */}
+          <section aria-label="India Railway Map" className="flex-1 min-h-[600px]">
+            <IndiaRailwayMap
+              sourceId={sourceId}
+              targetId={targetId}
+              onSelectStation={handleSelectStationFromMap}
+            />
+          </section>
+        </main>
+
+        {/* 5. Right-side Notification Panel */}
+        <div className="hidden xl:block">
+          <NotificationPanel
+            onSelectCorridor={handleSelectCorridorFromNotification}
+          />
+        </div>
+      </div>
     </div>
   );
 }
