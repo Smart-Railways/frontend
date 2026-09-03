@@ -7,10 +7,10 @@ const LeafletMapComponent = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="w-full h-[680px] lg:h-[760px] rounded-3xl bg-[#060a13] border border-[#172642] flex items-center justify-center text-slate-400">
+      <div className="w-full h-[600px] lg:h-[680px] rounded-2xl bg-brand-surface border border-brand-border flex items-center justify-center text-brand-muted shadow-sm">
         <div className="flex flex-col items-center gap-3">
-          <RefreshCw className="w-8 h-8 animate-spin text-emerald-400" />
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
+          <RefreshCw className="w-8 h-8 animate-spin text-brand-primary" />
+          <span className="text-xs font-bold uppercase tracking-wider text-brand-secondary">
             Initializing Leaflet Geographic Grid...
           </span>
         </div>

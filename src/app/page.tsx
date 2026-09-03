@@ -12,7 +12,7 @@ export default function Home() {
   // Default premier corridor: New Delhi (NDLS) to Mumbai Central (MMCT)
   const [sourceId, setSourceId] = useState<string>("ndls");
   const [targetId, setTargetId] = useState<string>("mmct");
-  const [activeNavTab, setActiveNavTab] = useState<string>("routes");
+  const [activeNavTab, setActiveNavTab] = useState<string>("dashboard");
 
   const handleSwapStations = () => {
     const temp = sourceId;
@@ -31,7 +31,6 @@ export default function Home() {
     } else if (!targetId && stationId !== sourceId) {
       setTargetId(stationId);
     } else {
-      // Re-assign target
       setTargetId(stationId);
     }
   };
@@ -43,7 +42,6 @@ export default function Home() {
       return;
     }
     if (!stationId) return;
-    // Set as destination from current origin
     if (stationId !== sourceId) {
       setTargetId(stationId);
     } else {
@@ -53,44 +51,44 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-[#070b13] text-slate-100 flex flex-col font-sans selection:bg-emerald-500/30 selection:text-emerald-200">
+    <div className="min-h-screen bg-brand-tertiary text-brand-secondary flex flex-col font-sans selection:bg-brand-primary/20 selection:text-brand-primary">
       {/* 1. Left Fixed Vertical Navbar */}
       <VerticalNavbar
         activeTab={activeNavTab}
         onTabChange={setActiveNavTab}
-        unreadCount={4}
+        unreadCount={1}
       />
 
       {/* Main App Container with Left Navbar Offset & Right Notification Panel */}
       <div className="flex-1 flex pl-20 lg:pl-64">
-        {/* 2. Center Content Area (Main Focus: India Railway Map & Selector) */}
-        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-7 flex flex-col space-y-5 overflow-y-auto max-w-[1500px] mx-auto w-full">
+        {/* 2. Center Content Area */}
+        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-7 flex flex-col space-y-4 max-w-[1600px] mx-auto w-full">
           
           {/* Top Operational Header */}
-          <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#172642]/60">
+          <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-brand-border/80">
             <div>
-              <div className="flex items-center gap-2.5">
-                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 shadow-sm shadow-emerald-950">
-                  <Route className="w-4 h-4" />
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-brand-secondary text-white shadow-xs flex-shrink-0">
+                  <Route className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-lg sm:text-xl font-extrabold text-white tracking-tight">
+                  <h1 className="text-xl sm:text-2xl font-extrabold text-brand-secondary tracking-tight">
                     Railway Route Dashboard
                   </h1>
                 </div>
               </div>
-              <p className="text-xs text-slate-400 mt-3">
+              <p className="text-xs text-brand-muted mt-1.5 font-medium">
                 Pan-India corridor planning, automated block scheduling, and real-time network pathfinder.
               </p>
             </div>
 
-            {/* Quick System Badges */}
+            {/* Live Clock & Date Badge */}
             <div className="flex items-center gap-3">
               <LiveClock />
             </div>
           </header>
 
-          {/* 3. Horizontal From -> To Dropdown Selector */}
+          {/* 3. Horizontal Route Selector */}
           <section aria-label="Route Selector">
             <HorizontalRouteSelector
               sourceId={sourceId}
@@ -103,7 +101,7 @@ export default function Home() {
           </section>
 
           {/* 4. Center Stage: India Railway Map */}
-          <section aria-label="India Railway Map" className="flex-1 min-h-[600px]">
+          <section aria-label="India Railway Map" className="flex-1 min-h-[580px]">
             <IndiaRailwayMap
               sourceId={sourceId}
               targetId={targetId}
