@@ -4,17 +4,12 @@ import React, { useState } from "react";
 import Link from "next/link";
 import {
   LayoutDashboard,
-  Route,
   Train,
   Building2,
   Wrench,
-  Bell,
-  Settings,
-  ShieldCheck,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-
 import { usePathname } from "next/navigation";
 
 interface VerticalNavbarProps {
@@ -31,44 +26,93 @@ export function VerticalNavbar({
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
 
+  // Determine active navigation item from the current route
   const currentActiveTab =
-    activeTab || (pathname === "/maintenance" ? "maintenance" : pathname === "/assets" ? "assets" : pathname === "/trains" ? "trains" : pathname === "/" ? "routes" : "routes");
+    activeTab ||
+    (pathname === "/maintenance"
+      ? "maintenance"
+      : pathname === "/assets"
+      ? "assets"
+      : pathname === "/trains"
+      ? "trains"
+      : pathname === "/"
+      ? "dashboard"
+      : "dashboard");
 
   const navItems = [
-    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, href: "/" },
-    { id: "trains", label: "Trains", icon: Train, href: "/trains" },
-    { id: "assets", label: "Assets", icon: Building2, href: "/assets" },
-    { id: "maintenance", label: "Maintenance", icon: Wrench, href: "/maintenance" },
+    {
+      id: "dashboard",
+      label: "Dashboard",
+      icon: LayoutDashboard,
+      href: "/",
+      color: "green",
+    },
+    {
+      id: "trains",
+      label: "Trains",
+      icon: Train,
+      href: "/trains",
+      color: "blue",
+    },
+    {
+      id: "assets",
+      label: "Assets",
+      icon: Building2,
+      href: "/assets",
+      color: "blue",
+    },
+    {
+      id: "maintenance",
+      label: "Maintenance",
+      icon: Wrench,
+      href: "/maintenance",
+      color: "amber",
+    },
   ];
 
   return (
     <aside
-      className={`fixed top-0 left-0 bottom-0 z-40 bg-[#070b13]/95 backdrop-blur-md border-r border-[#172642] flex flex-col justify-between transition-all duration-300 select-none shadow-2xl ${
-        collapsed ? "w-20" : "w-64"
-      }`}
+      className={`fixed top-0 left-0 bottom-0 z-40
+        bg-[#070b13]
+        border-r border-[#172642]
+        flex flex-col justify-between
+        transition-all duration-300
+        select-none
+        ${collapsed ? "w-20" : "w-64"}`}
     >
-      {/* Top Brand / Logo */}
+      {/* =========================
+          TOP BRAND / LOGO
+      ========================== */}
+
       <div>
         <div className="h-16 flex items-center justify-between px-4 border-b border-[#172642]">
-          <Link href="/" className="flex items-center gap-3 overflow-hidden cursor-pointer">
-            <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-900 border border-blue-400/30 shadow-lg shadow-blue-950/60 flex-shrink-0">
+          <Link
+            href="/"
+            className="flex items-center gap-3 overflow-hidden cursor-pointer"
+          >
+            {/* Logo */}
+            <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-900 border border-blue-400/30 flex-shrink-0">
               <Train className="w-5 h-5 text-white" />
+
+              {/* Status Indicator */}
               <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
               </span>
             </div>
 
+            {/* Brand Text */}
             {!collapsed && (
               <div className="transition-opacity duration-200">
                 <div className="flex items-center gap-1.5">
                   <span className="font-extrabold text-sm tracking-tight text-white">
                     AutoBlock
                   </span>
+
                   <span className="text-emerald-400 font-extrabold text-xs px-1.5 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/30">
                     AI
                   </span>
                 </div>
+
                 <span className="text-[10px] font-semibold text-slate-400 tracking-wider uppercase block">
                   Indian Railways
                 </span>
@@ -76,7 +120,7 @@ export function VerticalNavbar({
             )}
           </Link>
 
-          {/* Collapse toggle button */}
+          {/* Collapse Button */}
           <button
             onClick={() => setCollapsed(!collapsed)}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -90,7 +134,10 @@ export function VerticalNavbar({
           </button>
         </div>
 
-        {/* Navigation Items List */}
+        {/* =========================
+            NAVIGATION
+        ========================== */}
+
         <nav className="p-3 space-y-1.5">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -102,29 +149,48 @@ export function VerticalNavbar({
                 href={item.href}
                 onClick={() => onTabChange?.(item.id)}
                 title={collapsed ? item.label : undefined}
-                className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-xs font-semibold transition-all group ${
-                  isCurrent
-                    ? "bg-gradient-to-r from-emerald-500/20 via-emerald-500/10 to-transparent text-emerald-300 border border-emerald-500/40 shadow-[0_0_15px_-3px_rgba(16,185,129,0.25)]"
-                    : "text-slate-400 hover:text-slate-100 hover:bg-[#0d1527] border border-transparent"
-                }`}
+                className={`
+                  w-full
+                  flex
+                  items-center
+                  justify-between
+                  px-3.5
+                  py-3
+                  rounded-xl
+                  text-xs
+                  font-semibold
+                  transition-colors
+                  group
+                  border
+
+                  ${
+                    isCurrent
+                      ? "bg-[#163A63] text-blue-400 border-[#2563EB]"
+                      : "text-slate-400 bg-transparent border-transparent hover:bg-[#0D1728] hover:text-slate-200"
+                  }
+                `}
               >
                 <div className="flex items-center gap-3.5">
                   <Icon
-                    className={`w-4 h-4 transition-colors ${
-                      isCurrent
-                        ? "text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.8)]"
-                        : "text-slate-500 group-hover:text-slate-300"
-                    }`}
+                    className={`
+                      w-4 h-4
+                      transition-colors
+
+                      ${
+                        isCurrent
+                          ? "text-[#60A5FA]"
+                          : "text-slate-500 group-hover:text-slate-300"
+                      }
+                    `}
                   />
+
                   {!collapsed && <span>{item.label}</span>}
                 </div>
-
               </Link>
             );
           })}
         </nav>
       </div>
-     
     </aside>
   );
 }

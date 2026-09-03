@@ -19,11 +19,9 @@ import {
   Maximize2,
   Train as TrainIcon,
   Clock,
-  Layers,
   Wrench,
   AlertTriangle,
   ExternalLink,
-  ShieldAlert,
 } from "lucide-react";
 import {
   STATIONS,
@@ -39,75 +37,77 @@ interface IndiaLeafletMapProps {
   onSelectStation?: (stationId: string) => void;
 }
 
-// Custom Leaflet DivIcons for Railway Stations along the active corridor
+// Clean, bold, professional Leaflet DivIcons strictly adhering to the 4-color palette
+// No circular glowing rings, no animate-ping, high contrast
 function createStationIcon(
   station: RailwayStation,
   isSource: boolean,
   isTarget: boolean,
-  isOnRoute: boolean,
-  hasMaintenance?: boolean
+  isOnRoute: boolean
 ) {
+  // Origin Station: Primary AI Signal Green (#10B981)
   if (isSource) {
     return L.divIcon({
       className: "custom-leaflet-marker",
       html: `
-        <div class="relative flex flex-col items-center -translate-x-1/2 -translate-y-1/2">
-          <span class="absolute w-9 h-9 rounded-full ${hasMaintenance ? "bg-amber-400" : "bg-emerald-400"} opacity-40 animate-ping"></span>
-          <div class="relative flex items-center justify-center w-7 h-7 rounded-full ${hasMaintenance ? "bg-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.9)]" : "bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.9)]"} border-2 border-white text-white text-[10px] font-black">
+        <div class="relative flex flex-col items-center -translate-x-1/2 -translate-y-1/2 select-none">
+          <div class="flex items-center justify-center px-2 py-0.5 rounded-md bg-[#072ac8] border-2 border-white text-white text-[10px] font-black tracking-wider shadow-md">
             START
           </div>
-          <span class="mt-1 px-2 py-0.5 rounded-md bg-[#070b13]/95 border ${hasMaintenance ? "border-amber-500 text-amber-300" : "border-emerald-500 text-emerald-300"} text-[10px] font-extrabold whitespace-nowrap shadow-xl">
+          <span class="mt-1 px-2 py-0.5 rounded-md bg-[#070b13] border border-[#072ac8] text-[#072ac8] text-[10px] font-extrabold whitespace-nowrap shadow-md">
             ${station.name} (${station.code})
           </span>
         </div>
       `,
-      iconSize: [30, 30],
-      iconAnchor: [15, 15],
+      iconSize: [60, 36],
+      iconAnchor: [30, 18],
     });
   }
 
+  // Destination Station: Secondary Railway Blue (#2563EB)
   if (isTarget) {
     return L.divIcon({
       className: "custom-leaflet-marker",
       html: `
-        <div class="relative flex flex-col items-center -translate-x-1/2 -translate-y-1/2">
-          <span class="absolute w-9 h-9 rounded-full ${hasMaintenance ? "bg-amber-400" : "bg-blue-400"} opacity-40 animate-ping"></span>
-          <div class="relative flex items-center justify-center w-7 h-7 rounded-full ${hasMaintenance ? "bg-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.9)]" : "bg-blue-500 border-2 border-white shadow-[0_0_20px_rgba(59,130,246,0.9)]"} border-2 border-white text-white text-[10px] font-black">
+        <div class="relative flex flex-col items-center -translate-x-1/2 -translate-y-1/2 select-none">
+          <div class="flex items-center justify-center px-2 py-0.5 rounded-md bg-[#072ac8] border-2 border-white text-white text-[10px] font-black tracking-wider shadow-md">
             END
           </div>
-          <span class="mt-1 px-2 py-0.5 rounded-md bg-[#070b13]/95 border ${hasMaintenance ? "border-amber-500 text-amber-300" : "border-blue-500 text-blue-300"} text-[10px] font-extrabold whitespace-nowrap shadow-xl">
+          <span class="mt-1 px-2 py-0.5 rounded-md bg-[#070b13] border border-[#072ac8] text-[#072ac8] text-[10px] font-extrabold whitespace-nowrap shadow-md">
             ${station.name} (${station.code})
           </span>
         </div>
       `,
-      iconSize: [30, 30],
-      iconAnchor: [15, 15],
+      iconSize: [60, 36],
+      iconAnchor: [30, 18],
     });
   }
 
+  // Intermediate Corridor Stations: Solid AI Signal Green dot with clean white border
   if (isOnRoute) {
     return L.divIcon({
       className: "custom-leaflet-marker",
       html: `
-        <div class="relative flex flex-col items-center -translate-x-1/2 -translate-y-1/2 group">
-          <div class="w-4 h-4 rounded-full ${hasMaintenance ? "bg-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.9)]" : "bg-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.9)]"} border-2 border-[#070b13]"></div>
-          <span class="mt-1 px-1.5 py-0.5 rounded bg-[#070b13]/90 border border-[#1e3256] text-[9px] font-bold text-slate-200 whitespace-nowrap shadow-lg">
+        <div class="relative flex flex-col items-center -translate-x-1/2 -translate-y-1/2 group select-none">
+          <div class="w-3.5 h-3.5 rounded-full bg-[#072ac8] border-2 border-white shadow-md"></div>
+          <span class="mt-1 px-1.5 py-0.5 rounded bg-[#070b13] border border-[#172642] text-[9px] font-bold text-slate-200 whitespace-nowrap shadow-md">
             ${station.name}
           </span>
         </div>
       `,
-      iconSize: [16, 16],
-      iconAnchor: [8, 8],
+      iconSize: [40, 26],
+      iconAnchor: [20, 7],
     });
   }
 
+  // Other Stations: Subtle Railway Blue dot
   return L.divIcon({
     className: "custom-leaflet-marker",
     html: `
-      <div class="w-3 h-3 rounded-full bg-slate-400 border border-[#070b13] shadow-sm -translate-x-1/2 -translate-y-1/2"></div>
+      <div class="w-2.5 h-2.5 rounded-full bg-[#3B82F6]/60 border border-[#070b13] -translate-x-1/2 -translate-y-1/2 select-none"></div>
     `,
-    iconSize: [12, 12],
-    iconAnchor: [6, 6],
+    iconSize: [10, 10],
+    iconAnchor: [5, 5],
   });
 }
 
@@ -275,28 +275,13 @@ export function IndiaLeafletMap({
       {/* Top Left Active Corridor Header Badge */}
       <div
         style={{ zIndex: 400 }}
-        className="absolute top-4 left-4 flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#0d1527]/95 backdrop-blur-md border border-[#172642] shadow-2xl pointer-events-auto flex-wrap"
+        className="absolute top-4 left-4 flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-[#0d1527]/95 backdrop-blur-md border border-[#172642] shadow-2xl pointer-events-auto flex-wrap"
       >
-        <span className="relative flex h-2 w-2">
-          <span
-            className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-              hasActiveMaintenance ? "bg-amber-400" : "bg-emerald-400"
-            }`}
-          ></span>
-          <span
-            className={`relative inline-flex rounded-full h-2 w-2 ${
-              hasActiveMaintenance ? "bg-amber-500" : "bg-emerald-500"
-            }`}
-          ></span>
-        </span>
+        <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0"></span>
         <span className="text-xs font-bold text-white tracking-wide">
           Corridor Section:
         </span>
-        <span
-          className={`text-xs font-extrabold ${
-            hasActiveMaintenance ? "text-amber-300" : "text-emerald-400"
-          }`}
-        >
+        <span className="text-xs font-extrabold text-emerald-400">
           {sourceStation ? sourceStation.name : "--"} → {targetStation ? targetStation.name : "--"}
         </span>
         <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#172642] text-slate-300 font-mono font-bold">
@@ -304,9 +289,9 @@ export function IndiaLeafletMap({
         </span>
 
         {hasActiveMaintenance && (
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold animate-pulse flex items-center gap-1">
-            <Wrench className="w-3 h-3" />
-            <span>MAINTENANCE ACTIVE ({activeMaintenanceTasks.length})</span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-red-500 border border-amber-500/30 font-bold flex items-center gap-1">
+            <Wrench className="w-3 h-3 text-red-500" />
+            <span>MAINTENANCE NOTICE ({activeMaintenanceTasks.length})</span>
           </span>
         )}
       </div>
@@ -344,51 +329,51 @@ export function IndiaLeafletMap({
 
         <MapControls onResetView={handleResetIndiaView} />
 
-        {/* HIGHLIGHTED ACTIVE CORRIDOR (Glowing Multi-layer Polyline - Hazard Amber if Maintenance, Neon Emerald if Clear) */}
+        {/* HIGHLIGHTED ACTIVE CORRIDOR (Bold, clean, professional - Primary AI Signal Green) */}
         {routeCoordinates.length > 1 && (
           <>
-            {/* Outer Glow Aura */}
+            {/* Outer high-contrast dark casing */}
             <Polyline
               positions={routeCoordinates}
               pathOptions={{
-                color: hasActiveMaintenance ? "#f59e0b" : "#10b981",
-                weight: hasActiveMaintenance ? 14 : 12,
-                opacity: hasActiveMaintenance ? 0.55 : 0.4,
+                color: "#050811",
+                weight: 8,
+                opacity: 1,
                 lineCap: "round",
                 lineJoin: "round",
               }}
             />
-            {/* Inner Neon Track */}
+            {/* Main bold route line in Primary Blue */}
             <Polyline
               positions={routeCoordinates}
               pathOptions={{
-                color: hasActiveMaintenance ? "#fbbf24" : "#00e676",
-                weight: hasActiveMaintenance ? 6 : 5,
-                opacity: 0.95,
+                color: "#072ac8",
+                weight: 5,
+                opacity: 1,
                 lineCap: "round",
                 lineJoin: "round",
               }}
             />
-            {/* Core Pulse / Hazard Runner */}
+            {/* Center railway track dash */}
             <Polyline
               positions={routeCoordinates}
               pathOptions={{
                 color: "#ffffff",
-                weight: hasActiveMaintenance ? 3 : 2,
-                opacity: 0.95,
-                dashArray: hasActiveMaintenance ? "10, 14" : "8, 16",
-                lineCap: "round",
+                weight: 1.5,
+                opacity: 0.85,
+                dashArray: "6, 12",
+                lineCap: "square",
               }}
             />
           </>
         )}
 
-        {/* ONLY THE STATIONS THAT BELONG TO THIS CORRIDOR */}
+        {/* STATIONS ALONG THE CORRIDOR */}
         {visibleStations.map((station) => {
           const isSource = station.id === sourceId;
           const isTarget = station.id === targetId;
           const isOnRoute = activeStationIdSet.has(station.id);
-          const icon = createStationIcon(station, isSource, isTarget, isOnRoute, hasActiveMaintenance);
+          const icon = createStationIcon(station, isSource, isTarget, isOnRoute);
 
           return (
             <Marker
@@ -402,7 +387,6 @@ export function IndiaLeafletMap({
               <Tooltip direction="top" offset={[0, -10]} opacity={0.95}>
                 <div className="text-[11px] font-bold text-slate-900 px-1">
                   {station.name} ({station.code}) — {station.city}
-                  {hasActiveMaintenance && " [Maintenance Block Zone]"}
                 </div>
               </Tooltip>
 
@@ -424,7 +408,7 @@ export function IndiaLeafletMap({
                   </div>
                   {hasActiveMaintenance && (
                     <div className="mt-1 p-1.5 rounded bg-amber-50 border border-amber-300 text-[10px] text-amber-900 font-medium">
-                      ⚠️ <strong>Maintenance Task:</strong> {primaryMaintenanceTask?.task_code} active in this sector.
+                      ⚠️ <strong>Maintenance Notice:</strong> {primaryMaintenanceTask?.task_code} recorded in this sector.
                     </div>
                   )}
                 </div>
@@ -441,35 +425,19 @@ export function IndiaLeafletMap({
           className="absolute bottom-4 left-4 right-4 pointer-events-auto flex flex-col space-y-2"
         >
           {/* Main Corridor Summary Card */}
-          <div
-            className={`rounded-2xl bg-[#070b13]/95 backdrop-blur-xl border p-4 shadow-2xl transition-all flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-3 duration-300 ${
-              hasActiveMaintenance
-                ? "border-amber-500/50 shadow-amber-950/40"
-                : "border-emerald-500/40 shadow-emerald-950/40"
-            }`}
-          >
+          <div className="rounded-2xl bg-[#070b13]/95 backdrop-blur-xl border border-[#172642] p-4 shadow-2xl transition-all flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-3 duration-300">
             <div className="flex flex-col md:flex-row items-center justify-between gap-4">
               {/* Origin & Destination */}
               <div className="flex items-center gap-3 w-full md:w-auto">
-                <div
-                  className={`flex items-center justify-center w-11 h-11 rounded-xl border shadow-[0_0_15px_rgba(0,0,0,0.4)] ${
-                    hasActiveMaintenance
-                      ? "bg-amber-500/20 border-amber-500/40 text-amber-400"
-                      : "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
-                  }`}
-                >
-                  {hasActiveMaintenance ? (
-                    <Wrench className="w-5 h-5" />
-                  ) : (
-                    <TrainIcon className="w-6 h-6" />
-                  )}
+                <div className="flex items-center justify-center w-11 h-11 rounded-xl border border-emerald-500/30 bg-emerald-500/15 text-emerald-400 shadow-md">
+                  <TrainIcon className="w-6 h-6" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-sm text-white">
                       {sourceStation.name} ({sourceStation.code})
                     </span>
-                    <span className={hasActiveMaintenance ? "text-amber-400 font-bold" : "text-emerald-400 font-bold"}>
+                    <span className="text-emerald-400 font-bold">
                       →
                     </span>
                     <span className="font-bold text-sm text-white">
@@ -479,7 +447,7 @@ export function IndiaLeafletMap({
                   <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400">
                     <span>{activeRoute.stationIds.length} Stations in Corridor</span>
                     <span>•</span>
-                    <span className={hasActiveMaintenance ? "text-amber-300 font-medium" : "text-emerald-300 font-medium"}>
+                    <span className="text-emerald-300 font-medium">
                       {activeRoute.popularTrains[0]}
                     </span>
                   </div>
@@ -513,13 +481,13 @@ export function IndiaLeafletMap({
                     Corridor Status
                   </span>
                   {hasActiveMaintenance ? (
-                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-bold shadow-sm">
-                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-                      <span>Maintenance Block Active</span>
+                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold shadow-sm">
+                      <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                      <span>Maintenance Scheduled</span>
                     </div>
                   ) : (
                     <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-semibold">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                       <span>Clear Signal</span>
                     </div>
                   )}
@@ -527,11 +495,11 @@ export function IndiaLeafletMap({
               </div>
             </div>
 
-            {/* Prominent Active Track Maintenance Banner */}
+            {/* Track Maintenance Notice Banner (Tertiary: Maintenance Amber) */}
             {hasActiveMaintenance && primaryMaintenanceTask && (
-              <div className="p-3 rounded-xl bg-gradient-to-r from-amber-500/15 via-[#0d1527] to-[#070b13] border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in duration-300">
+              <div className="p-3 rounded-xl bg-[#0d1527] border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in duration-300">
                 <div className="flex items-start sm:items-center gap-2.5">
-                  <div className="p-1.5 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-400 mt-0.5 sm:mt-0">
+                  <div className="p-1.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400 mt-0.5 sm:mt-0">
                     <AlertTriangle className="w-4 h-4" />
                   </div>
                   <div>
@@ -542,7 +510,7 @@ export function IndiaLeafletMap({
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-200 border border-amber-500/40 font-bold">
                         {primaryMaintenanceTask.urgency || "HIGH"} URGENCY
                       </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold font-mono">
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40 font-bold font-mono">
                         Status: {primaryMaintenanceTask.task_status || "PENDING"}
                       </span>
                     </div>
@@ -559,7 +527,7 @@ export function IndiaLeafletMap({
                   </div>
                   <Link
                     href="/maintenance"
-                    className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-[#070b13] text-xs font-extrabold transition-all shadow-md flex items-center gap-1.5"
+                    className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-extrabold transition-all shadow-md flex items-center gap-1.5"
                   >
                     <span>Inspect Order</span>
                     <ExternalLink className="w-3 h-3" />

@@ -23,7 +23,7 @@ export const PALETTE = {
     DEFAULT: "#2563EB",
     brand: "#1D4ED8",
     sky: "#38BDF8",
-    cyan: "#06B6D4",
+    cardPrimary: "#072ac8",
     // Mission control dark surfaces
     cockpitBg: "#080C15",
     cardBg: "#0D1527",

@@ -20,7 +20,7 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Valley+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet" />
         <link href="https://fonts.cdnfonts.com/css/valley-sans" rel="stylesheet" />
       </head>
-      <body className="min-h-screen bg-[#080c15] text-slate-100 antialiased selection:bg-emerald-500/30 selection:text-emerald-200 font-sans">
+      <body className="min-h-screen bg-[#738f45] text-slate-100 antialiased selection:bg-emerald-500/30 selection:text-emerald-200 font-sans">
         <QueryProvider>{children}</QueryProvider>
       </body>
     </html>

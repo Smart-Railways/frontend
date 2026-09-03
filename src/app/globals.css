@@ -9,6 +9,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --color-card-primary: #072ac8;
   --color-signal-green: #10b981;
   --color-signal-green-glow: #00e676;
   --color-railway-blue: #2563eb;

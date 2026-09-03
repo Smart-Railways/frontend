@@ -14,6 +14,10 @@ const config: Config = {
         heading: ["Valley Sans", "Inter", "sans-serif"],
       },
       colors: {
+        "card-primary": "#072ac8",
+        card: {
+          primary: "#072ac8",
+        },
         // --- AutoBlockPlanner AI Color Palette ---
         // Primary — AI Signal Green (Operational, Optimized, Safe, Live)
         signal: {
@@ -87,7 +91,7 @@ const config: Config = {
             800: "#991b1b",
             900: "#7f1d1d",
             950: "#450a0a",
-            glow: "#ff334b",
+            // glow: "#ff334b",
           },
         },
       },
