@@ -580,29 +580,21 @@ export default function TrainsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#070b13] text-slate-100 flex flex-col font-sans selection:bg-emerald-500/30 selection:text-emerald-200">
+    /* Brand Cockpit Page Background: bg-brand-cockpit (#080c15 / #070b13) */
+    <div className="min-h-screen bg-brand-cockpit text-slate-100 flex flex-col font-sans selection:bg-emerald-500/30 selection:text-emerald-200">
       {/* 1. Left Vertical Navbar */}
       <VerticalNavbar activeTab={activeNavTab} onTabChange={setActiveNavTab} unreadCount={3} />
 
       {/* Main Content Area */}
       <div className="flex-1 flex pl-20 lg:pl-64">
         <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-7 flex flex-col space-y-6 max-w-[1500px] mx-auto w-full">
-          {/* Header */}
-          <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#172642]/60">
+          {/* Header Bar with Brand Border */}
+          <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-brand-border/60">
             <div>
-              <div className="flex items-center gap-2.5">
-                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-400 shadow-sm shadow-blue-950">
-                  <TrainIcon className="w-4 h-4" />
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
-                    Section Train Timetable (TT)
-                  </h1>
-                  <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-300">
-                    <Timer className="w-3 h-3 text-blue-400" />
-                    <span>30m Cache (Stale-While-Revalidate)</span>
-                  </span>
-                </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
+                  Section Train Timetable
+                </h1>
               </div>
               <p className="text-xs text-slate-400 mt-1">
                 Real-time master timetable schedules, train movement dispatch records, and corridor throughput with 30-minute stale caching.
@@ -610,7 +602,7 @@ export default function TrainsPage() {
             </div>
 
             {/* Quick Actions */}
-            <div className="flex items-center gap-2.5 flex-wrap">
+            {/* <div className="flex items-center gap-2.5 flex-wrap">
               <button
                 onClick={handleRefresh}
                 disabled={isGlobalRefetching}
@@ -649,17 +641,16 @@ export default function TrainsPage() {
                 <Clock className="w-3.5 h-3.5" />
                 <span>Log Movement</span>
               </button>
-            </div>
+            </div> */}
           </header>
 
-          {/* Section and Date Selection Bar */}
-          <section className="p-4 rounded-2xl bg-[#0d1527]/90 border border-[#172642] shadow-xl backdrop-blur-sm space-y-4">
+          {/* Section and Date Selection Bar: Brand Card Surface (bg-brand-card) & Border (border-brand-border) */}
+          <section className="p-4 rounded-2xl bg-brand-card/90 border border-brand-border shadow-xl backdrop-blur-sm space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
               {/* Section Dropdown */}
               <div className="md:col-span-6 space-y-1.5">
                 <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
                   <span className="flex items-center gap-1.5 uppercase tracking-wider">
-                    <Layers className="w-3.5 h-3.5 text-emerald-400" />
                     Select Railway Section / Corridor
                   </span>
                   {currentSection && (
@@ -669,22 +660,20 @@ export default function TrainsPage() {
                   )}
                 </label>
                 <div className="relative">
+                  {/* Brand Cockpit Input Fields: bg-brand-cockpit & border-brand-border */}
                   <select
                     value={activeSectionId || ""}
                     onChange={(e) => setSelectedSectionId(Number(e.target.value))}
                     disabled={loadingSections}
-                    className="w-full bg-[#070b13] border border-[#1e3256] focus:border-emerald-500 text-white text-sm rounded-xl px-3.5 py-2.5 outline-none transition-colors appearance-none cursor-pointer disabled:opacity-50 font-medium"
+                    className="w-full bg-brand-cockpit border border-brand-border focus:border-emerald-500 text-white text-sm rounded-xl px-3.5 py-2.5 outline-none transition-colors cursor-pointer disabled:opacity-50 font-medium"
                   >
                     {sections.map((sec) => (
-                      <option key={sec.id} value={sec.id} className="bg-[#070b13] text-white">
+                      <option key={sec.id} value={sec.id} className="bg-brand-cockpit text-white">
                         {sec.section_name} ({sec.distance} km) • {sec.origin_station} →{" "}
                         {sec.end_station}
                       </option>
                     ))}
                   </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
-                    <SlidersHorizontal className="w-4 h-4" />
-                  </div>
                 </div>
               </div>
 
@@ -692,18 +681,18 @@ export default function TrainsPage() {
               <div className="md:col-span-6 space-y-1.5">
                 <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
                   <span className="flex items-center gap-1.5 uppercase tracking-wider">
-                    <CalendarIcon className="w-3.5 h-3.5 text-blue-400" />
                     Operating Day Schedule
                   </span>
                   <span className="text-[10px] text-blue-300 font-mono">
                     Day: {DAYS_FULL[selectedDayIndex]}
                   </span>
                 </label>
+                {/* Date Controls: bg-brand-cockpit & hover:bg-brand-cardHover */}
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handlePrevDay}
                     title="Previous Day"
-                    className="p-2.5 rounded-xl bg-[#070b13] border border-[#1e3256] hover:bg-[#121d36] text-slate-300 hover:text-white transition-colors cursor-pointer"
+                    className="p-2.5 rounded-xl bg-brand-cockpit border border-brand-border hover:bg-brand-cardHover text-slate-300 hover:text-white transition-colors cursor-pointer"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
@@ -712,20 +701,20 @@ export default function TrainsPage() {
                     type="date"
                     value={selectedDate}
                     onChange={(e) => setSelectedDate(e.target.value)}
-                    className="flex-1 bg-[#070b13] border border-[#1e3256] focus:border-blue-500 text-white text-sm rounded-xl px-3.5 py-2 outline-none font-medium cursor-pointer"
+                    className="flex-1 bg-brand-cockpit border border-brand-border focus:border-blue-500 text-white text-sm rounded-xl px-3.5 py-2 outline-none font-medium cursor-pointer"
                   />
 
                   <button
                     onClick={handleNextDay}
                     title="Next Day"
-                    className="p-2.5 rounded-xl bg-[#070b13] border border-[#1e3256] hover:bg-[#121d36] text-slate-300 hover:text-white transition-colors cursor-pointer"
+                    className="p-2.5 rounded-xl bg-brand-cockpit border border-brand-border hover:bg-brand-cardHover text-slate-300 hover:text-white transition-colors cursor-pointer"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </button>
 
                   <button
                     onClick={handleSetToday}
-                    className="px-3 py-2 rounded-xl bg-[#070b13] border border-[#1e3256] hover:bg-[#121d36] text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors whitespace-nowrap cursor-pointer"
+                    className="px-3 py-2 rounded-xl bg-brand-cockpit border border-brand-border hover:bg-brand-cardHover text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors whitespace-nowrap cursor-pointer"
                   >
                     Today
                   </button>
@@ -734,16 +723,15 @@ export default function TrainsPage() {
             </div>
 
             {/* Filter Sub-row */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-[#172642]/60">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-brand-border/60">
               {/* Search Box */}
-              <div className="relative w-full sm:w-80">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <div className="w-full sm:w-80">
                 <input
                   type="text"
                   placeholder="Search train no., name, type..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-[#070b13] border border-[#1e3256] focus:border-emerald-500 text-xs text-white rounded-xl pl-9 pr-3 py-2 outline-none"
+                  className="w-full bg-brand-cockpit border border-brand-border focus:border-emerald-500 text-xs text-white rounded-xl px-3.5 py-2 outline-none"
                 />
               </div>
 
@@ -757,7 +745,7 @@ export default function TrainsPage() {
                       className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all whitespace-nowrap cursor-pointer ${
                         selectedTypeFilter === type
                           ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm"
-                          : "bg-[#070b13] text-slate-400 border-[#172642] hover:text-slate-200"
+                          : "bg-brand-cockpit text-slate-400 border-brand-border hover:text-slate-200"
                       }`}
                     >
                       {type === "VB" ? "Vande Bharat" : type}
@@ -769,24 +757,21 @@ export default function TrainsPage() {
                   onClick={() => setRunningTodayOnly(!runningTodayOnly)}
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all whitespace-nowrap cursor-pointer ${
                     runningTodayOnly
-                      ? "bg-blue-500/20 text-blue-300 border-blue-500/50 shadow-sm"
-                      : "bg-[#070b13] text-slate-400 border-[#172642] hover:text-slate-200"
+                      ? "bg-brand-primary/20 text-blue-300 border-brand-primary/50 shadow-sm"
+                      : "bg-brand-cockpit text-slate-400 border-brand-border hover:text-slate-200"
                   }`}
                 >
-                  ⚡ Runs on {DAYS_FULL[selectedDayIndex]}
+                  Runs on {DAYS_FULL[selectedDayIndex]}
                 </button>
               </div>
             </div>
           </section>
 
-          {/* KPI Stat Cards for Section & Day */}
+          {/* KPI Stat Cards: Minimal & Professional with Brand Primary Color */}
           <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="p-4 rounded-2xl bg-gradient-to-br from-[#0d1527] to-[#070b13] border border-[#172642]">
-              <div className="flex items-center justify-between text-slate-400 mb-1">
-                <span className="text-xs font-semibold uppercase tracking-wider">
-                  Total TT Schedules
-                </span>
-                <TrainIcon className="w-4 h-4 text-emerald-400" />
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-brand-card to-brand-cockpit border border-brand-border">
+              <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                Total TT Schedules
               </div>
               <div className="text-2xl font-black text-white">{stats.total}</div>
               <div className="text-[11px] text-slate-400 mt-1">
@@ -794,25 +779,19 @@ export default function TrainsPage() {
               </div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-gradient-to-br from-[#0d1527] to-[#070b13] border border-[#172642]">
-              <div className="flex items-center justify-between text-slate-400 mb-1">
-                <span className="text-xs font-semibold uppercase tracking-wider">
-                  High Priority Services
-                </span>
-                <Zap className="w-4 h-4 text-amber-400" />
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-brand-card to-brand-cockpit border border-brand-border">
+              <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                High Priority Services
               </div>
-              <div className="text-2xl font-black text-amber-300">{stats.highPriority}</div>
+              <div className="text-2xl font-black text-blue-400">{stats.highPriority}</div>
               <div className="text-[11px] text-slate-400 mt-1">Priority 8-10 Express/VB/Rajdhani</div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-gradient-to-br from-[#0d1527] to-[#070b13] border border-[#172642]">
-              <div className="flex items-center justify-between text-slate-400 mb-1">
-                <span className="text-xs font-semibold uppercase tracking-wider">
-                  Avg Transit Duration
-                </span>
-                <Clock className="w-4 h-4 text-blue-400" />
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-brand-card to-brand-cockpit border border-brand-border">
+              <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                Avg Transit Duration
               </div>
-              <div className="text-2xl font-black text-blue-300">
+              <div className="text-2xl font-black text-blue-400">
                 {stats.avgDuration > 0 ? `${stats.avgDuration} mins` : "--"}
               </div>
               <div className="text-[11px] text-slate-400 mt-1">
@@ -820,24 +799,21 @@ export default function TrainsPage() {
               </div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-gradient-to-br from-[#0d1527] to-[#070b13] border border-[#172642]">
-              <div className="flex items-center justify-between text-slate-400 mb-1">
-                <span className="text-xs font-semibold uppercase tracking-wider">
-                  Avg Corridor Speed
-                </span>
-                <Gauge className="w-4 h-4 text-purple-400" />
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-brand-card to-brand-cockpit border border-brand-border">
+              <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                Avg Corridor Speed
               </div>
-              <div className="text-2xl font-black text-purple-300">
+              <div className="text-2xl font-black text-blue-400">
                 {stats.avgSpeed > 0 ? `${stats.avgSpeed} km/h` : "--"}
               </div>
               <div className="text-[11px] text-slate-400 mt-1">Section operational velocity</div>
             </div>
           </section>
 
-          {/* Trains Table Section */}
-          <section className="rounded-2xl bg-[#0d1527] border border-[#172642] shadow-2xl overflow-hidden">
+          {/* Trains Table Section: Surface bg-brand-card, Header bg-brand-cockpit, Divider divide-brand-border */}
+          <section className="rounded-2xl bg-brand-card border border-brand-border shadow-2xl overflow-hidden">
             {/* Table Header Bar */}
-            <div className="p-4 border-b border-[#172642] flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-[#09101d]">
+            <div className="p-4 border-b border-brand-border flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-brand-cockpit/90">
               <div>
                 <h2 className="text-sm font-bold text-white flex items-center gap-2">
                   <span>Section Timetable:</span>
@@ -854,7 +830,7 @@ export default function TrainsPage() {
               </div>
 
               <div className="flex items-center gap-3 text-xs text-slate-400 font-mono">
-                <span className="px-2 py-0.5 rounded bg-[#070b13] border border-[#172642] text-amber-300">
+                <span className="px-2 py-0.5 rounded bg-brand-cockpit border border-brand-border text-amber-300">
                   REST: /railways/schedules/ & /railways/train-movements/
                 </span>
                 <span className="font-bold text-white">
@@ -866,7 +842,7 @@ export default function TrainsPage() {
             {/* Main Table */}
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-[#070b13]/80 text-slate-400 font-bold uppercase tracking-wider border-b border-[#172642]">
+                <thead className="bg-brand-cockpit/80 text-slate-400 font-bold uppercase tracking-wider border-b border-brand-border">
                   <tr>
                     <th className="py-3 px-4">Train # & Name</th>
                     <th className="py-3 px-4">Type</th>
@@ -880,7 +856,7 @@ export default function TrainsPage() {
                     <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#172642]/60">
+                <tbody className="divide-y divide-brand-border/60">
                   {isGlobalLoading ? (
                     <tr>
                       <td colSpan={10} className="py-16 text-center text-slate-400">
@@ -914,7 +890,7 @@ export default function TrainsPage() {
                             </button>
                             <button
                               onClick={() => handleOpenMovementModal()}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#121d36] hover:bg-[#1a2b4f] border border-[#1e3256] text-xs font-semibold text-blue-300 transition-colors cursor-pointer"
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-cardHover hover:bg-brand-accent border border-brand-border text-xs font-semibold text-blue-300 transition-colors cursor-pointer"
                             >
                               <Clock className="w-3.5 h-3.5" />
                               Log Movement
@@ -928,26 +904,21 @@ export default function TrainsPage() {
                       return (
                         <tr
                           key={item.id}
-                          className="hover:bg-[#121d36]/60 transition-colors group"
+                          className="hover:bg-brand-cardHover/60 transition-colors group"
                         >
                           {/* Train Number & Name */}
                           <td className="py-3.5 px-4">
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-8 h-8 rounded-lg bg-[#070b13] border border-[#1e3256] flex items-center justify-center text-blue-400 font-mono font-bold group-hover:border-blue-400/50 transition-colors">
-                                <TrainIcon className="w-4 h-4" />
+                            <div>
+                              <div className="font-extrabold text-white text-sm font-mono flex items-center gap-1.5">
+                                <span>{item.trainNumber}</span>
+                                {item.scheduleId && (
+                                  <span className="text-[10px] font-sans font-normal text-slate-500">
+                                    #TT-{item.scheduleId}
+                                  </span>
+                                )}
                               </div>
-                              <div>
-                                <div className="font-extrabold text-white text-sm font-mono flex items-center gap-1.5">
-                                  <span>{item.trainNumber}</span>
-                                  {item.scheduleId && (
-                                    <span className="text-[10px] font-sans font-normal text-slate-500">
-                                      #TT-{item.scheduleId}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="text-slate-300 font-medium text-xs">
-                                  {item.trainName}
-                                </div>
+                              <div className="text-slate-300 font-medium text-xs">
+                                {item.trainName}
                               </div>
                             </div>
                           </td>
@@ -1028,11 +999,11 @@ export default function TrainsPage() {
                                     className={`w-4 h-4 rounded text-[9px] font-bold flex items-center justify-center ${
                                       isSelectedDay
                                         ? runs
-                                          ? "bg-blue-500 text-white ring-1 ring-white shadow-sm"
+                                          ? "bg-brand-primary text-white ring-1 ring-white shadow-sm"
                                           : "bg-slate-700 text-slate-400"
                                         : runs
                                         ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                                        : "bg-[#070b13] text-slate-600 border border-[#172642]"
+                                        : "bg-brand-cockpit text-slate-600 border border-brand-border"
                                     }`}
                                   >
                                     {dayLabel}
@@ -1077,14 +1048,14 @@ export default function TrainsPage() {
                             <div className="flex items-center justify-end gap-1.5">
                               <button
                                 onClick={() => setInspectItem(item)}
-                                className="p-1.5 rounded-lg bg-[#070b13] hover:bg-[#1a2b4f] border border-[#1e3256] text-slate-300 hover:text-white transition-colors"
+                                className="p-1.5 rounded-lg bg-brand-cockpit hover:bg-brand-primary/20 border border-brand-border text-slate-300 hover:text-white transition-colors"
                                 title="Inspect Full TT Details"
                               >
                                 <Eye className="w-3.5 h-3.5 text-blue-400" />
                               </button>
                               <button
                                 onClick={() => handleOpenMovementModal(item)}
-                                className="p-1.5 rounded-lg bg-[#070b13] hover:bg-[#1a2b4f] border border-[#1e3256] text-slate-300 hover:text-white transition-colors"
+                                className="p-1.5 rounded-lg bg-brand-cockpit hover:bg-brand-primary/20 border border-brand-border text-slate-300 hover:text-white transition-colors"
                                 title="Log / Update Live Movement"
                               >
                                 <Clock className="w-3.5 h-3.5 text-emerald-400" />
@@ -1102,13 +1073,13 @@ export default function TrainsPage() {
         </main>
       </div>
 
-      {/* MODAL 1: Inspect Train Timetable Entry */}
+      {/* MODAL 1: Inspect Train Timetable Entry (bg-brand-card & border-brand-border) */}
       {inspectItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#0d1527] border border-[#172642] rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-[#172642]">
+          <div className="bg-brand-card border border-brand-border rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-brand-border">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-blue-500/15 text-blue-400 border border-blue-500/30">
+                <div className="p-2 rounded-xl bg-brand-primary/15 text-blue-400 border border-brand-primary/30">
                   <TrainIcon className="w-5 h-5" />
                 </div>
                 <div>
@@ -1128,23 +1099,23 @@ export default function TrainsPage() {
               </button>
             </div>
 
-            {/* Timetable Parameters Grid */}
+            {/* Timetable Parameters Grid: bg-brand-cockpit & border-brand-border */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-              <div className="p-3 rounded-xl bg-[#070b13] border border-[#172642]">
+              <div className="p-3 rounded-xl bg-brand-cockpit border border-brand-border">
                 <span className="text-slate-400 block text-[10px] uppercase">Service Type</span>
                 <span className="font-bold text-white mt-0.5 block">{inspectItem.trainType}</span>
               </div>
-              <div className="p-3 rounded-xl bg-[#070b13] border border-[#172642]">
+              <div className="p-3 rounded-xl bg-brand-cockpit border border-brand-border">
                 <span className="text-slate-400 block text-[10px] uppercase">Priority Rating</span>
                 <span className="font-bold text-amber-400 mt-0.5 block">
                   {inspectItem.priority} / 10
                 </span>
               </div>
-              <div className="p-3 rounded-xl bg-[#070b13] border border-[#172642]">
+              <div className="p-3 rounded-xl bg-brand-cockpit border border-brand-border">
                 <span className="text-slate-400 block text-[10px] uppercase">Section Corridor</span>
                 <span className="font-bold text-white mt-0.5 block">{inspectItem.sectionName}</span>
               </div>
-              <div className="p-3 rounded-xl bg-[#070b13] border border-[#172642]">
+              <div className="p-3 rounded-xl bg-brand-cockpit border border-brand-border">
                 <span className="text-slate-400 block text-[10px] uppercase">
                   Scheduled Entry (IST)
                 </span>
@@ -1152,7 +1123,7 @@ export default function TrainsPage() {
                   {inspectItem.scheduledEntryTime}
                 </span>
               </div>
-              <div className="p-3 rounded-xl bg-[#070b13] border border-[#172642]">
+              <div className="p-3 rounded-xl bg-brand-cockpit border border-brand-border">
                 <span className="text-slate-400 block text-[10px] uppercase">
                   Scheduled Exit (IST)
                 </span>
@@ -1160,7 +1131,7 @@ export default function TrainsPage() {
                   {inspectItem.scheduledExitTime}
                 </span>
               </div>
-              <div className="p-3 rounded-xl bg-[#070b13] border border-[#172642]">
+              <div className="p-3 rounded-xl bg-brand-cockpit border border-brand-border">
                 <span className="text-slate-400 block text-[10px] uppercase">
                   Transit Duration / Speed
                 </span>
@@ -1170,8 +1141,8 @@ export default function TrainsPage() {
               </div>
             </div>
 
-            {/* Operating Days Breakdown */}
-            <div className="p-3 rounded-xl bg-[#070b13] border border-[#172642] space-y-2">
+            {/* Operating Days Breakdown: bg-brand-cockpit */}
+            <div className="p-3 rounded-xl bg-brand-cockpit border border-brand-border space-y-2">
               <span className="text-xs font-bold text-slate-300 block">Weekly Operating Days</span>
               <div className="flex items-center gap-2 flex-wrap">
                 {DAYS_FULL.map((d, i) => {
@@ -1182,7 +1153,7 @@ export default function TrainsPage() {
                       className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 ${
                         runs
                           ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                          : "bg-[#0d1527] text-slate-600 border border-[#1e3256]"
+                          : "bg-brand-card text-slate-600 border border-brand-border"
                       }`}
                     >
                       <span>{d}</span>
@@ -1193,8 +1164,8 @@ export default function TrainsPage() {
               </div>
             </div>
 
-            {/* Live Movement Dispatch Info */}
-            <div className="p-3 rounded-xl bg-[#070b13] border border-[#172642] space-y-1.5 text-xs">
+            {/* Live Movement Dispatch Info: bg-brand-cockpit */}
+            <div className="p-3 rounded-xl bg-brand-cockpit border border-brand-border space-y-1.5 text-xs">
               <span className="font-bold text-slate-300 block">Live Movement Status</span>
               <div className="grid grid-cols-2 gap-2 text-slate-300 font-mono">
                 <div>
@@ -1213,7 +1184,7 @@ export default function TrainsPage() {
               <summary className="text-slate-400 hover:text-slate-200 cursor-pointer font-bold mb-2">
                 View Raw DRF API Payload
               </summary>
-              <pre className="p-3 rounded-xl bg-[#070b13] border border-[#172642] text-[11px] font-mono text-emerald-300 overflow-x-auto">
+              <pre className="p-3 rounded-xl bg-brand-cockpit border border-brand-border text-[11px] font-mono text-emerald-300 overflow-x-auto">
                 {JSON.stringify(
                   {
                     schedule: inspectItem.rawSchedule,
@@ -1229,7 +1200,7 @@ export default function TrainsPage() {
             <div className="pt-2 flex justify-end">
               <button
                 onClick={() => setInspectItem(null)}
-                className="px-4 py-2 rounded-xl bg-[#070b13] hover:bg-[#121d36] text-xs font-semibold text-slate-300 transition-colors cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-brand-cockpit hover:bg-brand-cardHover text-xs font-semibold text-slate-300 transition-colors cursor-pointer"
               >
                 Close
               </button>
@@ -1238,11 +1209,11 @@ export default function TrainsPage() {
         </div>
       )}
 
-      {/* MODAL 2: Create Master Train Schedule (TT) */}
+      {/* MODAL 2: Create Master Train Schedule (bg-brand-card & border-brand-border) */}
       {isCreateScheduleModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-          <div className="bg-[#0d1527] border border-[#172642] rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#172642]">
+          <div className="bg-brand-card border border-brand-border rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-brand-border">
               <div className="flex items-center gap-2">
                 <CalendarCheck className="w-5 h-5 text-emerald-400" />
                 <h3 className="text-base font-bold text-white">Create Section Timetable Schedule</h3>
@@ -1256,18 +1227,18 @@ export default function TrainsPage() {
             </div>
 
             <form onSubmit={handleCreateScheduleSubmit} className="space-y-4 text-xs">
-              {/* Target Section */}
+              {/* Target Section: bg-brand-cockpit */}
               <div>
                 <label className="font-bold text-slate-300 block mb-1">Target Section</label>
                 <input
                   type="text"
                   disabled
                   value={`${currentSection?.section_name} (${currentSection?.origin_station} → ${currentSection?.end_station})`}
-                  className="w-full bg-[#070b13] border border-[#172642] text-slate-300 text-xs rounded-xl px-3 py-2 cursor-not-allowed"
+                  className="w-full bg-brand-cockpit border border-brand-border text-slate-300 text-xs rounded-xl px-3 py-2 cursor-not-allowed"
                 />
               </div>
 
-              {/* Select Train */}
+              {/* Select Train: bg-brand-cockpit */}
               <div>
                 <label className="font-bold text-slate-300 block mb-1">Select Train</label>
                 <select
@@ -1276,7 +1247,7 @@ export default function TrainsPage() {
                     setNewScheduleData((prev) => ({ ...prev, train: Number(e.target.value) }))
                   }
                   required
-                  className="w-full bg-[#070b13] border border-[#1e3256] text-white text-xs rounded-xl px-3 py-2 outline-none cursor-pointer"
+                  className="w-full bg-brand-cockpit border border-brand-border text-white text-xs rounded-xl px-3 py-2 outline-none cursor-pointer"
                 >
                   {trains.map((t) => (
                     <option key={t.id} value={t.id}>
@@ -1286,7 +1257,7 @@ export default function TrainsPage() {
                 </select>
               </div>
 
-              {/* Entry & Exit Times */}
+              {/* Entry & Exit Times: bg-brand-cockpit */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="font-bold text-slate-300 block mb-1">
@@ -1303,7 +1274,7 @@ export default function TrainsPage() {
                       }))
                     }
                     required
-                    className="w-full bg-[#070b13] border border-[#1e3256] text-white text-xs rounded-xl px-3 py-2 outline-none font-mono"
+                    className="w-full bg-brand-cockpit border border-brand-border text-white text-xs rounded-xl px-3 py-2 outline-none font-mono"
                   />
                 </div>
                 <div>
@@ -1321,7 +1292,7 @@ export default function TrainsPage() {
                       }))
                     }
                     required
-                    className="w-full bg-[#070b13] border border-[#1e3256] text-white text-xs rounded-xl px-3 py-2 outline-none font-mono"
+                    className="w-full bg-brand-cockpit border border-brand-border text-white text-xs rounded-xl px-3 py-2 outline-none font-mono"
                   />
                 </div>
               </div>
@@ -1350,7 +1321,7 @@ export default function TrainsPage() {
                         className={`flex-1 py-1.5 rounded-lg text-center font-bold text-xs transition-colors cursor-pointer ${
                           isSet
                             ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50"
-                            : "bg-[#070b13] text-slate-500 border border-[#172642]"
+                            : "bg-brand-cockpit text-slate-500 border border-brand-border"
                         }`}
                       >
                         {day}
@@ -1361,11 +1332,11 @@ export default function TrainsPage() {
               </div>
 
               {/* Submit Buttons */}
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#172642]">
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-brand-border">
                 <button
                   type="button"
                   onClick={() => setIsCreateScheduleModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-[#070b13] hover:bg-[#121d36] text-xs font-semibold text-slate-300 transition-colors cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-brand-cockpit hover:bg-brand-cardHover text-xs font-semibold text-slate-300 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -1382,11 +1353,11 @@ export default function TrainsPage() {
         </div>
       )}
 
-      {/* MODAL 3: Log Live Train Movement */}
+      {/* MODAL 3: Log Live Train Movement (bg-brand-card & border-brand-border) */}
       {isLogMovementModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-          <div className="bg-[#0d1527] border border-[#172642] rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#172642]">
+          <div className="bg-brand-card border border-brand-border rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-brand-border">
               <div className="flex items-center gap-2">
                 <Clock className="w-5 h-5 text-emerald-400" />
                 <h3 className="text-base font-bold text-white">Log Live Train Movement</h3>
@@ -1400,7 +1371,7 @@ export default function TrainsPage() {
             </div>
 
             <form onSubmit={handleLogMovementSubmit} className="space-y-4 text-xs">
-              {/* Select Schedule */}
+              {/* Select Schedule: bg-brand-cockpit */}
               <div>
                 <label className="font-bold text-slate-300 block mb-1">
                   Select Timetable Schedule
@@ -1414,7 +1385,7 @@ export default function TrainsPage() {
                     }))
                   }
                   required
-                  className="w-full bg-[#070b13] border border-[#1e3256] text-white text-xs rounded-xl px-3 py-2 outline-none cursor-pointer"
+                  className="w-full bg-brand-cockpit border border-brand-border text-white text-xs rounded-xl px-3 py-2 outline-none cursor-pointer"
                 >
                   <option value="">-- Choose schedule --</option>
                   {timetableItems.map((item) => (
@@ -1426,7 +1397,7 @@ export default function TrainsPage() {
                 </select>
               </div>
 
-              {/* Service Date */}
+              {/* Service Date: bg-brand-cockpit */}
               <div>
                 <label className="font-bold text-slate-300 block mb-1">Service Date</label>
                 <input
@@ -1436,11 +1407,11 @@ export default function TrainsPage() {
                     setMovementForm((prev) => ({ ...prev, serviceDate: e.target.value }))
                   }
                   required
-                  className="w-full bg-[#070b13] border border-[#1e3256] text-white text-xs rounded-xl px-3 py-2 outline-none cursor-pointer"
+                  className="w-full bg-brand-cockpit border border-brand-border text-white text-xs rounded-xl px-3 py-2 outline-none cursor-pointer"
                 />
               </div>
 
-              {/* Actual Entry & Exit Times */}
+              {/* Actual Entry & Exit Times: bg-brand-cockpit */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="font-bold text-slate-300 block mb-1">
@@ -1453,7 +1424,7 @@ export default function TrainsPage() {
                       setMovementForm((prev) => ({ ...prev, actualEntry: e.target.value }))
                     }
                     required
-                    className="w-full bg-[#070b13] border border-[#1e3256] text-white text-xs rounded-xl px-3 py-2 outline-none font-mono"
+                    className="w-full bg-brand-cockpit border border-brand-border text-white text-xs rounded-xl px-3 py-2 outline-none font-mono"
                   />
                 </div>
                 <div>
@@ -1466,17 +1437,17 @@ export default function TrainsPage() {
                     onChange={(e) =>
                       setMovementForm((prev) => ({ ...prev, actualExit: e.target.value }))
                     }
-                    className="w-full bg-[#070b13] border border-[#1e3256] text-white text-xs rounded-xl px-3 py-2 outline-none font-mono"
+                    className="w-full bg-brand-cockpit border border-brand-border text-white text-xs rounded-xl px-3 py-2 outline-none font-mono"
                   />
                 </div>
               </div>
 
               {/* Submit Buttons */}
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#172642]">
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-brand-border">
                 <button
                   type="button"
                   onClick={() => setIsLogMovementModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-[#070b13] hover:bg-[#121d36] text-xs font-semibold text-slate-300 transition-colors cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-brand-cockpit hover:bg-brand-cardHover text-xs font-semibold text-slate-300 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>

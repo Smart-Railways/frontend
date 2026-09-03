@@ -9,6 +9,16 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --color-brand-primary: #072ac8;
+  --color-brand-card: #0d1527;
+  --color-brand-card-hover: #121d36;
+  --color-brand-cockpit: #080c15;
+  --color-brand-sidebar: #070b13;
+  --color-brand-border: #172642;
+  --color-brand-accent: #16284a;
+  --color-brand-signal: #10b981;
+  --color-brand-amber: #f59e0b;
+  --color-brand-critical: #ef4444;
   --color-card-primary: #072ac8;
   --color-signal-green: #10b981;
   --color-signal-green-glow: #00e676;
