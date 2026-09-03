@@ -16,6 +16,11 @@ import {
   deleteMaintenanceTask,
   getTrains,
   getTrainById,
+  getTrainSchedules,
+  getTrainScheduleById,
+  createTrainSchedule,
+  updateTrainSchedule,
+  deleteTrainSchedule,
   getTrainMovements,
   getTrainMovementById,
   createTrainMovement,
@@ -29,10 +34,20 @@ import {
   UpdateAssetInput,
   CreateMaintenanceTaskInput,
   UpdateMaintenanceTaskInput,
+  CreateTrainScheduleInput,
+  UpdateTrainScheduleInput,
   CreateTrainMovementInput,
   ConflictCheckInput,
   FeasibleWindowsInput,
 } from "@/types";
+
+// ==========================================
+// 30 Minutes Caching Configuration (TanStack Query)
+// ==========================================
+// 30 minutes in milliseconds = 30 * 60 * 1000 = 1,800,000 ms
+export const TIMETABLE_STALE_TIME = 30 * 60 * 1000;
+// 60 minutes garbage collection time retention
+export const TIMETABLE_GC_TIME = 60 * 60 * 1000;
 
 // ==========================================
 // Sections Queries
@@ -46,6 +61,9 @@ export function useRailwaySections() {
       if (!res.success) throw new Error(res.error || "Failed to fetch railway sections");
       return res.data ?? [];
     },
+    staleTime: TIMETABLE_STALE_TIME,
+    gcTime: TIMETABLE_GC_TIME,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -59,6 +77,9 @@ export function useRailwaySection(id?: number | string | null) {
       return res.data ?? null;
     },
     enabled: !!id,
+    staleTime: TIMETABLE_STALE_TIME,
+    gcTime: TIMETABLE_GC_TIME,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -216,6 +237,9 @@ export function useTrains() {
       if (!res.success) throw new Error(res.error || "Failed to fetch trains");
       return res.data ?? [];
     },
+    staleTime: TIMETABLE_STALE_TIME,
+    gcTime: TIMETABLE_GC_TIME,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -229,8 +253,88 @@ export function useTrain(id?: number | string | null) {
       return res.data ?? null;
     },
     enabled: !!id,
+    staleTime: TIMETABLE_STALE_TIME,
+    gcTime: TIMETABLE_GC_TIME,
+    refetchOnWindowFocus: false,
   });
 }
+
+// ==========================================
+// Train Schedules (Master Time Table TT) Queries & Mutations
+// ==========================================
+
+export function useTrainSchedules() {
+  return useQuery({
+    queryKey: ["train-schedules"],
+    queryFn: async () => {
+      const res = await getTrainSchedules();
+      if (!res.success) throw new Error(res.error || "Failed to fetch train schedules");
+      return res.data ?? [];
+    },
+    staleTime: TIMETABLE_STALE_TIME,
+    gcTime: TIMETABLE_GC_TIME,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useTrainSchedule(id?: number | string | null) {
+  return useQuery({
+    queryKey: ["train-schedules", id],
+    queryFn: async () => {
+      if (!id) return null;
+      const res = await getTrainScheduleById(id);
+      if (!res.success) throw new Error(res.error || `Failed to fetch train schedule #${id}`);
+      return res.data ?? null;
+    },
+    enabled: !!id,
+    staleTime: TIMETABLE_STALE_TIME,
+    gcTime: TIMETABLE_GC_TIME,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useCreateTrainSchedule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: CreateTrainScheduleInput) => {
+      const res = await createTrainSchedule(data);
+      if (!res.success) throw new Error(res.error || "Failed to create train schedule");
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["train-schedules"] });
+    },
+  });
+}
+
+export function useUpdateTrainSchedule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number | string; data: CreateTrainScheduleInput }) => {
+      const res = await updateTrainSchedule(id, data);
+      if (!res.success) throw new Error(res.error || `Failed to update train schedule #${id}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["train-schedules"] });
+    },
+  });
+}
+
+export function useDeleteTrainSchedule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number | string) => {
+      const res = await deleteTrainSchedule(id);
+      if (!res.success) throw new Error(res.error || `Failed to delete train schedule #${id}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["train-schedules"] });
+    },
+  });
+}
+
 
 // ==========================================
 // Train Movements Queries & Mutations
@@ -244,6 +348,9 @@ export function useTrainMovements() {
       if (!res.success) throw new Error(res.error || "Failed to fetch train movements");
       return res.data ?? [];
     },
+    staleTime: TIMETABLE_STALE_TIME,
+    gcTime: TIMETABLE_GC_TIME,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -257,6 +364,9 @@ export function useTrainMovement(id?: number | string | null) {
       return res.data ?? null;
     },
     enabled: !!id,
+    staleTime: TIMETABLE_STALE_TIME,
+    gcTime: TIMETABLE_GC_TIME,
+    refetchOnWindowFocus: false,
   });
 }
 
