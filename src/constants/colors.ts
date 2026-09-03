@@ -1,38 +1,32 @@
 /**
- * AutoBlockPlanner AI Dashboard - Color Tokens
+ * AutoBlockPlanner AI Dashboard - Core Brand Palette Design System
  * 
- * Note: Colors are fully integrated into tailwind.config.ts & globals.css!
- * Use Tailwind classes directly:
- *   - bg-brand-primary, bg-brand-card, bg-brand-cockpit, bg-brand-sidebar
- *   - border-brand-border, bg-brand-accent, bg-brand-signal, etc.
+ * Primary (Royal Blue): #2563EB - Main actions, active states, route, links
+ * Secondary (Charcoal): #171A1F - Sidebar, headings, dark UI elements
+ * Tertiary (Cream): #F8F5EE - Main background
+ * Surface (Warm White): #FFFDF9 - Cards, panels, inputs
+ * Border (Soft Beige): #E7E2D8 - Borders/dividers
+ * Muted (Slate Gray): #64748B - Secondary text
+ * Blue Light (Pale Blue): #DBEAFE - Selected/hover backgrounds
  */
 
 export const PALETTE = {
-  brandPrimary: "#072ac8",
-  brandCard: "#0d1527",
-  brandCockpit: "#080c15",
-  brandSidebar: "#070b13",
-  brandBorder: "#172642",
-  brandAccent: "#16284a",
-  signalGreen: {
-    DEFAULT: "#10B981",
-    glow: "#00E676",
-    light: "#34D399",
-    dark: "#059669",
-  },
-  railwayBlue: {
-    DEFAULT: "#2563EB",
-    brand: "#1D4ED8",
-    cardPrimary: "#072ac8",
-  },
-  maintenanceAmber: {
-    DEFAULT: "#F59E0B",
-    glow: "#FFB703",
-  },
-  criticalRed: {
-    DEFAULT: "#EF4444",
-    glow: "#FF334B",
-  },
+  primary: "#2563EB",
+  secondary: "#171A1F",
+  tertiary: "#F8F5EE",
+  surface: "#FFFDF9",
+  border: "#E7E2D8",
+  muted: "#64748B",
+  blueLight: "#DBEAFE",
+
+  // Named Aliases
+  royalBlue: "#2563EB",
+  charcoal: "#171A1F",
+  cream: "#F8F5EE",
+  warmWhite: "#FFFDF9",
+  softBeige: "#E7E2D8",
+  slateGray: "#64748B",
+  paleBlue: "#DBEAFE",
 } as const;
 
 export default PALETTE;

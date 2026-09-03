@@ -53,13 +53,10 @@ export function HorizontalRouteSelector({
   const allCorridors = useMemo(() => {
     const list: RailwayCorridorPreset[] = [];
 
-    // Prioritize backend sections from API database
     backendSections.forEach((sec) => {
-      // Clean section name
       let srcStation = getStationByName(sec.origin_station);
       let dstStation = getStationByName(sec.end_station);
 
-      // Try splitting section_name if stations aren't matched directly
       if (!srcStation || !dstStation) {
         const parts = sec.section_name
           .split(/[-–—]/)
@@ -96,7 +93,6 @@ export function HorizontalRouteSelector({
       }
     });
 
-    // Add remaining presets
     AVAILABLE_CORRIDORS.forEach((preset) => {
       const exists = list.some(
         (c) =>
@@ -135,7 +131,6 @@ export function HorizontalRouteSelector({
   const handleSwapClick = () => {
     setIsSwapping(true);
     onSwap();
-
     setTimeout(() => setIsSwapping(false), 300);
   };
 
@@ -144,20 +139,20 @@ export function HorizontalRouteSelector({
   const hasSelection = Boolean(sourceId || targetId);
 
   return (
-    <div className="w-full space-y-2.5">
-      {/* Main Container */}
-      <Card className="p-3 sm:p-4 rounded-2xl bg-[#0d1527]/95 backdrop-blur-md border-[#172642] shadow-2xl flex flex-col space-y-3 gap-0">
+    <div className="w-full border-none">
+      {/* Main Container Card */}
+      <Card className="p-3 sm:p-4 rounded-2xl bg-brand-surface border border-brand-border ring-0 shadow-xs flex flex-col space-y-3">
         {/* Origin / Destination Station Selectors */}
         <div className="flex flex-col md:flex-row items-center gap-2.5 sm:gap-3">
 
           {/* Origin Station Box */}
-          <div className="flex-1 w-full relative flex items-center bg-[#0F2744] border border-[#2563EB] hover:bg-[#123052] hover:border-[#2563EB] focus-within:border-[#2563EB] focus-within:ring-1 focus-within:ring-[#2563EB]/30 rounded-xl px-3.5 py-2.5 transition-all">
-            <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 mr-3 flex-shrink-0">
-              <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.9)] animate-pulse" />
+          <div className="flex-1 w-full relative flex items-center bg-brand-surface border border-brand-border hover:border-brand-primary/50 focus-within:border-brand-primary focus-within:ring-1 focus-within:ring-brand-primary/20 rounded-xl px-3.5 py-2.5 transition-all shadow-xs">
+            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-brand-blue-light text-brand-primary mr-3 flex-shrink-0">
+              <div className="w-3 h-3 rounded-full bg-brand-primary" />
             </div>
 
             <div className="flex-1 min-w-0">
-              <label className="text-[10px] font-bold text-slate-400 tracking-wider block">
+              <label className="text-[11px] font-bold text-brand-muted tracking-wide block">
                 Origin Station
               </label>
 
@@ -165,7 +160,7 @@ export function HorizontalRouteSelector({
                 value={sourceId || ""}
                 onValueChange={(val) => val && onSourceChange(val)}
               >
-                <SelectTrigger className="w-full h-auto p-0 bg-transparent border-0 text-white text-xs font-semibold focus:ring-0 focus-visible:ring-0 focus-visible:border-transparent shadow-none hover:bg-transparent justify-between cursor-pointer">
+                <SelectTrigger className="w-full h-auto p-0 bg-transparent border-0 text-brand-secondary text-xs sm:text-sm font-bold focus:ring-0 focus-visible:ring-0 focus-visible:border-transparent shadow-none hover:bg-transparent justify-between cursor-pointer">
                   <SelectValue placeholder="Choose origin station...">
                     {selectedSource
                       ? `${selectedSource.name} (${selectedSource.code})`
@@ -173,13 +168,13 @@ export function HorizontalRouteSelector({
                   </SelectValue>
                 </SelectTrigger>
 
-                <SelectContent className="bg-[#0d1527] border-[#172642] text-white max-h-60 overflow-y-auto">
+                <SelectContent className="bg-brand-surface border-brand-border text-brand-secondary max-h-60 overflow-y-auto shadow-lg">
                   {corridorStations.map((station) => (
                     <SelectItem
                       key={`src-${station.id}`}
                       value={station.id}
                       disabled={station.id === targetId}
-                      className="text-white focus:bg-[#172642] focus:text-white text-xs cursor-pointer"
+                      className="text-brand-secondary focus:bg-brand-blue-light focus:text-brand-primary text-xs cursor-pointer"
                     >
                       {station.name} ({station.code}) — {station.city}
                     </SelectItem>
@@ -188,14 +183,6 @@ export function HorizontalRouteSelector({
               </Select>
             </div>
 
-            {selectedSource && (
-              <Badge
-                variant="outline"
-                className="hidden sm:inline-flex text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border-emerald-500/30 ml-2"
-              >
-                {selectedSource.code}
-              </Badge>
-            )}
           </div>
 
           {/* Interactive Swap Direction Button */}
@@ -207,26 +194,26 @@ export function HorizontalRouteSelector({
             disabled={!sourceId && !targetId}
             title="Reverse corridor direction"
             aria-label="Reverse corridor direction"
-            className="p-2.5 size-auto rounded-xl bg-[#121c32] hover:bg-[#1a2948] text-slate-300 hover:text-emerald-400 border-[#1e2e4a] hover:border-emerald-500/40 shadow-md transition-all flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed group active:scale-90 cursor-pointer"
+            className="p-2.5 size-auto rounded-xl bg-brand-surface hover:bg-brand-tertiary text-brand-secondary border-brand-border shadow-xs transition-all flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed group active:scale-90 cursor-pointer"
           >
             <ArrowRightLeft
               className={cn(
                 "w-4 h-4 transition-transform duration-300",
                 isSwapping
-                  ? "rotate-180 text-emerald-400"
-                  : "group-hover:rotate-45"
+                  ? "rotate-180 text-brand-primary"
+                  : "group-hover:text-brand-primary"
               )}
             />
           </Button>
 
           {/* Destination Station Box */}
-          <div className="flex-1 w-full relative flex items-center bg-[#0F2744] border border-[#2563EB] hover:bg-[#123052] hover:border-[#2563EB] focus-within:border-[#2563EB] focus-within:ring-1 focus-within:ring-[#2563EB]/30 rounded-xl px-3.5 py-2.5 transition-all">
-            <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-400 mr-3 flex-shrink-0">
-              <MapPin className="w-3.5 h-3.5" />
+          <div className="flex-1 w-full relative flex items-center bg-brand-surface border border-brand-border hover:border-brand-primary/50 focus-within:border-brand-primary focus-within:ring-1 focus-within:ring-brand-primary/20 rounded-xl px-3.5 py-2.5 transition-all shadow-xs">
+            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-brand-blue-light text-brand-primary mr-3 flex-shrink-0">
+              <MapPin className="w-4 h-4 text-brand-primary" />
             </div>
 
             <div className="flex-1 min-w-0">
-              <label className="text-[10px] font-bold text-slate-400 tracking-wider block">
+              <label className="text-[11px] font-bold text-brand-muted tracking-wide block">
                 Destination Station
               </label>
 
@@ -234,7 +221,7 @@ export function HorizontalRouteSelector({
                 value={targetId || ""}
                 onValueChange={(val) => val && onTargetChange(val)}
               >
-                <SelectTrigger className="w-full h-auto p-0 bg-transparent border-0 text-white text-xs font-semibold focus:ring-0 focus-visible:ring-0 focus-visible:border-transparent shadow-none hover:bg-transparent justify-between cursor-pointer">
+                <SelectTrigger className="w-full h-auto p-0 bg-transparent border-0 text-brand-secondary text-xs sm:text-sm font-bold focus:ring-0 focus-visible:ring-0 focus-visible:border-transparent shadow-none hover:bg-transparent justify-between cursor-pointer">
                   <SelectValue placeholder="Choose destination station...">
                     {selectedTarget
                       ? `${selectedTarget.name} (${selectedTarget.code})`
@@ -242,13 +229,13 @@ export function HorizontalRouteSelector({
                   </SelectValue>
                 </SelectTrigger>
 
-                <SelectContent className="bg-[#0d1527] border-[#172642] text-white max-h-60 overflow-y-auto">
+                <SelectContent className="bg-brand-surface border-brand-border text-brand-secondary max-h-60 overflow-y-auto shadow-lg">
                   {corridorStations.map((station) => (
                     <SelectItem
                       key={`dst-${station.id}`}
                       value={station.id}
                       disabled={station.id === sourceId}
-                      className="text-white focus:bg-[#172642] focus:text-white text-xs cursor-pointer"
+                      className="text-brand-secondary focus:bg-brand-blue-light focus:text-brand-primary text-xs cursor-pointer"
                     >
                       {station.name} ({station.code}) — {station.city}
                     </SelectItem>
@@ -256,19 +243,10 @@ export function HorizontalRouteSelector({
                 </SelectContent>
               </Select>
             </div>
-
-            {selectedTarget && (
-              <Badge
-                variant="outline"
-                className="hidden sm:inline-flex text-[10px] font-bold px-2 py-0.5 rounded bg-blue-950/60 text-blue-300 border-blue-500/30 ml-2"
-              >
-                {selectedTarget.code}
-              </Badge>
-            )}
           </div>
 
           {/* Reset Route Action */}
-          <Button
+          {/* <Button
             type="button"
             variant="outline"
             size="sm"
@@ -276,23 +254,22 @@ export function HorizontalRouteSelector({
             disabled={!hasSelection}
             title="Reset selected corridor"
             className={cn(
-              "flex items-center gap-1.5 px-3 py-2.5 rounded-xl border transition-all text-xs font-semibold flex-shrink-0 group h-auto",
+              "flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-brand-border transition-all text-xs font-bold flex-shrink-0 group h-auto",
               hasSelection
-                ? "bg-[#121c32] hover:bg-[#182645] text-slate-300 hover:text-white border-[#1e2e4a] hover:border-slate-500/50 shadow-md cursor-pointer active:scale-95"
-                : "bg-[#0a0f1d] text-slate-600 border-[#152033] cursor-not-allowed opacity-50"
+                ? "bg-brand-surface hover:bg-brand-tertiary text-brand-secondary shadow-xs cursor-pointer active:scale-95"
+                : "bg-brand-surface text-brand-muted opacity-60 cursor-not-allowed"
             )}
           >
             <RotateCcw
               className={cn(
                 "w-3.5 h-3.5 transition-transform duration-300",
                 hasSelection
-                  ? "group-hover:-rotate-90 text-slate-400 group-hover:text-emerald-400"
-                  : "text-slate-600"
+                  ? "group-hover:-rotate-90 text-brand-muted group-hover:text-brand-primary"
+                  : "text-brand-muted"
               )}
             />
-
             <span className="hidden sm:inline">Reset</span>
-          </Button>
+          </Button> */}
         </div>
       </Card>
     </div>

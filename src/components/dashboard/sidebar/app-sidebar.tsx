@@ -16,7 +16,6 @@ import {
   Settings,
   HelpCircle,
 } from "lucide-react";
-import { SystemHealth } from "./system-health";
 
 interface NavItem {
   id: string;
@@ -100,29 +99,10 @@ export function AppSidebar() {
         </div>
 
         {/* Secondary Navigation */}
-        {/* {SECONDARY_ITEMS.map((item) => {
-          const Icon = item.icon;
-          const isActive = pathname === item.href;
-
-          return (
-            <Link
-              key={item.id}
-              href={item.href}
-              className={`flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs font-medium transition-all ${
-                isActive
-                  ? "bg-blue-600/20 text-white"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-[#0d1527]/80"
-              }`}
-            >
-              <Icon className="w-4 h-4 text-slate-500" />
-              <span>{item.label}</span>
-            </Link>
-          );
-        })} */}
+      
       </div>
 
-      {/* System Health Card with Live Train Graphic */}
-      <SystemHealth />
+ 
     </aside>
   );
 }

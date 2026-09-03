@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Clock } from "lucide-react";
+import { Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface LiveClockProps {
@@ -23,11 +23,12 @@ export function LiveClock({ className, showIcon = true, format12Hour = true }: L
 
   if (!now) {
     return (
-      <div className={cn("flex items-center gap-2 text-xs font-semibold text-slate-300 bg-[#0d1527] px-3.5 py-1.5 rounded-xl border border-[#172642]", className)}>
-        {showIcon && <Clock className="w-3.5 h-3.5 text-blue-400 shrink-0" />}
-        <span className="opacity-60">-- --- ----</span>
-        <span className="text-slate-600">|</span>
-        <span className="text-blue-400 font-mono opacity-60">--:--:-- --</span>
+      <div className={cn("flex items-center gap-2.5 text-xs font-medium bg-brand-surface px-3 py-1.5 rounded-xl border border-brand-border shadow-sm", className)}>
+        {showIcon && <Calendar className="w-4 h-4 text-brand-secondary shrink-0" />}
+        <span className="text-brand-secondary font-semibold">-- --- ----</span>
+        <span className="text-brand-primary bg-brand-blue-light px-2 py-0.5 rounded-md font-mono text-xs font-bold border border-brand-primary/20">
+          --:--:-- --
+        </span>
       </div>
     );
   }
@@ -46,11 +47,12 @@ export function LiveClock({ className, showIcon = true, format12Hour = true }: L
   });
 
   return (
-    <div className={cn("flex items-center gap-2 text-xs font-semibold text-slate-300 bg-[#0d1527] px-3.5 py-1.5 rounded-xl border border-[#172642]", className)}>
-      {showIcon && <Clock className="w-3.5 h-3.5 text-blue-400 shrink-0" />}
-      <span>{dateStr}</span>
-      <span className="text-slate-600">|</span>
-      <span className="text-blue-400 font-mono">{timeStr}</span>
+    <div className={cn("flex items-center gap-2 text-xs bg-brand-surface p-2 rounded-xl border border-brand-border shadow-sm", className)}>
+      {showIcon && <Calendar className="w-4 h-4 text-brand-secondary shrink-0" />}
+      <span className="text-brand-secondary font-bold tracking-tight">{dateStr}</span>
+      <span className="text-brand-surface bg-brand-secondary p-1 px-2 rounded-lg font-mono text-xs font-extrabold border border-brand-primary/20 tracking-wide">
+        {timeStr}
+      </span>
     </div>
   );
 }
