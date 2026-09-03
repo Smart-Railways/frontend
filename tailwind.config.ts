@@ -15,6 +15,27 @@ const config: Config = {
       },
       colors: {
         "card-primary": "#072ac8",
+        "brand-primary": "#072ac8",
+        "brand-card": "#0d1527",
+        "brand-cockpit": "#080c15",
+        "brand-sidebar": "#070b13",
+        "brand-border": "#172642",
+        "brand-accent": "#16284a",
+        //here
+        brand: {
+          DEFAULT: "#072ac8",
+          primary: "#072ac8",
+          card: "#0d1527",
+          cardHover: "#121d36",
+          cockpit: "#072ac8",
+          sidebar: "#070b13",
+          border: "#172642",
+          borderHover: "#233963",
+          accent: "#16284a",
+          signal: "#10b981",
+          amber: "#f59e0b",
+          critical: "#ef4444",
+        },
         card: {
           primary: "#072ac8",
         },
