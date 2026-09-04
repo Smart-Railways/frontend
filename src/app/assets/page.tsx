@@ -22,6 +22,7 @@ import {
   LayoutGrid,
   Table as TableIcon,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   useAssets,
   useRailwaySections,
@@ -291,7 +292,11 @@ export default function AssetsPage() {
               <div className="w-9 h-9 rounded-full bg-brand-blue-light text-brand-primary flex items-center justify-center flex-shrink-0 mt-0.5"><Building2 className="w-4 h-4" /></div>
               <div>
                 <div className="text-[10px] font-extrabold uppercase tracking-wider text-brand-muted mb-0.5">Total Assets</div>
-                <div className="text-2xl font-black text-brand-secondary tracking-tight">{stats.total}</div>
+                {loadingAssets ? (
+                  <Skeleton className="h-8 w-14 my-0.5 rounded-lg" />
+                ) : (
+                  <div className="text-2xl font-black text-brand-secondary tracking-tight">{stats.total}</div>
+                )}
                 <div className="text-[11px] text-brand-muted mt-0.5 font-medium">Across all sections</div>
               </div>
             </div>
@@ -299,7 +304,11 @@ export default function AssetsPage() {
               <div className="w-9 h-9 rounded-full bg-red-50 text-red-600 flex items-center justify-center flex-shrink-0 mt-0.5"><AlertTriangle className="w-4 h-4" /></div>
               <div>
                 <div className="text-[10px] font-extrabold uppercase tracking-wider text-brand-muted mb-0.5">High Risk Assets</div>
-                <div className="text-2xl font-black text-red-600 tracking-tight">{stats.criticalRiskCount}</div>
+                {loadingAssets ? (
+                  <Skeleton className="h-8 w-14 my-0.5 rounded-lg" />
+                ) : (
+                  <div className="text-2xl font-black text-red-600 tracking-tight">{stats.criticalRiskCount}</div>
+                )}
                 <div className="text-[11px] text-brand-muted mt-0.5 font-medium">Risk score ≥ 7 / 10</div>
               </div>
             </div>
@@ -307,7 +316,11 @@ export default function AssetsPage() {
               <div className="w-9 h-9 rounded-full bg-purple-50 text-purple-700 flex items-center justify-center flex-shrink-0 mt-0.5"><Radio className="w-4 h-4" /></div>
               <div>
                 <div className="text-[10px] font-extrabold uppercase tracking-wider text-brand-muted mb-0.5">S&T Division</div>
-                <div className="text-2xl font-black text-brand-secondary tracking-tight">{stats.sntCount}</div>
+                {loadingAssets ? (
+                  <Skeleton className="h-8 w-14 my-0.5 rounded-lg" />
+                ) : (
+                  <div className="text-2xl font-black text-brand-secondary tracking-tight">{stats.sntCount}</div>
+                )}
                 <div className="text-[11px] text-brand-muted mt-0.5 font-medium">Signals & Telecom</div>
               </div>
             </div>
@@ -315,7 +328,11 @@ export default function AssetsPage() {
               <div className="w-9 h-9 rounded-full bg-brand-blue-light text-brand-primary flex items-center justify-center flex-shrink-0 mt-0.5"><Layers className="w-4 h-4" /></div>
               <div>
                 <div className="text-[10px] font-extrabold uppercase tracking-wider text-brand-muted mb-0.5">Civil Engineering</div>
-                <div className="text-2xl font-black text-brand-secondary tracking-tight">{stats.engCount}</div>
+                {loadingAssets ? (
+                  <Skeleton className="h-8 w-14 my-0.5 rounded-lg" />
+                ) : (
+                  <div className="text-2xl font-black text-brand-secondary tracking-tight">{stats.engCount}</div>
+                )}
                 <div className="text-[11px] text-brand-muted mt-0.5 font-medium">Tracks & Turnouts</div>
               </div>
             </div>
@@ -323,7 +340,11 @@ export default function AssetsPage() {
               <div className="w-9 h-9 rounded-full bg-amber-50 text-amber-700 flex items-center justify-center flex-shrink-0 mt-0.5"><Zap className="w-4 h-4" /></div>
               <div>
                 <div className="text-[10px] font-extrabold uppercase tracking-wider text-brand-muted mb-0.5">Traction / OHE</div>
-                <div className="text-2xl font-black text-brand-secondary tracking-tight">{stats.tractionCount}</div>
+                {loadingAssets ? (
+                  <Skeleton className="h-8 w-14 my-0.5 rounded-lg" />
+                ) : (
+                  <div className="text-2xl font-black text-brand-secondary tracking-tight">{stats.tractionCount}</div>
+                )}
                 <div className="text-[11px] text-brand-muted mt-0.5 font-medium">Electrical Grid</div>
               </div>
             </div>
@@ -377,14 +398,119 @@ export default function AssetsPage() {
               <div>
                 <h2 className="text-sm font-bold text-brand-secondary flex items-center gap-2">
                   <span>Tracked Infrastructure Assets</span>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-brand-blue-light text-brand-primary border border-brand-primary/20 font-bold">{filteredAssets.length} of {assets.length}</span>
+                  {loadingAssets || loadingSections ? (
+                    <Skeleton className="h-5 w-14 rounded-full" />
+                  ) : (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-brand-blue-light text-brand-primary border border-brand-primary/20 font-bold">
+                      {filteredAssets.length} of {assets.length}
+                    </span>
+                  )}
                 </h2>
                 <p className="text-xs text-brand-muted mt-0.5 font-medium">Railway network equipment, health scores, and division ownership</p>
               </div>
               <div className="text-xs text-brand-muted font-mono">REST Endpoint: <code className="text-brand-primary bg-brand-blue-light px-2 py-0.5 rounded border border-brand-primary/20 font-bold">/railways/assets/</code></div>
             </div>
             {loadingAssets || loadingSections ? (
-              <div className="py-16 text-center text-brand-muted"><div className="flex flex-col items-center justify-center gap-2"><RefreshCw className="w-7 h-7 animate-spin text-brand-primary" /><span className="text-xs font-bold text-brand-secondary">Loading assets from backend...</span></div></div>
+              viewMode === "table" ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-brand-surface text-brand-muted font-bold uppercase tracking-wider border-b border-brand-border text-[10px]">
+                      <tr>
+                        <th className="py-3 px-4">ID</th>
+                        <th className="py-3 px-4">Asset Title</th>
+                        <th className="py-3 px-4">Category</th>
+                        <th className="py-3 px-4">Division</th>
+                        <th className="py-3 px-4">Section</th>
+                        <th className="py-3 px-4">Risk Level</th>
+                        <th className="py-3 px-4">Setup Date</th>
+                        <th className="py-3 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-brand-border/60">
+                      {Array.from({ length: 5 }).map((_, idx) => (
+                        <tr key={idx} className="hover:bg-brand-tertiary/40 transition-colors">
+                          <td className="py-3.5 px-4 font-mono font-bold">
+                            <Skeleton className="h-4 w-8" />
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-2.5">
+                              <Skeleton className="w-8 h-8 rounded-lg shrink-0" />
+                              <div className="space-y-1.5">
+                                <Skeleton className="h-4 w-36" />
+                                <Skeleton className="h-2.5 w-16" />
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <Skeleton className="h-5 w-20 rounded-md" />
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <Skeleton className="h-5 w-16 rounded-md" />
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <Skeleton className="h-4 w-28 rounded" />
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-2">
+                              <Skeleton className="h-5 w-14 rounded-md" />
+                              <Skeleton className="h-3 w-12 rounded" />
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-1.5">
+                              <Skeleton className="w-3.5 h-3.5 rounded-full shrink-0" />
+                              <Skeleton className="h-3.5 w-20 rounded" />
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <Skeleton className="w-7 h-7 rounded-lg" />
+                              <Skeleton className="w-7 h-7 rounded-lg" />
+                              <Skeleton className="w-7 h-7 rounded-lg" />
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Array.from({ length: 6 }).map((_, idx) => (
+                    <div key={idx} className="p-4 rounded-xl bg-brand-surface border border-brand-border flex flex-col justify-between space-y-3 shadow-sm">
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <Skeleton className="w-8 h-8 rounded-lg shrink-0" />
+                            <div className="space-y-1.5">
+                              <Skeleton className="h-4 w-32" />
+                              <Skeleton className="h-2.5 w-20" />
+                            </div>
+                          </div>
+                          <Skeleton className="h-5 w-16 rounded-md" />
+                        </div>
+                        <div className="space-y-2 pt-1">
+                          <div className="flex items-center justify-between">
+                            <Skeleton className="h-3 w-14" />
+                            <Skeleton className="h-3 w-28" />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <Skeleton className="h-3 w-14" />
+                            <Skeleton className="h-5 w-16 rounded-md" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="pt-2 border-t border-brand-border flex items-center justify-between">
+                        <Skeleton className="h-4 w-14 rounded" />
+                        <div className="flex items-center gap-1.5">
+                          <Skeleton className="w-7 h-7 rounded-lg" />
+                          <Skeleton className="w-7 h-7 rounded-lg" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
             ) : filteredAssets.length === 0 ? (
               <div className="py-16 text-center text-brand-muted"><div className="flex flex-col items-center justify-center gap-3"><Building2 className="w-10 h-10 text-brand-muted opacity-60" /><div className="text-sm font-bold text-brand-secondary">No matching assets found</div><button onClick={handleOpenCreateModal} className="mt-2 flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-xs font-bold text-white shadow-xs transition-colors cursor-pointer"><Plus className="w-4 h-4" />Create First Asset</button></div></div>
             ) : viewMode === "table" ? (

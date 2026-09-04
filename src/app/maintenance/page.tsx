@@ -21,11 +21,19 @@ import {
   ShieldAlert,
   Zap,
   Hourglass,
+  Timer,
+  ArrowRight,
+  Info,
+  MapPin,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   useMaintenanceTasks,
   useAssets,
   useRailwaySections,
+  useBlockWindows,
+  useCheckBlockConflict,
+  useFeasibleWindows,
   useCreateMaintenanceTask,
   useUpdateMaintenanceTask,
   useDeleteMaintenanceTask,
@@ -35,6 +43,8 @@ import {
   CreateMaintenanceTaskInput,
   MaintenancePriority,
   MaintenanceStatus,
+  ConflictCheckResponse,
+  FeasibleWindowsResponse,
 } from "@/types";
 
 // Urgency metadata & styling (Light brand tokens)
@@ -118,14 +128,18 @@ export default function MaintenancePage() {
   const { data: tasks = [], isLoading: loadingTasks, isRefetching: refetchingTasks, refetch: refetchTasks } = useMaintenanceTasks();
   const { data: assets = [], isLoading: loadingAssets, refetch: refetchAssets } = useAssets();
   const { data: sections = [] } = useRailwaySections();
+  const { data: blockWindows = [], isLoading: loadingBlockWindows } = useBlockWindows();
 
   // Mutations
   const createTaskMutation = useCreateMaintenanceTask();
   const updateTaskMutation = useUpdateMaintenanceTask();
   const deleteTaskMutation = useDeleteMaintenanceTask();
+  const checkConflictMutation = useCheckBlockConflict();
+  const feasibleWindowsMutation = useFeasibleWindows();
 
   // Filters & State
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [selectedCorridorFilter, setSelectedCorridorFilter] = useState<string>("ALL");
   const [selectedUrgencyFilter, setSelectedUrgencyFilter] = useState<string>("ALL");
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>("ALL");
   const [selectedAssetFilter, setSelectedAssetFilter] = useState<string>("ALL");
@@ -142,6 +156,32 @@ export default function MaintenancePage() {
   const [editingTask, setEditingTask] = useState<MaintenanceTask | null>(null);
   const [deletingTask, setDeletingTask] = useState<MaintenanceTask | null>(null);
   const [inspectingTask, setInspectingTask] = useState<MaintenanceTask | null>(null);
+
+  // Conflict Modal State
+  const [isConflictModalOpen, setIsConflictModalOpen] = useState<boolean>(false);
+  const [conflictForm, setConflictForm] = useState<{
+    section: number;
+    maintenance_start: string;
+    maintenance_end: string;
+  }>({
+    section: 1,
+    maintenance_start: "2026-09-04 02:00:00",
+    maintenance_end: "2026-09-04 05:00:00",
+  });
+  const [conflictResult, setConflictResult] = useState<ConflictCheckResponse | null>(null);
+  const [conflictError, setConflictError] = useState<string | null>(null);
+
+  // Feasible Windows Modal State
+  const [isFeasibleModalOpen, setIsFeasibleModalOpen] = useState<boolean>(false);
+  const [feasibleForm, setFeasibleForm] = useState<{
+    task_id: string;
+    block_window_id: number;
+  }>({
+    task_id: "",
+    block_window_id: 0,
+  });
+  const [feasibleResult, setFeasibleResult] = useState<FeasibleWindowsResponse | null>(null);
+  const [feasibleError, setFeasibleError] = useState<string | null>(null);
 
   // Form State
   const [formData, setFormData] = useState<CreateMaintenanceTaskInput>({
@@ -243,16 +283,179 @@ export default function MaintenancePage() {
     });
   };
 
+  // Conflict Modal Handlers
+  const handleOpenConflictModal = (sectionId?: number) => {
+    setConflictError(null);
+    setConflictResult(null);
+
+    const defaultSection = sectionId || (sections[0]?.id ? Number(sections[0].id) : 1);
+
+    setConflictForm({
+      section: defaultSection,
+      maintenance_start: "2026-09-04 02:00:00",
+      maintenance_end: "2026-09-04 05:00:00",
+    });
+    setIsConflictModalOpen(true);
+  };
+
+  const handleRunConflictCheck = (e: React.FormEvent) => {
+    e.preventDefault();
+    setConflictError(null);
+    setConflictResult(null);
+
+    let start = conflictForm.maintenance_start.replace("T", " ");
+    if (start.length === 16) start += ":00";
+    let end = conflictForm.maintenance_end.replace("T", " ");
+    if (end.length === 16) end += ":00";
+
+    checkConflictMutation.mutate(
+      {
+        section: Number(conflictForm.section),
+        maintenance_start: start,
+        maintenance_end: end,
+      },
+      {
+        onSuccess: (data) => {
+          setConflictResult(data ?? null);
+        },
+        onError: (err) => {
+          setConflictError(err instanceof Error ? err.message : "Failed to run conflict check");
+        },
+      }
+    );
+  };
+
+  // Feasible Windows Modal Handlers
+  const handleOpenFeasibleModal = (task?: MaintenanceTask) => {
+    setFeasibleError(null);
+    setFeasibleResult(null);
+
+    const targetTask = task || (tasks.length > 0 ? tasks[0] : null);
+    const targetTaskId = targetTask ? targetTask.task_code : "";
+    let preferredWindowId = 0;
+
+    if (targetTask) {
+      const taskAsset = assets.find((a) => a.id === targetTask.asset);
+      const secId = taskAsset?.section;
+      const secName = targetTask.section_name || taskAsset?.section_name;
+      const matchingBw = blockWindows.find((bw) => {
+        if (secId && Number(bw.section) === Number(secId)) return true;
+        if (
+          secName &&
+          bw.section_name &&
+          bw.section_name.trim().toLowerCase() === secName.trim().toLowerCase()
+        ) {
+          return true;
+        }
+        return false;
+      });
+      if (matchingBw) preferredWindowId = matchingBw.id;
+    }
+
+    setFeasibleForm({
+      task_id: targetTaskId,
+      block_window_id: preferredWindowId,
+    });
+    setIsFeasibleModalOpen(true);
+  };
+
+  // Selected task in Feasible Window modal
+  const selectedFeasibleTask = useMemo(() => {
+    return tasks.find((t) => t.task_code === feasibleForm.task_id) || null;
+  }, [tasks, feasibleForm.task_id]);
+
+  const selectedFeasibleTaskAsset = useMemo(() => {
+    if (!selectedFeasibleTask) return null;
+    return assets.find((a) => a.id === selectedFeasibleTask.asset) || null;
+  }, [assets, selectedFeasibleTask]);
+
+  // Section ID & Name for the maintenance task
+  const selectedFeasibleSectionId = selectedFeasibleTaskAsset?.section ?? null;
+  const selectedFeasibleSectionName =
+    selectedFeasibleTask?.section_name || selectedFeasibleTaskAsset?.section_name || "";
+
+  // Filter block windows ONLY for that section
+  const sectionBlockWindows = useMemo(() => {
+    if (!selectedFeasibleTask) return [];
+    return blockWindows.filter((bw) => {
+      if (selectedFeasibleSectionId && Number(bw.section) === Number(selectedFeasibleSectionId)) {
+        return true;
+      }
+      if (
+        selectedFeasibleSectionName &&
+        bw.section_name &&
+        bw.section_name.trim().toLowerCase() === selectedFeasibleSectionName.trim().toLowerCase()
+      ) {
+        return true;
+      }
+      return false;
+    });
+  }, [selectedFeasibleTask, selectedFeasibleSectionId, selectedFeasibleSectionName, blockWindows]);
+
+  const handleRunFeasibleCheck = (e: React.FormEvent) => {
+    e.preventDefault();
+    setFeasibleError(null);
+    setFeasibleResult(null);
+
+    if (!feasibleForm.task_id.trim()) {
+      setFeasibleError("Please specify a valid Task Code.");
+      return;
+    }
+    if (!feasibleForm.block_window_id) {
+      setFeasibleError("Please select an available block window for this corridor.");
+      return;
+    }
+
+    feasibleWindowsMutation.mutate(
+      {
+        task_id: feasibleForm.task_id,
+        block_window_id: Number(feasibleForm.block_window_id),
+      },
+      {
+        onSuccess: (data) => {
+          setFeasibleResult(data ?? null);
+        },
+        onError: (err) => {
+          setFeasibleError(err instanceof Error ? err.message : "Failed to calculate feasible windows");
+        },
+      }
+    );
+  };
+
+  // Available Corridors for filtering
+  const availableCorridors = useMemo(() => {
+    const list = new Map<string, string>();
+    sections.forEach((s) => {
+      if (s.section_name) {
+        list.set(s.section_name, s.section_name);
+      }
+    });
+    tasks.forEach((t) => {
+      if (t.section_name && !list.has(t.section_name)) {
+        list.set(t.section_name, t.section_name);
+      }
+    });
+    return Array.from(list.entries()).map(([key, label]) => ({ key, label }));
+  }, [sections, tasks]);
+
   // Filtered Tasks
   const filteredTasks = useMemo(() => {
     return tasks.filter((t) => {
+      const taskAsset = assets.find((a) => a.id === t.asset);
+      const corridorName = t.section_name || taskAsset?.section_name;
+
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchCode = t.task_code?.toLowerCase().includes(q);
         const matchAsset = t.asset_name?.toLowerCase().includes(q);
         const matchDetails = t.details?.toLowerCase().includes(q);
         const matchId = String(t.id).includes(q);
-        if (!matchCode && !matchAsset && !matchDetails && !matchId) return false;
+        const matchCorridor = corridorName?.toLowerCase().includes(q);
+        if (!matchCode && !matchAsset && !matchDetails && !matchId && !matchCorridor) return false;
+      }
+
+      if (selectedCorridorFilter !== "ALL" && corridorName !== selectedCorridorFilter) {
+        return false;
       }
 
       if (selectedUrgencyFilter !== "ALL" && t.urgency !== selectedUrgencyFilter) return false;
@@ -261,7 +464,15 @@ export default function MaintenancePage() {
 
       return true;
     });
-  }, [tasks, searchQuery, selectedUrgencyFilter, selectedStatusFilter, selectedAssetFilter]);
+  }, [
+    tasks,
+    assets,
+    searchQuery,
+    selectedCorridorFilter,
+    selectedUrgencyFilter,
+    selectedStatusFilter,
+    selectedAssetFilter,
+  ]);
 
   // Metric Summary
   const stats = useMemo(() => {
@@ -331,8 +542,26 @@ export default function MaintenancePage() {
             </div>
 
             {/* Quick Actions */}
-            <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2.5 flex-wrap">
               <LiveClock />
+
+              <button
+                onClick={() => handleOpenConflictModal()}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100/80 border border-amber-200 text-xs font-bold text-amber-800 transition-colors cursor-pointer shadow-2xs"
+                title="Run timetable conflict simulation against active train movements"
+              >
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                <span>Check Conflict</span>
+              </button>
+
+              <button
+                onClick={() => handleOpenFeasibleModal()}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-50 hover:bg-purple-100/80 border border-purple-200 text-xs font-bold text-purple-800 transition-colors cursor-pointer shadow-2xs"
+                title="Find feasible maintenance windows for tasks"
+              >
+                <Timer className="w-3.5 h-3.5 text-purple-600" />
+                <span>Feasible Windows</span>
+              </button>
 
               <button
                 onClick={() => {
@@ -366,7 +595,11 @@ export default function MaintenancePage() {
                 <div className="text-[10px] font-extrabold uppercase tracking-wider text-brand-muted mb-0.5">
                   Total Tasks
                 </div>
-                <div className="text-2xl font-black text-brand-secondary tracking-tight">{stats.total}</div>
+                {loadingTasks ? (
+                  <Skeleton className="h-8 w-14 my-0.5 rounded-lg" />
+                ) : (
+                  <div className="text-2xl font-black text-brand-secondary tracking-tight">{stats.total}</div>
+                )}
                 <div className="text-[11px] text-brand-muted mt-0.5 font-medium">Across all assets</div>
               </div>
             </div>
@@ -379,7 +612,11 @@ export default function MaintenancePage() {
                 <div className="text-[10px] font-extrabold uppercase tracking-wider text-brand-muted mb-0.5">
                   Pending Execution
                 </div>
-                <div className="text-2xl font-black text-amber-600 tracking-tight">{stats.pendingCount}</div>
+                {loadingTasks ? (
+                  <Skeleton className="h-8 w-14 my-0.5 rounded-lg" />
+                ) : (
+                  <div className="text-2xl font-black text-amber-600 tracking-tight">{stats.pendingCount}</div>
+                )}
                 <div className="text-[11px] text-brand-muted mt-0.5 font-medium">Needs block allocation</div>
               </div>
             </div>
@@ -392,7 +629,11 @@ export default function MaintenancePage() {
                 <div className="text-[10px] font-extrabold uppercase tracking-wider text-brand-muted mb-0.5">
                   Scheduled Blocks
                 </div>
-                <div className="text-2xl font-black text-brand-primary tracking-tight">{stats.scheduledCount}</div>
+                {loadingTasks ? (
+                  <Skeleton className="h-8 w-14 my-0.5 rounded-lg" />
+                ) : (
+                  <div className="text-2xl font-black text-brand-primary tracking-tight">{stats.scheduledCount}</div>
+                )}
                 <div className="text-[11px] text-brand-muted mt-0.5 font-medium">Ready for dispatch</div>
               </div>
             </div>
@@ -405,7 +646,11 @@ export default function MaintenancePage() {
                 <div className="text-[10px] font-extrabold uppercase tracking-wider text-brand-muted mb-0.5">
                   Critical Priority
                 </div>
-                <div className="text-2xl font-black text-red-600 tracking-tight">{stats.criticalCount}</div>
+                {loadingTasks ? (
+                  <Skeleton className="h-8 w-14 my-0.5 rounded-lg" />
+                ) : (
+                  <div className="text-2xl font-black text-red-600 tracking-tight">{stats.criticalCount}</div>
+                )}
                 <div className="text-[11px] text-brand-muted mt-0.5 font-medium">High risk or urgent</div>
               </div>
             </div>
@@ -418,9 +663,13 @@ export default function MaintenancePage() {
                 <div className="text-[10px] font-extrabold uppercase tracking-wider text-brand-muted mb-0.5">
                   Total Block Time
                 </div>
-                <div className="text-2xl font-black text-brand-secondary tracking-tight">
-                  {Math.floor(stats.totalMinutes / 60)}h {stats.totalMinutes % 60}m
-                </div>
+                {loadingTasks ? (
+                  <Skeleton className="h-8 w-20 my-0.5 rounded-lg" />
+                ) : (
+                  <div className="text-2xl font-black text-brand-secondary tracking-tight">
+                    {Math.floor(stats.totalMinutes / 60)}h {stats.totalMinutes % 60}m
+                  </div>
+                )}
                 <div className="text-[11px] text-brand-muted mt-0.5 font-medium">Estimated track occupancy</div>
               </div>
             </div>
@@ -428,22 +677,38 @@ export default function MaintenancePage() {
 
           {/* Filtering and Controls Bar */}
           <section className="p-4 sm:p-5 rounded-2xl bg-brand-surface border border-brand-border shadow-sm space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-center">
               
               {/* Search Bar */}
-              <div className="md:col-span-4 relative">
+              <div className="lg:col-span-4 relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
                 <input
                   type="text"
-                  placeholder="Search task code, asset, details..."
+                  placeholder="Search task code, corridor, asset, details..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-xs text-brand-secondary placeholder:text-brand-muted rounded-xl pl-9 pr-3 py-2.5 outline-none transition-colors font-medium shadow-2xs"
                 />
               </div>
 
+              {/* Corridor / Section Filter Dropdown */}
+              <div className="lg:col-span-3">
+                <select
+                  value={selectedCorridorFilter}
+                  onChange={(e) => setSelectedCorridorFilter(e.target.value)}
+                  className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none cursor-pointer font-bold shadow-2xs"
+                >
+                  <option value="ALL">All Corridors ({availableCorridors.length})</option>
+                  {availableCorridors.map((c) => (
+                    <option key={c.key} value={c.key}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Status Filter Dropdown */}
-              <div className="md:col-span-3">
+              <div className="lg:col-span-2">
                 <select
                   value={selectedStatusFilter}
                   onChange={(e) => setSelectedStatusFilter(e.target.value)}
@@ -458,13 +723,13 @@ export default function MaintenancePage() {
               </div>
 
               {/* Target Asset Filter Dropdown */}
-              <div className="md:col-span-3">
+              <div className="lg:col-span-2">
                 <select
                   value={selectedAssetFilter}
                   onChange={(e) => setSelectedAssetFilter(e.target.value)}
                   className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none cursor-pointer font-bold shadow-2xs"
                 >
-                  <option value="ALL">All Tracked Assets</option>
+                  <option value="ALL">All Assets</option>
                   {assets.map((a) => (
                     <option key={a.id} value={String(a.id)}>
                       {a.asset_title} (#{a.id})
@@ -474,7 +739,7 @@ export default function MaintenancePage() {
               </div>
 
               {/* View Mode Toggle */}
-              <div className="md:col-span-2 flex items-center justify-end gap-1.5">
+              <div className="lg:col-span-1 flex items-center justify-end gap-1.5">
                 <button
                   onClick={() => setViewMode("table")}
                   className={`p-2 rounded-xl border transition-colors cursor-pointer shadow-2xs ${
@@ -528,9 +793,13 @@ export default function MaintenancePage() {
               <div>
                 <h2 className="text-sm font-bold text-brand-secondary flex items-center gap-2">
                   <span>Maintenance Queue & Task Registry</span>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-brand-blue-light text-brand-primary border border-brand-primary/20 font-bold">
-                    {filteredTasks.length} of {tasks.length}
-                  </span>
+                  {loadingTasks || loadingAssets ? (
+                    <Skeleton className="h-5 w-14 rounded-full" />
+                  ) : (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-brand-blue-light text-brand-primary border border-brand-primary/20 font-bold">
+                      {filteredTasks.length} of {tasks.length}
+                    </span>
+                  )}
                 </h2>
                 <p className="text-xs text-brand-muted mt-0.5 font-medium">
                   Corridor maintenance requirements and duration bounds
@@ -544,12 +813,104 @@ export default function MaintenancePage() {
 
             {/* View Switching */}
             {loadingTasks || loadingAssets ? (
-              <div className="py-16 text-center text-brand-muted">
-                <div className="flex flex-col items-center justify-center gap-2">
-                  <RefreshCw className="w-7 h-7 animate-spin text-brand-primary" />
-                  <span className="text-xs font-bold text-brand-secondary">Loading maintenance tasks...</span>
+              viewMode === "table" ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-brand-surface text-brand-muted font-bold uppercase tracking-wider border-b border-brand-border text-[10px]">
+                      <tr>
+                        <th className="py-3 px-4">Task Code</th>
+                        <th className="py-3 px-4">Target Asset</th>
+                        <th className="py-3 px-4">Corridor / Section</th>
+                        <th className="py-3 px-4">Urgency</th>
+                        <th className="py-3 px-4">Risk Rating</th>
+                        <th className="py-3 px-4">Duration</th>
+                        <th className="py-3 px-4">Deadline</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-brand-border/60">
+                      {Array.from({ length: 5 }).map((_, idx) => (
+                        <tr key={idx} className="hover:bg-brand-tertiary/40 transition-colors">
+                          <td className="py-3.5 px-4 font-mono font-bold">
+                            <Skeleton className="h-4 w-20" />
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div className="space-y-1.5">
+                              <Skeleton className="h-4 w-36" />
+                              <Skeleton className="h-2.5 w-24" />
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-1.5">
+                              <Skeleton className="w-3.5 h-3.5 rounded shrink-0" />
+                              <Skeleton className="h-4 w-28" />
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <Skeleton className="h-5 w-20 rounded-md" />
+                          </td>
+                          <td className="py-3.5 px-4 font-mono">
+                            <Skeleton className="h-4 w-12" />
+                          </td>
+                          <td className="py-3.5 px-4 font-mono">
+                            <Skeleton className="h-4 w-16" />
+                          </td>
+                          <td className="py-3.5 px-4 font-mono">
+                            <div className="flex items-center gap-1.5">
+                              <Skeleton className="w-3.5 h-3.5 rounded-full shrink-0" />
+                              <Skeleton className="h-3.5 w-20 rounded" />
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <Skeleton className="h-5 w-20 rounded-md" />
+                          </td>
+                          <td className="py-3.5 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <Skeleton className="w-7 h-7 rounded-lg" />
+                              <Skeleton className="w-7 h-7 rounded-lg" />
+                              <Skeleton className="w-7 h-7 rounded-lg" />
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              </div>
+              ) : (
+                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Array.from({ length: 6 }).map((_, idx) => (
+                    <div key={idx} className="p-4 rounded-xl bg-brand-surface border border-brand-border flex flex-col justify-between space-y-3 shadow-sm">
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="space-y-1.5">
+                            <Skeleton className="h-4 w-24" />
+                            <Skeleton className="h-4 w-36" />
+                          </div>
+                          <Skeleton className="h-5 w-16 rounded-md" />
+                        </div>
+                        <div className="space-y-2 pt-1">
+                          <div className="flex items-center justify-between">
+                            <Skeleton className="h-3 w-14" />
+                            <Skeleton className="h-3 w-28" />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <Skeleton className="h-3 w-14" />
+                            <Skeleton className="h-5 w-20 rounded-md" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="pt-2 border-t border-brand-border flex items-center justify-between">
+                        <Skeleton className="h-4 w-16 rounded" />
+                        <div className="flex items-center gap-1.5">
+                          <Skeleton className="w-7 h-7 rounded-lg" />
+                          <Skeleton className="w-7 h-7 rounded-lg" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
             ) : filteredTasks.length === 0 ? (
               <div className="py-16 text-center text-brand-muted">
                 <div className="flex flex-col items-center justify-center gap-3">
@@ -577,6 +938,7 @@ export default function MaintenancePage() {
                     <tr>
                       <th className="py-3 px-4">Task Code</th>
                       <th className="py-3 px-4">Target Asset</th>
+                      <th className="py-3 px-4">Corridor / Section</th>
                       <th className="py-3 px-4">Urgency</th>
                       <th className="py-3 px-4">Risk Rating</th>
                       <th className="py-3 px-4">Duration</th>
@@ -589,6 +951,8 @@ export default function MaintenancePage() {
                     {filteredTasks.map((task) => {
                       const urg = URGENCY_CONFIG[task.urgency || "MEDIUM"] || URGENCY_CONFIG.MEDIUM;
                       const stat = STATUS_CONFIG[task.task_status || "PENDING"] || STATUS_CONFIG.PENDING;
+                      const taskAsset = assets.find((a) => a.id === task.asset);
+                      const corridorName = task.section_name || taskAsset?.section_name || "General Corridor";
 
                       return (
                         <tr
@@ -607,6 +971,12 @@ export default function MaintenancePage() {
                                 {task.details}
                               </div>
                             )}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-1.5 font-semibold text-brand-secondary text-xs">
+                              <MapPin className="w-3.5 h-3.5 text-brand-primary shrink-0" />
+                              <span>{corridorName}</span>
+                            </div>
                           </td>
                           <td className="py-3.5 px-4">
                             <span
@@ -637,6 +1007,13 @@ export default function MaintenancePage() {
                           </td>
                           <td className="py-3.5 px-4 text-right">
                             <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => handleOpenFeasibleModal(task)}
+                                className="p-1.5 rounded-lg bg-brand-surface hover:bg-purple-50 border border-brand-border hover:border-purple-200 text-purple-600 shadow-xs transition-colors cursor-pointer"
+                                title="Check Feasible Windows"
+                              >
+                                <Timer className="w-3.5 h-3.5" />
+                              </button>
                               <button
                                 onClick={() => setInspectingTask(task)}
                                 className="p-1.5 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-brand-primary shadow-xs transition-colors cursor-pointer"
@@ -704,6 +1081,13 @@ export default function MaintenancePage() {
 
                         <div className="space-y-1 pt-1 text-xs">
                           <div className="flex items-center justify-between text-brand-muted">
+                            <span>Corridor:</span>
+                            <span className="font-bold text-brand-secondary flex items-center gap-1">
+                              <MapPin className="w-3 h-3 text-brand-primary shrink-0" />
+                              {task.section_name || assets.find((a) => a.id === task.asset)?.section_name || "General Corridor"}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-brand-muted">
                             <span>Duration:</span>
                             <span className="font-mono font-bold text-brand-secondary">
                               {task.estimated_duration} mins
@@ -733,6 +1117,13 @@ export default function MaintenancePage() {
                         </span>
 
                         <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleOpenFeasibleModal(task)}
+                            className="p-1.5 rounded-lg bg-brand-surface hover:bg-purple-50 border border-brand-border hover:border-purple-200 text-purple-600 transition-colors cursor-pointer"
+                            title="Check Feasible Windows"
+                          >
+                            <Timer className="w-3.5 h-3.5" />
+                          </button>
                           <button
                             onClick={() => setInspectingTask(task)}
                             className="p-1.5 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-brand-primary transition-colors cursor-pointer"
@@ -902,6 +1293,26 @@ export default function MaintenancePage() {
                 </div>
               </div>
 
+              <div className="p-3 rounded-xl bg-brand-tertiary/60 border border-brand-border space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="font-extrabold text-brand-secondary">
+                    Risk / Severity Rating (1 - 10)
+                  </label>
+                  <span className="font-mono font-black text-brand-primary">
+                    {formData.risk_rating} / 10
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={1}
+                  max={10}
+                  step={1}
+                  value={formData.risk_rating}
+                  onChange={(e) => setFormData({ ...formData, risk_rating: Number(e.target.value) })}
+                  className="w-full accent-brand-primary cursor-pointer h-2 bg-brand-border rounded-lg"
+                />
+              </div>
+
               <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-brand-border">
                 <button
                   type="button"
@@ -951,6 +1362,13 @@ export default function MaintenancePage() {
               <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
                 <span className="text-brand-muted block text-[10px] uppercase font-bold">Target Asset</span>
                 <span className="font-bold text-brand-secondary mt-0.5 block">{inspectingTask.asset_name || `Asset #${inspectingTask.asset}`}</span>
+              </div>
+              <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
+                <span className="text-brand-muted block text-[10px] uppercase font-bold">Corridor / Section</span>
+                <span className="font-bold text-brand-secondary mt-0.5 block flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-brand-primary shrink-0" />
+                  {inspectingTask.section_name || assets.find((a) => a.id === inspectingTask.asset)?.section_name || "General Corridor"}
+                </span>
               </div>
               <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
                 <span className="text-brand-muted block text-[10px] uppercase font-bold">Urgency</span>
@@ -1015,6 +1433,439 @@ export default function MaintenancePage() {
                 {isDeleting ? "Deleting..." : "Delete Task"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: Timetable Conflict Detection Engine */}
+      {isConflictModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-brand-surface border border-brand-border rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-brand-border">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
+                  <ShieldAlert className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-brand-secondary">
+                    Timetable Conflict Detector
+                  </h3>
+                  <p className="text-xs text-brand-muted">
+                    Simulate maintenance block windows against active train movements
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsConflictModalOpen(false)}
+                className="text-brand-muted hover:text-brand-secondary text-lg font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleRunConflictCheck} className="space-y-4">
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-brand-secondary mb-1">
+                    Railway Section <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={conflictForm.section}
+                    onChange={(e) =>
+                      setConflictForm({ ...conflictForm, section: Number(e.target.value) })
+                    }
+                    className="w-full px-3 py-2 rounded-xl bg-brand-surface border border-brand-border text-brand-secondary text-xs focus:outline-hidden focus:border-brand-primary cursor-pointer"
+                    required
+                  >
+                    {sections.map((sec) => (
+                      <option key={sec.id} value={sec.id}>
+                        {sec.section_name} ({sec.origin_station} to {sec.end_station})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-brand-secondary mb-1">
+                      Maintenance Start Time <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="YYYY-MM-DD HH:MM:SS"
+                      value={conflictForm.maintenance_start}
+                      onChange={(e) =>
+                        setConflictForm({ ...conflictForm, maintenance_start: e.target.value })
+                      }
+                      className="w-full px-3 py-2 rounded-xl bg-brand-surface border border-brand-border text-brand-secondary text-xs font-mono focus:outline-hidden focus:border-brand-primary"
+                      required
+                    />
+                    <span className="text-[10px] text-brand-muted mt-1 block">e.g. 2026-09-04 02:00:00</span>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-brand-secondary mb-1">
+                      Maintenance End Time <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="YYYY-MM-DD HH:MM:SS"
+                      value={conflictForm.maintenance_end}
+                      onChange={(e) =>
+                        setConflictForm({ ...conflictForm, maintenance_end: e.target.value })
+                      }
+                      className="w-full px-3 py-2 rounded-xl bg-brand-surface border border-brand-border text-brand-secondary text-xs font-mono focus:outline-hidden focus:border-brand-primary"
+                      required
+                    />
+                    <span className="text-[10px] text-brand-muted mt-1 block">e.g. 2026-09-04 05:00:00</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsConflictModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-brand-secondary transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={checkConflictMutation.isPending}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-xs font-bold text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  {checkConflictMutation.isPending ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Simulating Traffic...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldAlert className="w-3.5 h-3.5" />
+                      <span>Run Conflict Check</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+
+            {/* Error Display */}
+            {conflictError && (
+              <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-bold">Conflict Check Failed</div>
+                  <div className="mt-0.5 text-red-700">{conflictError}</div>
+                </div>
+              </div>
+            )}
+
+            {/* Conflict Result Display */}
+            {conflictResult && (
+              <div className="space-y-3 pt-2 border-t border-brand-border">
+                {conflictResult.has_conflict ? (
+                  <div className="space-y-3">
+                    <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-900 text-xs flex items-start gap-2.5">
+                      <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-extrabold text-sm text-red-900">
+                          Traffic Conflict Detected ({conflictResult.conflict_count} Collisions)
+                        </div>
+                        <p className="mt-0.5 text-red-700">
+                          Active scheduled train movements intersect with this requested maintenance window.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="text-xs font-bold text-brand-secondary">
+                        Conflicting Train Movements:
+                      </div>
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                        {conflictResult.conflicts.map((c, idx) => (
+                          <div
+                            key={idx}
+                            className="p-2.5 rounded-xl bg-brand-surface border border-red-200 shadow-2xs flex items-center justify-between gap-3 text-xs"
+                          >
+                            <div>
+                              <div className="font-bold text-brand-secondary flex items-center gap-1.5">
+                                <span className="font-mono text-red-700 font-bold">{c.train_number}</span>
+                                <span>-</span>
+                                <span>{c.train_name}</span>
+                              </div>
+                              <div className="text-[11px] text-brand-muted mt-0.5 font-mono">
+                                Occupancy: {c.entry_time} → {c.exit_time}
+                              </div>
+                            </div>
+                            <span className="px-2 py-0.5 rounded-md bg-red-100 text-red-800 text-[10px] font-bold border border-red-200 shrink-0">
+                              Schedule Collision
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-start gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-extrabold text-sm text-emerald-900">
+                        Corridor Clear - No Conflict Detected
+                      </div>
+                      <p className="mt-0.5 text-emerald-700">
+                        Zero scheduled train movements collide with this maintenance window on Section #{conflictForm.section}. Safe for track occupancy.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: Feasible Block Windows Finder */}
+      {isFeasibleModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-brand-surface border border-brand-border rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-brand-border">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center">
+                  <Timer className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-brand-secondary">
+                    Feasible Maintenance Window Finder
+                  </h3>
+                  <p className="text-xs text-brand-muted">
+                    Calculate available conflict-free intervals inside corridor block windows
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsFeasibleModalOpen(false)}
+                className="text-brand-muted hover:text-brand-secondary text-lg font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleRunFeasibleCheck} className="space-y-4">
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-brand-secondary mb-1">
+                    Select Maintenance Task <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={feasibleForm.task_id}
+                    onChange={(e) => {
+                      const selectedCode = e.target.value;
+                      const task = tasks.find((t) => t.task_code === selectedCode);
+                      let matchingWindowId = 0;
+                      if (task) {
+                        const taskAsset = assets.find((a) => a.id === task.asset);
+                        const secId = taskAsset?.section;
+                        const secName = task.section_name || taskAsset?.section_name;
+                        const matchingBws = blockWindows.filter((bw) => {
+                          if (secId && Number(bw.section) === Number(secId)) return true;
+                          if (
+                            secName &&
+                            bw.section_name &&
+                            bw.section_name.trim().toLowerCase() === secName.trim().toLowerCase()
+                          ) {
+                            return true;
+                          }
+                          return false;
+                        });
+                        if (matchingBws.length > 0) {
+                          matchingWindowId = matchingBws[0].id;
+                        }
+                      }
+                      setFeasibleForm({
+                        task_id: selectedCode,
+                        block_window_id: matchingWindowId,
+                      });
+                    }}
+                    className="w-full px-3 py-2 rounded-xl bg-brand-surface border border-brand-border text-brand-secondary text-xs focus:outline-hidden focus:border-brand-primary cursor-pointer"
+                    required
+                  >
+                    <option value="">Select a maintenance task...</option>
+                    {tasks.map((t) => (
+                      <option key={t.id} value={t.task_code}>
+                        {t.task_code} - {t.asset_name || `Asset #${t.asset}`} ({t.estimated_duration} mins)
+                      </option>
+                    ))}
+                  </select>
+                  {selectedFeasibleTask && (
+                    <div className="flex items-center gap-1.5 mt-1.5 px-2.5 py-1 rounded-lg bg-brand-tertiary border border-brand-border text-[11px] text-brand-secondary">
+                      <MapPin className="w-3.5 h-3.5 text-brand-primary shrink-0" />
+                      <span>
+                        Scheduled Corridor:{" "}
+                        <strong className="text-brand-primary">
+                          {selectedFeasibleSectionName || `Section #${selectedFeasibleSectionId}`}
+                        </strong>
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-brand-secondary">
+                      Select Block Window <span className="text-red-500">*</span>
+                    </label>
+                    {selectedFeasibleSectionName && (
+                      <span className="text-[10px] text-brand-muted font-medium">
+                        Only showing blocks for {selectedFeasibleSectionName}
+                      </span>
+                    )}
+                  </div>
+                  <select
+                    value={feasibleForm.block_window_id}
+                    onChange={(e) =>
+                      setFeasibleForm({ ...feasibleForm, block_window_id: Number(e.target.value) })
+                    }
+                    className="w-full px-3 py-2 rounded-xl bg-brand-surface border border-brand-border text-brand-secondary text-xs focus:outline-hidden focus:border-brand-primary cursor-pointer"
+                    required
+                  >
+                    {sectionBlockWindows.length === 0 ? (
+                      <option value={0}>
+                        No block windows registered for {selectedFeasibleSectionName || `Section #${selectedFeasibleSectionId}`}
+                      </option>
+                    ) : (
+                      <>
+                        <option value={0}>Select a block window...</option>
+                        {sectionBlockWindows.map((bw) => (
+                          <option key={bw.id} value={bw.id}>
+                            Window #{bw.id} - {bw.section_name || `Section ${bw.section}`} ({bw.start_time} to {bw.end_time}) [{bw.status}]
+                          </option>
+                        ))}
+                      </>
+                    )}
+                  </select>
+                  {loadingBlockWindows && (
+                    <span className="text-[10px] text-brand-muted mt-1 block">Loading block windows...</span>
+                  )}
+
+                  {sectionBlockWindows.length === 0 && selectedFeasibleTask && (
+                    <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2 mt-2">
+                      <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-bold">No Block Windows on this Corridor</div>
+                        <div className="text-[11px] text-amber-800 mt-0.5">
+                          There are currently no block windows allocated on{" "}
+                          <strong>{selectedFeasibleSectionName || `Section #${selectedFeasibleSectionId}`}</strong>.
+                          Maintenance cannot be executed without a block window on the same corridor section.
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsFeasibleModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-brand-secondary transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={feasibleWindowsMutation.isPending}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  {feasibleWindowsMutation.isPending ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Evaluating Windows...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Timer className="w-3.5 h-3.5" />
+                      <span>Find Feasible Windows</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+
+            {/* Error Display */}
+            {feasibleError && (
+              <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-bold">Evaluation Error</div>
+                  <div className="mt-0.5 text-red-700">{feasibleError}</div>
+                </div>
+              </div>
+            )}
+
+            {/* Feasible Result Display */}
+            {feasibleResult && (
+              <div className="space-y-3 pt-2 border-t border-brand-border">
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="p-2.5 rounded-xl bg-brand-tertiary border border-brand-border">
+                    <span className="text-brand-muted block text-[10px] uppercase font-bold">Section</span>
+                    <span className="font-bold text-brand-secondary mt-0.5 block truncate">{feasibleResult.section}</span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-brand-tertiary border border-brand-border">
+                    <span className="text-brand-muted block text-[10px] uppercase font-bold">Required Time</span>
+                    <span className="font-bold text-brand-primary mt-0.5 block font-mono">{feasibleResult.required_duration_minutes} mins</span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-brand-tertiary border border-brand-border">
+                    <span className="text-brand-muted block text-[10px] uppercase font-bold">Corridor Status</span>
+                    <span className={`font-bold mt-0.5 block ${feasibleResult.feasible ? "text-emerald-600" : "text-red-600"}`}>
+                      {feasibleResult.feasible ? "FEASIBLE" : "INFEASIBLE"}
+                    </span>
+                  </div>
+                </div>
+
+                {feasibleResult.feasible && feasibleResult.windows && feasibleResult.windows.length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="text-xs font-bold text-brand-secondary flex items-center justify-between">
+                      <span>Available Feasible Windows:</span>
+                      <span className="text-emerald-600 font-bold text-[11px]">{feasibleResult.windows.length} slot(s) found</span>
+                    </div>
+
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {feasibleResult.windows.map((w, idx) => (
+                        <div
+                          key={idx}
+                          className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-200 text-xs flex items-center justify-between gap-3"
+                        >
+                          <div>
+                            <div className="font-mono font-bold text-brand-secondary flex items-center gap-1.5">
+                              <span>{w.start}</span>
+                              <ArrowRight className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <span>{w.end}</span>
+                            </div>
+                            <div className="text-[11px] text-emerald-800 mt-0.5 font-medium">
+                              Sufficient clearance for {feasibleResult.required_duration_minutes}-minute work.
+                            </div>
+                          </div>
+                          <span className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-mono font-bold text-xs shrink-0">
+                            {w.duration_minutes} mins
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
+                    <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-bold">No Feasible Slots In This Window</div>
+                      <div className="mt-0.5 text-amber-700">
+                        The requested block window does not have a continuous free slot of at least {feasibleResult.required_duration_minutes} minutes without train traffic.
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -21,6 +21,7 @@ import {
   Timer,
   Radio,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   useRailwaySections,
   useTrains,
@@ -317,10 +318,10 @@ export default function TrainsPage() {
   const [isCreateScheduleModalOpen, setIsCreateScheduleModalOpen] = useState<boolean>(false);
   const [isLogMovementModalOpen, setIsLogMovementModalOpen] = useState<boolean>(false);
 
-  const { data: sections = [], refetch: refetchSections } = useRailwaySections();
-  const { data: trains = [], refetch: refetchTrains } = useTrains();
-  const { data: schedules = [], refetch: refetchSchedules } = useTrainSchedules();
-  const { data: movements = [], refetch: refetchMovements } = useTrainMovements();
+  const { data: sections = [], isLoading: loadingSections, refetch: refetchSections } = useRailwaySections();
+  const { data: trains = [], isLoading: loadingTrains, refetch: refetchTrains } = useTrains();
+  const { data: schedules = [], isLoading: loadingSchedules, refetch: refetchSchedules } = useTrainSchedules();
+  const { data: movements = [], isLoading: loadingMovements, refetch: refetchMovements } = useTrainMovements();
 
   const availableSections = useMemo(() => {
     return sections && sections.length > 0 ? sections : DEFAULT_RAILWAY_SECTIONS;
@@ -681,27 +682,52 @@ export default function TrainsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-border/60 text-brand-secondary">
-                    {filteredTrackedTrains.length === 0 ? (
+                    {loadingTracked ? (
+                      Array.from({ length: 5 }).map((_, idx) => (
+                        <tr key={idx} className="hover:bg-brand-tertiary/40 transition-colors">
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2.5">
+                              <Skeleton className="w-1.5 h-8 rounded-full shrink-0" />
+                              <div className="space-y-1.5">
+                                <Skeleton className="h-4 w-16" />
+                                <Skeleton className="h-3 w-28" />
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              <Skeleton className="h-5 w-16 rounded-md" />
+                              <Skeleton className="h-4 w-8" />
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <Skeleton className="h-4 w-28" />
+                          </td>
+                          <td className="py-3 px-4 font-mono">
+                            <Skeleton className="h-4 w-24" />
+                          </td>
+                          <td className="py-3 px-4 font-mono">
+                            <Skeleton className="h-4 w-24" />
+                          </td>
+                          <td className="py-3 px-4">
+                            <Skeleton className="h-6 w-24 rounded-full" />
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Skeleton className="w-2.5 h-6 rounded-xs" />
+                              <Skeleton className="w-7 h-7 rounded-lg" />
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : filteredTrackedTrains.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="py-12 text-center text-brand-muted">
-                          {loadingTracked ? (
-                            <div className="flex items-center justify-center gap-2">
-                              <RefreshCw className="w-4 h-4 animate-spin text-brand-primary" />
-                              <span className="font-semibold text-xs text-brand-secondary">
-                                Loading tracked trains operations...
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="space-y-1.5 max-w-sm mx-auto">
-                              <TrainIcon className="w-8 h-8 text-brand-muted mx-auto opacity-50" />
-                              <div className="font-bold text-sm text-brand-secondary">
-                                No tracked trains found for this corridor and date
-                              </div>
-                              <p className="text-xs text-brand-muted">
-                                Try choosing a different date or select another corridor section from the dropdown.
-                              </p>
-                            </div>
-                          )}
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            <TrainIcon className="w-8 h-8 text-brand-muted opacity-50" />
+                            <div className="text-sm font-bold text-brand-secondary">No tracked train operations found</div>
+                            <p className="text-xs text-brand-muted">Try selecting a different corridor section or date.</p>
+                          </div>
                         </td>
                       </tr>
                     ) : (
@@ -709,7 +735,7 @@ export default function TrainsPage() {
                         const theme = getTrainTypeTheme(item.train_type, item.train_name);
                         const delayObj = formatDelayMetric(item.delay_minutes);
                         return (
-                          <tr key={`${item.train_number}-${idx}`} className={"hover:bg-brand-tertiary/60"}>
+                          <tr key={`${item.train_number}-${idx}`} className={`hover:bg-brand-tertiary/60 ${theme.borderColor}`}>
                             <td className="py-3 px-4">
                               <div className="flex items-center gap-2.5">
                                 <div className={`w-1.5 h-8 rounded-full ${theme.lineColor}`} />
@@ -720,11 +746,14 @@ export default function TrainsPage() {
                               </div>
                             </td>
                             <td className="py-3 px-4">
+                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold border ${theme.badge}`}>
+                                {item.train_type}
+                              </span>
                               <span className="ml-2 font-bold">{item.priority}/10</span>
                             </td>
                             <td className="py-3 px-4">{item.section.name}</td>
-                            <td className="py-3 px-4 font-mono">{formatTrainTimeIST(item.schedule.entry_time)} → {formatTrainTimeIST(item.schedule.exit_time)}</td>
-                            <td className="py-3 px-4 font-mono">{formatTrainTimeIST(item.movement?.actual_entry_time)} → {formatTrainTimeIST(item.movement?.actual_exit_time)}</td>
+                            <td className="py-3 px-4 font-mono">{formatTimeString(item.schedule.entry_time)} → {formatTimeString(item.schedule.exit_time)}</td>
+                            <td className="py-3 px-4 font-mono">{formatTimeString(item.movement?.actual_entry_time)} → {formatTimeString(item.movement?.actual_exit_time)}</td>
                             <td className="py-3 px-4">
                               <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold border ${delayObj.badgeClass}`}>
                                 {delayObj.text}
@@ -732,6 +761,7 @@ export default function TrainsPage() {
                             </td>
                             <td className="py-3 px-4 text-right">
                               <div className="flex items-center justify-end gap-2">
+                                <span className={`w-2.5 h-6 rounded-xs ${theme.lineColor}`} />
                                 <button onClick={() => setInspectTrackedTrain(item)} className="p-1.5 rounded-lg bg-brand-surface border border-brand-border hover:bg-brand-tertiary">
                                   <Eye className="w-3.5 h-3.5" />
                                 </button>
@@ -979,7 +1009,11 @@ export default function TrainsPage() {
                   </div>
                   <div>
                     <div className="text-[10px] font-bold uppercase text-brand-muted">Total Schedules</div>
-                    <div className="text-xl font-black text-brand-secondary">{scheduleStats.total}</div>
+                    {loadingSchedules ? (
+                      <Skeleton className="h-7 w-12 my-0.5 rounded" />
+                    ) : (
+                      <div className="text-xl font-black text-brand-secondary">{scheduleStats.total}</div>
+                    )}
                   </div>
                 </div>
 
@@ -989,7 +1023,11 @@ export default function TrainsPage() {
                   </div>
                   <div>
                     <div className="text-[10px] font-bold uppercase text-brand-muted">Runs Today</div>
-                    <div className="text-xl font-black text-emerald-700">{scheduleStats.runningToday}</div>
+                    {loadingSchedules ? (
+                      <Skeleton className="h-7 w-12 my-0.5 rounded" />
+                    ) : (
+                      <div className="text-xl font-black text-emerald-700">{scheduleStats.runningToday}</div>
+                    )}
                   </div>
                 </div>
 
@@ -999,7 +1037,11 @@ export default function TrainsPage() {
                   </div>
                   <div>
                     <div className="text-[10px] font-bold uppercase text-brand-muted">High Priority</div>
-                    <div className="text-xl font-black text-amber-700">{scheduleStats.highPriority}</div>
+                    {loadingSchedules ? (
+                      <Skeleton className="h-7 w-12 my-0.5 rounded" />
+                    ) : (
+                      <div className="text-xl font-black text-amber-700">{scheduleStats.highPriority}</div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1019,7 +1061,55 @@ export default function TrainsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-border/60 text-brand-secondary">
-                    {filteredSchedules.length === 0 ? (
+                    {loadingSchedules ? (
+                      Array.from({ length: 5 }).map((_, idx) => (
+                        <tr key={idx} className="hover:bg-brand-tertiary/40 transition-colors">
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2.5">
+                              <Skeleton className="w-1.5 h-8 rounded-full shrink-0" />
+                              <div className="space-y-1.5">
+                                <Skeleton className="h-4 w-16" />
+                                <Skeleton className="h-3 w-28" />
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              <Skeleton className="h-5 w-16 rounded-md" />
+                              <Skeleton className="h-4 w-8" />
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <Skeleton className="h-4 w-28" />
+                          </td>
+                          <td className="py-3 px-4 font-mono">
+                            <Skeleton className="h-4 w-14" />
+                          </td>
+                          <td className="py-3 px-4 font-mono">
+                            <Skeleton className="h-4 w-14" />
+                          </td>
+                          <td className="py-3 px-4 font-mono">
+                            <Skeleton className="h-4 w-14" />
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-1">
+                              {Array.from({ length: 7 }).map((_, i) => (
+                                <Skeleton key={i} className="w-4 h-4 rounded-full" />
+                              ))}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <Skeleton className="h-5 w-16 rounded-md" />
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Skeleton className="w-2.5 h-6 rounded-xs" />
+                              <Skeleton className="w-7 h-7 rounded-lg" />
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : filteredSchedules.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="py-14 text-center text-brand-muted">
                           <div className="flex flex-col items-center justify-center gap-2 max-w-md mx-auto">

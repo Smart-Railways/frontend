@@ -44,7 +44,8 @@ export interface ConflictCheckResponse {
 
 export interface FeasibleWindowsInput {
   task_id: string;
-  block_id: number;
+  block_window_id: number;
+  block_id?: number;
 }
 
 export interface FeasibleWindowSlot {
@@ -55,7 +56,8 @@ export interface FeasibleWindowSlot {
 
 export interface FeasibleWindowsResponse {
   task_id: string;
-  block_id: number;
+  block_window_id: number;
+  block_id?: number;
   section: string;
   required_duration_minutes: number;
   feasible: boolean;

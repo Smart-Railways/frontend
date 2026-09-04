@@ -17,6 +17,9 @@
   --color-brand-border: #e7e2d8;
   --color-brand-muted: #64748b;
   --color-brand-blue-light: #dbeafe;
+
+  --color-muted: #e7e2d8;
+  --color-muted-foreground: #64748b;
 }
 
 @layer base {
