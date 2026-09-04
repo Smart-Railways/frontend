@@ -34,6 +34,8 @@ import {
   CreateTrainScheduleInput,
   CreateTrainMovementInput,
 } from "@/types";
+import { DEFAULT_RAILWAY_SECTIONS } from "@/constants/railway-defaults";
+import { formatTrainTimeIST, formatTimeString } from "@/lib/time-utils";
 
 const DAYS_SHORT = ["M", "T", "W", "T", "F", "S", "S"];
 const DAYS_FULL = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -60,19 +62,6 @@ function formatDisplayDate(dateStr: string): string {
   } catch {
     return dateStr;
   }
-}
-
-// Helper to format time (e.g. "06:00:00" -> "06:00")
-function formatTimeString(timeStr?: string | null): string {
-  if (!timeStr) return "--:--";
-  if (timeStr.includes("T")) {
-    const timePart = timeStr.split("T")[1].replace("Z", "");
-    return timePart.substring(0, 5);
-  }
-  if (timeStr.includes(" ")) {
-    return timeStr.split(" ")[1].substring(0, 5);
-  }
-  return timeStr.substring(0, 5);
 }
 
 // Format minutes delay into hours and minutes
@@ -142,13 +131,9 @@ function calculateTimeDuration(
   if (!entryTime || !exitTime) return { durationMins: 0, formatted: "--" };
 
   const parseToMins = (t: string) => {
-    let cleanTime = t;
-    if (cleanTime.includes("T")) {
-      cleanTime = cleanTime.split("T")[1].replace("Z", "");
-    } else if (cleanTime.includes(" ")) {
-      cleanTime = cleanTime.split(" ")[1];
-    }
-    const [hh, mm] = cleanTime.split(":").map(Number);
+    const formatted = formatTrainTimeIST(t);
+    if (!formatted || formatted === "--:--") return 0;
+    const [hh, mm] = formatted.split(":").map(Number);
     return (hh || 0) * 60 + (mm || 0);
   };
 
@@ -320,7 +305,7 @@ export default function TrainsPage() {
   });
 
   const [selectedScheduleDate, setSelectedScheduleDate] = useState<string>(formatDateToISO(new Date()));
-  const [selectedSectionId, setSelectedSectionId] = useState<number | null>(null);
+  const [selectedSectionId, setSelectedSectionId] = useState<number | null>(1);
   const [scheduleSearchQuery, setScheduleSearchQuery] = useState<string>("");
   const [scheduleTypeFilter, setScheduleTypeFilter] = useState<string>("ALL");
   const [runsTodayOnly, setRunsTodayOnly] = useState<boolean>(false);
@@ -337,61 +322,63 @@ export default function TrainsPage() {
   const { data: schedules = [], refetch: refetchSchedules } = useTrainSchedules();
   const { data: movements = [], refetch: refetchMovements } = useTrainMovements();
 
+  const availableSections = useMemo(() => {
+    return sections && sections.length > 0 ? sections : DEFAULT_RAILWAY_SECTIONS;
+  }, [sections]);
+
+  const currentSection = useMemo(() => {
+    return (
+      availableSections.find((s) => s.id === selectedSectionId) ||
+      availableSections[0] ||
+      DEFAULT_RAILWAY_SECTIONS[0]
+    );
+  }, [availableSections, selectedSectionId]);
 
   const corridorStations = useMemo<{ code: string; name: string }[]>(() => {
     const stationMap = new Map<string, string>();
 
-    if (sections && sections.length > 0) {
-      sections.forEach((sec) => {
-        const srcCode = sec.source_station_code || sec.origin_station;
-        const srcName = sec.origin_station || sec.source_station_code || srcCode;
-        if (srcCode) {
-          stationMap.set(srcCode, srcName);
-        }
-        const dstCode = sec.destination_station_code || sec.end_station;
-        const dstName = sec.end_station || sec.destination_station_code || dstCode;
-        if (dstCode) {
-          stationMap.set(dstCode, dstName);
-        }
-      });
-    } else {
-      const defaults: [string, string][] = [
-        ["NDLS", "New Delhi"],
-        ["NZM", "Hazrat Nizamuddin"],
-        ["TKD", "Tuglakabad"],
-        ["FDB", "Faridabad"],
-        ["PWL", "Palwal"],
-        ["KSV", "Kosi Kalan"],
-        ["MTJ", "Mathura Junction"],
-        ["AGC", "Agra Cantt"],
-        ["GWL", "Gwalior"],
-        ["JHS", "VGL Jhansi"],
-        ["CNB", "Kanpur Central"],
-      ];
-
-      defaults.forEach(([code, name]) => stationMap.set(code, name));
-    }
+    availableSections.forEach((sec) => {
+      const srcCode = sec.source_station_code || sec.origin_station;
+      const srcName = sec.origin_station || sec.source_station_code || srcCode;
+      if (srcCode) {
+        stationMap.set(srcCode, srcName);
+      }
+      const dstCode = sec.destination_station_code || sec.end_station;
+      const dstName = sec.end_station || sec.destination_station_code || dstCode;
+      if (dstCode) {
+        stationMap.set(dstCode, dstName);
+      }
+    });
 
     return Array.from(stationMap.entries())
       .map(([code, name]) => ({ code, name }))
       .sort((a, b) => a.code.localeCompare(b.code));
-  }, [sections]);
+  }, [availableSections]);
 
   useEffect(() => {
-    if (sections && sections.length > 0) {
-      const availableCodes = corridorStations.map((stn) => stn.code);
-      const firstSec = sections[0];
-      const defaultSrc = firstSec.source_station_code || firstSec.origin_station;
-      const defaultDst = firstSec.destination_station_code || firstSec.end_station;
-
-      if (!availableCodes.includes(sourceCode) && defaultSrc) {
+    if (availableSections && availableSections.length > 0) {
+      const active =
+        availableSections.find((s) => s.id === selectedSectionId) ||
+        availableSections[0];
+      if (active) {
+        const defaultSrc = active.source_station_code || active.origin_station || "NDLS";
+        const defaultDst = active.destination_station_code || active.end_station || "MTJ";
         setSourceCode(defaultSrc);
-      }
-      if (!availableCodes.includes(destinationCode) && defaultDst) {
         setDestinationCode(defaultDst);
       }
     }
-  }, [sections, corridorStations]);
+  }, [availableSections, selectedSectionId]);
+
+  const handleSelectSection = (secId: number) => {
+    setSelectedSectionId(secId);
+    const sec = availableSections.find((s) => s.id === secId);
+    if (sec) {
+      const src = sec.source_station_code || sec.origin_station;
+      const dst = sec.destination_station_code || sec.end_station;
+      if (src) setSourceCode(src);
+      if (dst) setDestinationCode(dst);
+    }
+  };
 
   const handleRefetchAll = () => {
     refetchTracked();
@@ -400,9 +387,6 @@ export default function TrainsPage() {
     refetchTrains();
     refetchMovements();
   };
-
-  const activeSectionId = selectedSectionId ?? (sections.length > 0 ? sections[0].id : null);
-  const currentSection = useMemo(() => sections.find((s) => s.id === activeSectionId) || sections[0] || null, [sections, activeSectionId]);
 
   const selectedScheduleDayIndex = useMemo(() => {
     try {
@@ -541,8 +525,8 @@ export default function TrainsPage() {
       setMovementForm({
         scheduleId: item.scheduleId,
         serviceDate: trackedDate,
-        actualEntry: formatTimeString(item.scheduledEntryTime),
-        actualExit: formatTimeString(item.scheduledExitTime),
+        actualEntry: formatTrainTimeIST(item.scheduledEntryTime),
+        actualExit: formatTrainTimeIST(item.scheduledExitTime),
       });
     } else {
       setMovementForm({
@@ -597,45 +581,13 @@ export default function TrainsPage() {
                 </div>
               </div>
 
-              <div className="p-4 rounded-xl bg-brand-tertiary/70 border border-brand-border/70 space-y-3">
-                {sections.length > 0 && (
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-3 border-b border-brand-border/60">
-                    <div className="flex items-center gap-2">
-                      <label className="text-[11px] font-extrabold text-brand-secondary uppercase tracking-wider">
-                        Select Railway Section:
-                      </label>
-                      <span className="text-[10px] text-brand-muted font-medium">({sections.length} sections available)</span>
-                    </div>
-                    <div className="relative w-full sm:w-auto min-w-[260px]">
-                      <select
-                        onChange={(e) => {
-                          const secId = Number(e.target.value);
-                          const sec = sections.find((s) => s.id === secId);
-                          if (sec) {
-                            const src = sec.source_station_code || sec.origin_station;
-                            const dst = sec.destination_station_code || sec.end_station;
-                            if (src) setSourceCode(src);
-                            if (dst) setDestinationCode(dst);
-                          }
-                        }}
-                        className="w-full bg-brand-surface border border-brand-border text-brand-secondary text-xs rounded-xl px-3 py-1.5 outline-none font-bold cursor-pointer appearance-none pr-8 shadow-2xs"
-                        defaultValue=""
-                      >
-                        <option value="" disabled>Select from available sections...</option>
-                        {sections.map((sec) => (
-                          <option key={sec.id} value={sec.id}>
-                            {sec.section_name} ({sec.origin_station} → {sec.end_station})
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown className="w-3.5 h-3.5 text-brand-muted absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-end">
-                  <div className="lg:col-span-4 space-y-1">
-                    <label className="text-[10px] font-extrabold text-brand-muted uppercase tracking-wider">Operation Date</label>
+              <div className="p-4 rounded-xl bg-brand-tertiary/70 border border-brand-border/70 space-y-3.5">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                  {/* Operation Date */}
+                  <div className="md:col-span-4 space-y-1">
+                    <label className="text-[12px] font-extrabold text-brand-muted tracking-wider block">
+                      Operation Date
+                    </label>
                     <input
                       type="date"
                       value={trackedDate}
@@ -644,69 +596,80 @@ export default function TrainsPage() {
                     />
                   </div>
 
-                  <div className="lg:col-span-3 space-y-1">
-                    <label className="text-[10px] font-extrabold text-brand-muted uppercase tracking-wider flex items-center justify-between">
-                      <span>Source Corridor Station</span>
-                      <span className="font-mono text-brand-primary">{sourceCode}</span>
+                  {/* Single Section Name Dropdown (Replaces the 2 separate station dropdowns & swap button) */}
+                  <div className="md:col-span-6 space-y-1">
+                    <label className="text-[12px] font-extrabold text-brand-muted tracking-wider flex items-center justify-between">
+                      <span>Railway Corridor Section</span>
+                      <span className="text-[10px] text-brand-muted font-medium">
+                        ({availableSections.length} sections available)
+                      </span>
                     </label>
                     <div className="relative">
                       <select
-                        value={sourceCode}
-                        onChange={(e) => setSourceCode(e.target.value)}
-                        className="w-full bg-brand-surface border border-brand-border text-xs text-brand-secondary font-bold rounded-xl px-3.5 py-2 outline-none cursor-pointer appearance-none"
+                        value={currentSection.id}
+                        onChange={(e) => handleSelectSection(Number(e.target.value))}
+                        className="w-full bg-brand-surface border border-brand-border text-xs text-brand-secondary font-bold rounded-xl px-3.5 py-2 outline-none cursor-pointer appearance-none pr-8 shadow-2xs"
                       >
-                        {corridorStations.map((stn) => (
-                          <option key={`src-${stn.code}`} value={stn.code}>{stn.code} — {stn.name}</option>
+                        {availableSections.map((sec) => (
+                          <option key={sec.id} value={sec.id}>
+                            {sec.section_name} ({sec.source_station_code || sec.origin_station} → {sec.destination_station_code || sec.end_station})
+                          </option>
                         ))}
                       </select>
                       <ChevronDown className="w-3.5 h-3.5 text-brand-muted absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     </div>
                   </div>
 
-                  <div className="lg:col-span-1 flex justify-center pb-1">
-                    <button
-                      onClick={handleSwapStations}
-                      title="Swap Source & Destination"
-                      className="p-2 rounded-xl bg-brand-surface border border-brand-border hover:bg-brand-blue-light text-brand-muted transition-colors cursor-pointer"
-                    >
-                      <ArrowLeftRight className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div className="lg:col-span-3 space-y-1">
-                    <label className="text-[10px] font-extrabold text-brand-muted uppercase tracking-wider flex items-center justify-between">
-                      <span>Destination Corridor Station</span>
-                      <span className="font-mono text-brand-primary">{destinationCode}</span>
-                    </label>
-                    <div className="relative">
-                      <select
-                        value={destinationCode}
-                        onChange={(e) => setDestinationCode(e.target.value)}
-                        className="w-full bg-brand-surface border border-brand-border text-xs text-brand-secondary font-bold rounded-xl px-3.5 py-2 outline-none cursor-pointer appearance-none"
-                      >
-                        {corridorStations.map((stn) => (
-                          <option key={`dst-${stn.code}`} value={stn.code}>{stn.code} — {stn.name}</option>
-                        ))}
-                      </select>
-                      <ChevronDown className="w-3.5 h-3.5 text-brand-muted absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    </div>
-                  </div>
-
-                  <div className="lg:col-span-1 flex justify-end">
+                  {/* Fetch Button */}
+                  <div className="md:col-span-2 flex justify-end">
                     <button
                       onClick={() => refetchTracked()}
-                      className="w-full px-3 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                      disabled={refetchingTracked}
+                      className="w-full px-4 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition-all disabled:opacity-50"
                     >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span>Fetch</span>
+                      <RefreshCw className={`w-3.5 h-3.5 ${refetchingTracked ? "animate-spin" : ""}`} />
+                      <span>{refetchingTracked ? "Fetching..." : "Fetch"}</span>
                     </button>
+                  </div>
+                </div>
+
+                {/* Live Corridor Status Bar */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-brand-border/60 text-xs">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] font-extrabold text-brand-muted uppercase tracking-wider">
+                      Active Corridor:
+                    </span>
+                    <span className="font-black text-brand-secondary text-xs">
+                      {currentSection.section_name}
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-lg bg-brand-surface border border-brand-border font-mono text-[11px] font-bold text-brand-primary">
+                      {currentSection.source_station_code || currentSection.origin_station} → {currentSection.destination_station_code || currentSection.end_station}
+                    </span>
+                    <span className="text-[11px] text-brand-muted font-bold">
+                      • {currentSection.distance} km
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-brand-muted font-bold">Corridor Status:</span>
+                    {currentSection.status !== false ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-300 text-[10px] font-black">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span>OPERATIONAL / LIVE</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-300 text-[10px] font-black">
+                        <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                        <span>MAINTENANCE BLOCK</span>
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
 
               <div className="overflow-x-auto border border-brand-border/80 rounded-xl">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-brand-surface text-brand-muted font-bold uppercase tracking-wider border-b border-brand-border text-[10px]">
+                  <thead className="bg-brand-surface text-brand-muted font-bold tracking-wider border-b border-brand-border text-[12px]">
                     <tr>
                       <th className="py-3 px-4">Train No. & Name</th>
                       <th className="py-3 px-4">Type & Priority</th>
@@ -714,49 +677,70 @@ export default function TrainsPage() {
                       <th className="py-3 px-4">Window</th>
                       <th className="py-3 px-4">Actuals</th>
                       <th className="py-3 px-4">Delay Matrix (IST)</th>
-                      <th className="py-3 px-4 text-right">Symbolic Presence & Action</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-border/60 text-brand-secondary">
-                    {paginatedTrackedTrains.map((item, idx) => {
-                      const theme = getTrainTypeTheme(item.train_type, item.train_name);
-                      const delayObj = formatDelayMetric(item.delay_minutes);
-                      return (
-                        <tr key={`${item.train_number}-${idx}`} className={`hover:bg-brand-tertiary/60 ${theme.borderColor}`}>
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-2.5">
-                              <div className={`w-1.5 h-8 rounded-full ${theme.lineColor}`} />
-                              <div>
-                                <div className="font-extrabold text-sm">{item.train_number}</div>
-                                <div className="text-brand-muted font-bold text-xs">{item.train_name}</div>
+                    {filteredTrackedTrains.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-12 text-center text-brand-muted">
+                          {loadingTracked ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <RefreshCw className="w-4 h-4 animate-spin text-brand-primary" />
+                              <span className="font-semibold text-xs text-brand-secondary">
+                                Loading tracked trains operations...
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="space-y-1.5 max-w-sm mx-auto">
+                              <TrainIcon className="w-8 h-8 text-brand-muted mx-auto opacity-50" />
+                              <div className="font-bold text-sm text-brand-secondary">
+                                No tracked trains found for this corridor and date
                               </div>
+                              <p className="text-xs text-brand-muted">
+                                Try choosing a different date or select another corridor section from the dropdown.
+                              </p>
                             </div>
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold border ${theme.badge}`}>
-                              {item.train_type}
-                            </span>
-                            <span className="ml-2 font-bold">{item.priority}/10</span>
-                          </td>
-                          <td className="py-3 px-4">{item.section.name}</td>
-                          <td className="py-3 px-4 font-mono">{formatTimeString(item.schedule.entry_time)} → {formatTimeString(item.schedule.exit_time)}</td>
-                          <td className="py-3 px-4 font-mono">{formatTimeString(item.movement?.actual_entry_time)} → {formatTimeString(item.movement?.actual_exit_time)}</td>
-                          <td className="py-3 px-4">
-                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold border ${delayObj.badgeClass}`}>
-                              {delayObj.text}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <span className={`w-2.5 h-6 rounded-xs ${theme.lineColor}`} />
-                              <button onClick={() => setInspectTrackedTrain(item)} className="p-1.5 rounded-lg bg-brand-surface border border-brand-border hover:bg-brand-tertiary">
-                                <Eye className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                          )}
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedTrackedTrains.map((item, idx) => {
+                        const theme = getTrainTypeTheme(item.train_type, item.train_name);
+                        const delayObj = formatDelayMetric(item.delay_minutes);
+                        return (
+                          <tr key={`${item.train_number}-${idx}`} className={"hover:bg-brand-tertiary/60"}>
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-2.5">
+                                <div className={`w-1.5 h-8 rounded-full ${theme.lineColor}`} />
+                                <div>
+                                  <div className="font-extrabold text-sm">{item.train_number}</div>
+                                  <div className="text-brand-muted font-bold text-xs">{item.train_name}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="ml-2 font-bold">{item.priority}/10</span>
+                            </td>
+                            <td className="py-3 px-4">{item.section.name}</td>
+                            <td className="py-3 px-4 font-mono">{formatTrainTimeIST(item.schedule.entry_time)} → {formatTrainTimeIST(item.schedule.exit_time)}</td>
+                            <td className="py-3 px-4 font-mono">{formatTrainTimeIST(item.movement?.actual_entry_time)} → {formatTrainTimeIST(item.movement?.actual_exit_time)}</td>
+                            <td className="py-3 px-4">
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold border ${delayObj.badgeClass}`}>
+                                {delayObj.text}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button onClick={() => setInspectTrackedTrain(item)} className="p-1.5 rounded-lg bg-brand-surface border border-brand-border hover:bg-brand-tertiary">
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -820,11 +804,10 @@ export default function TrainsPage() {
                           <button
                             key={pageNumber}
                             onClick={() => setTrackedCurrentPage(pageNumber)}
-                            className={`w-7 h-7 rounded-lg font-bold text-xs transition-colors cursor-pointer ${
-                              trackedCurrentPage === pageNumber
+                            className={`w-7 h-7 rounded-lg font-bold text-xs transition-colors cursor-pointer ${trackedCurrentPage === pageNumber
                                 ? "bg-brand-primary text-white shadow-xs"
                                 : "bg-brand-surface border border-brand-border text-brand-secondary hover:bg-brand-tertiary"
-                            }`}
+                              }`}
                           >
                             {pageNumber}
                           </button>
@@ -915,7 +898,7 @@ export default function TrainsPage() {
                       className="w-full bg-brand-surface border border-brand-border hover:border-brand-primary/50 focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3 py-2 outline-none font-bold cursor-pointer shadow-2xs"
                     >
                       <option value="">All Corridors & Sections</option>
-                      {sections.map((sec) => (
+                      {availableSections.map((sec) => (
                         <option key={sec.id} value={sec.id}>
                           {sec.section_name} ({sec.distance || 141} km) • {sec.origin_station} → {sec.end_station}
                         </option>
@@ -964,23 +947,22 @@ export default function TrainsPage() {
                       <button
                         key={type}
                         onClick={() => setScheduleTypeFilter(type)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-                          scheduleTypeFilter === type
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${scheduleTypeFilter === type
                             ? "bg-brand-primary text-white shadow-xs"
                             : "text-brand-muted hover:text-brand-secondary hover:bg-brand-surface"
-                        }`}
+                          }`}
                       >
-                        {type === "VB" ? "Vande Bharat" : type}
+                        {type === "VB" ? "Vande Bharat" :
+                         type.charAt(0) + type.slice(1).toLowerCase()}
                       </button>
                     ))}
 
                     <button
                       onClick={() => setRunsTodayOnly(!runsTodayOnly)}
-                      className={`flex items-center gap-1 px-3 py-1 rounded-xl text-xs font-bold border transition-all whitespace-nowrap cursor-pointer shadow-2xs ${
-                        runsTodayOnly
+                      className={`flex items-center gap-1 px-3 py-1 rounded-xl text-xs font-bold border transition-all whitespace-nowrap cursor-pointer shadow-2xs ${runsTodayOnly
                           ? "bg-brand-blue-light text-brand-primary border-brand-primary/30"
                           : "bg-brand-surface text-brand-secondary border-brand-border hover:bg-brand-surface/80"
-                      }`}
+                        }`}
                     >
                       <span>Runs Today</span>
                       <ChevronDown className="w-3 h-3" />
@@ -1025,7 +1007,7 @@ export default function TrainsPage() {
               {/* Table 2 Data View */}
               <div className="overflow-x-auto border border-brand-border/80 rounded-xl">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-brand-surface text-brand-muted font-bold uppercase tracking-wider border-b border-brand-border text-[10px]">
+                  <thead className="bg-brand-surface text-brand-muted font-bold tracking-wider border-b border-brand-border text-[12px]">
                     <tr>
                       <th className="py-3 px-4">Train No. & Name</th>
                       <th className="py-3 px-4">Priority & Type</th>
@@ -1033,15 +1015,13 @@ export default function TrainsPage() {
                       <th className="py-3 px-4">Scheduled Entry (IST)</th>
                       <th className="py-3 px-4">Scheduled Exit (IST)</th>
                       <th className="py-3 px-4">Transit Duration</th>
-                      <th className="py-3 px-4">Weekly Running Days</th>
-                      <th className="py-3 px-4">Operating Status</th>
-                      <th className="py-3 px-4 text-right">Symbolic Presence & Action</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-border/60 text-brand-secondary">
                     {filteredSchedules.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="py-14 text-center text-brand-muted">
+                        <td colSpan={7} className="py-14 text-center text-brand-muted">
                           <div className="flex flex-col items-center justify-center gap-2 max-w-md mx-auto">
                             <CalendarCheck className="w-8 h-8 text-brand-muted opacity-50" />
                             <div className="text-sm font-bold text-brand-secondary">
@@ -1060,7 +1040,7 @@ export default function TrainsPage() {
                         return (
                           <tr
                             key={item.id}
-                            className={`hover:bg-brand-tertiary/60 transition-colors ${theme.borderColor}`}
+                            className={"hover:bg-brand-tertiary/60 transition-colors"}
                           >
                             {/* Train No & Name with symbolic type bar */}
                             <td className="py-3 px-4">
@@ -1077,17 +1057,12 @@ export default function TrainsPage() {
                               </div>
                             </td>
 
-                            {/* Priority & Type */}
-                            <td className="py-3 px-4">
-                              <div className="flex items-center gap-2">
-                                <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-extrabold border ${theme.badge}`}>
-                                  {item.trainType}
-                                </span>
-                                <span className="font-bold text-brand-primary text-xs">
-                                  {item.priority}/10
-                                </span>
-                              </div>
-                            </td>
+                            {/* Priority */}
+<td className="py-3 px-4">
+  <span className="font-bold text-black text-xs">
+    {item.priority}/10
+  </span>
+</td>
 
                             {/* Section Corridor */}
                             <td className="py-3 px-4">
@@ -1099,7 +1074,7 @@ export default function TrainsPage() {
                             {/* Scheduled Entry */}
                             <td className="py-3 px-4">
                               <div className="text-brand-primary font-semibold text-xs font-mono">
-                                {formatTimeString(item.scheduledEntryTime)}
+                                {formatTrainTimeIST(item.scheduledEntryTime)}
                               </div>
                               <span className="text-[10px] text-brand-muted">IST Entry</span>
                             </td>
@@ -1107,7 +1082,7 @@ export default function TrainsPage() {
                             {/* Scheduled Exit */}
                             <td className="py-3 px-4">
                               <div className="text-brand-primary font-semibold text-xs font-mono">
-                                {formatTimeString(item.scheduledExitTime)}
+                                {formatTrainTimeIST(item.scheduledExitTime)}
                               </div>
                               <span className="text-[10px] text-brand-muted">IST Exit</span>
                             </td>
@@ -1119,69 +1094,17 @@ export default function TrainsPage() {
                               </div>
                             </td>
 
-                            {/* Running Days Strip */}
-                            <td className="py-3 px-4">
-                              <div className="flex items-center gap-1">
-                                {DAYS_SHORT.map((dayLabel, idx) => {
-                                  const runs = item.runningDays[idx] === "1";
-                                  const isSelectedDay = idx === selectedScheduleDayIndex;
-                                  return (
-                                    <span
-                                      key={idx}
-                                      title={`${DAYS_FULL[idx]}: ${runs ? "Operates" : "No Service"}`}
-                                      className={`w-4 h-4 rounded text-[9px] font-bold flex items-center justify-center ${
-                                        isSelectedDay
-                                          ? runs
-                                            ? "bg-brand-primary text-white shadow-xs"
-                                            : "bg-slate-200 text-slate-500"
-                                          : runs
-                                          ? "bg-brand-blue-light text-brand-primary border border-blue-200"
-                                          : "bg-brand-surface text-slate-300 border border-brand-border"
-                                      }`}
-                                    >
-                                      {dayLabel}
-                                    </span>
-                                  );
-                                })}
-                              </div>
-                              <span className="text-[9px] text-brand-muted block mt-0.5 font-medium">
-                                {item.runsToday ? "● Runs Today" : "○ Off Schedule"}
-                              </span>
-                            </td>
-
-                            {/* Status Badge */}
-                            <td className="py-3 px-4">
-                              <span
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold border shadow-2xs ${item.statusBadge}`}
-                              >
-                                <span className={`w-1.5 h-1.5 rounded-full ${item.statusDot}`} />
-                                <span>{item.statusText}</span>
-                              </span>
-                            </td>
 
                             {/* Actions & Symbolic End Presence */}
                             <td className="py-3 px-4 text-right">
                               <div className="flex items-center justify-end gap-2">
-                                <span
-                                  className={`w-2.5 h-6 rounded-xs ${theme.lineColor}`}
-                                  title={`${theme.displayName} Symbolic Presence`}
-                                />
-                                <div className="flex items-center gap-1.5">
-                                  <button
-                                    onClick={() => setInspectScheduleItem(item)}
-                                    className="p-1.5 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-brand-primary shadow-xs transition-colors cursor-pointer"
-                                    title="Inspect Master Schedule Details"
-                                  >
-                                    <Eye className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleOpenMovementModal(item)}
-                                    className="p-1.5 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-brand-primary shadow-xs transition-colors cursor-pointer"
-                                    title="Log Live Movement"
-                                  >
-                                    <Clock className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
+                                <button
+                                  onClick={() => setInspectScheduleItem(item)}
+                                  className="p-1.5 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-black shadow-xs transition-colors cursor-pointer"
+                                  title="Inspect Master Schedule Details"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
                               </div>
                             </td>
                           </tr>
@@ -1251,11 +1174,10 @@ export default function TrainsPage() {
                           <button
                             key={pageNumber}
                             onClick={() => setSchedulesCurrentPage(pageNumber)}
-                            className={`w-7 h-7 rounded-lg font-bold text-xs transition-colors cursor-pointer ${
-                              schedulesCurrentPage === pageNumber
+                            className={`w-7 h-7 rounded-lg font-bold text-xs transition-colors cursor-pointer ${schedulesCurrentPage === pageNumber
                                 ? "bg-brand-primary text-white shadow-xs"
                                 : "bg-brand-surface border border-brand-border text-brand-secondary hover:bg-brand-tertiary"
-                            }`}
+                              }`}
                           >
                             {pageNumber}
                           </button>
@@ -1332,35 +1254,34 @@ export default function TrainsPage() {
               </div>
               <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
                 <span className="text-brand-muted block text-[10px] uppercase font-bold">Scheduled Entry</span>
-                <span className="font-bold text-brand-primary mt-0.5 block font-mono">{inspectTrackedTrain.schedule.entry_time}</span>
+                <span className="font-bold text-brand-primary mt-0.5 block font-mono">{formatTrainTimeIST(inspectTrackedTrain.schedule.entry_time)}</span>
               </div>
               <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
                 <span className="text-brand-muted block text-[10px] uppercase font-bold">Scheduled Exit</span>
-                <span className="font-bold text-brand-primary mt-0.5 block font-mono">{inspectTrackedTrain.schedule.exit_time}</span>
+                <span className="font-bold text-brand-primary mt-0.5 block font-mono">{formatTrainTimeIST(inspectTrackedTrain.schedule.exit_time)}</span>
               </div>
               <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
                 <span className="text-brand-muted block text-[10px] uppercase font-bold">Delay Offset</span>
-                <span className={`font-bold mt-0.5 block ${
-                  (inspectTrackedTrain.delay_minutes ?? 0) > 0 ? "text-red-600" : "text-emerald-600"
-                }`}>
+                <span className={`font-bold mt-0.5 block ${(inspectTrackedTrain.delay_minutes ?? 0) > 0 ? "text-red-600" : "text-emerald-600"
+                  }`}>
                   {formatDelayMetric(inspectTrackedTrain.delay_minutes).text}
                 </span>
               </div>
             </div>
 
             <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border space-y-2 text-xs">
-              <span className="font-bold text-brand-secondary block">Actual Movement Timestamps</span>
+              <span className="font-bold text-brand-secondary block">Actual Movement Timestamps (IST)</span>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <span className="text-brand-muted block text-[10px]">Actual Entry Time:</span>
                   <span className="font-mono text-brand-secondary font-bold">
-                    {inspectTrackedTrain.movement?.actual_entry_time || "Not logged yet"}
+                    {formatTrainTimeIST(inspectTrackedTrain.movement?.actual_entry_time, "Not logged yet")}
                   </span>
                 </div>
                 <div>
                   <span className="text-brand-muted block text-[10px]">Actual Exit Time:</span>
                   <span className="font-mono text-brand-secondary font-bold">
-                    {inspectTrackedTrain.movement?.actual_exit_time || "Not logged yet"}
+                    {formatTrainTimeIST(inspectTrackedTrain.movement?.actual_exit_time, "Not logged yet")}
                   </span>
                 </div>
               </div>
@@ -1421,11 +1342,11 @@ export default function TrainsPage() {
               </div>
               <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
                 <span className="text-brand-muted block text-[10px] uppercase font-bold">Scheduled Entry</span>
-                <span className="font-bold text-brand-primary mt-0.5 block font-mono">{inspectScheduleItem.scheduledEntryTime}</span>
+                <span className="font-bold text-brand-primary mt-0.5 block font-mono">{formatTrainTimeIST(inspectScheduleItem.scheduledEntryTime)}</span>
               </div>
               <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
                 <span className="text-brand-muted block text-[10px] uppercase font-bold">Scheduled Exit</span>
-                <span className="font-bold text-brand-primary mt-0.5 block font-mono">{inspectScheduleItem.scheduledExitTime}</span>
+                <span className="font-bold text-brand-primary mt-0.5 block font-mono">{formatTrainTimeIST(inspectScheduleItem.scheduledExitTime)}</span>
               </div>
               <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
                 <span className="text-brand-muted block text-[10px] uppercase font-bold">Transit Duration</span>
@@ -1443,11 +1364,10 @@ export default function TrainsPage() {
                   return (
                     <div
                       key={d}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 ${
-                        runs
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 ${runs
                           ? "bg-brand-blue-light text-brand-primary border border-brand-primary/30"
                           : "bg-brand-surface text-slate-400 border border-brand-border"
-                      }`}
+                        }`}
                     >
                       <span>{d}</span>
                       <span>{runs ? "✓" : "✗"}</span>

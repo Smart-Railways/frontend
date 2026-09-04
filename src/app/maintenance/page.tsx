@@ -505,7 +505,7 @@ export default function MaintenancePage() {
               <span className="text-[11px] font-extrabold text-brand-muted uppercase tracking-wider mr-1">
                 Urgency:
               </span>
-              {["ALL", "CRITICAL", "HIGH", "MEDIUM", "LOW"].map((urg) => (
+              {["ALL", "Critical", "High", "Medium", "Low"].map((urg) => (
                 <button
                   key={urg}
                   onClick={() => setSelectedUrgencyFilter(urg)}
