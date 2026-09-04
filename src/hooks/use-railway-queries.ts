@@ -16,6 +16,7 @@ import {
   deleteMaintenanceTask,
   getTrains,
   getTrainById,
+  getTrackedTrainOperations,
   getTrainSchedules,
   getTrainScheduleById,
   createTrainSchedule,
@@ -39,6 +40,7 @@ import {
   CreateTrainMovementInput,
   ConflictCheckInput,
   FeasibleWindowsInput,
+  GetTrainOperationsParams,
 } from "@/types";
 
 // ==========================================
@@ -253,6 +255,21 @@ export function useTrain(id?: number | string | null) {
       return res.data ?? null;
     },
     enabled: !!id,
+    staleTime: TIMETABLE_STALE_TIME,
+    gcTime: TIMETABLE_GC_TIME,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useTrackedTrainOperations(params: GetTrainOperationsParams) {
+  return useQuery({
+    queryKey: ["train-operations", params.date, params.source, params.destination],
+    queryFn: async () => {
+      const res = await getTrackedTrainOperations(params);
+      if (!res.success) throw new Error(res.error || "Failed to fetch tracked train operations");
+      return res.data ?? null;
+    },
+    enabled: Boolean(params.date && params.source && params.destination),
     staleTime: TIMETABLE_STALE_TIME,
     gcTime: TIMETABLE_GC_TIME,
     refetchOnWindowFocus: false,
