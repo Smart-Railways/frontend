@@ -19,12 +19,7 @@ import {
   getTrackedTrainOperations,
   getTrainSchedules,
   getTrainScheduleById,
-  createTrainSchedule,
-  updateTrainSchedule,
-  deleteTrainSchedule,
   getTrainMovements,
-  getTrainMovementById,
-  createTrainMovement,
   getBlockWindows,
   getBlockWindowById,
   checkBlockConflict,
@@ -310,48 +305,6 @@ export function useTrainSchedule(id?: number | string | null) {
   });
 }
 
-export function useCreateTrainSchedule() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (data: CreateTrainScheduleInput) => {
-      const res = await createTrainSchedule(data);
-      if (!res.success) throw new Error(res.error || "Failed to create train schedule");
-      return res.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["train-schedules"] });
-    },
-  });
-}
-
-export function useUpdateTrainSchedule() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, data }: { id: number | string; data: CreateTrainScheduleInput }) => {
-      const res = await updateTrainSchedule(id, data);
-      if (!res.success) throw new Error(res.error || `Failed to update train schedule #${id}`);
-      return res.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["train-schedules"] });
-    },
-  });
-}
-
-export function useDeleteTrainSchedule() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: number | string) => {
-      const res = await deleteTrainSchedule(id);
-      if (!res.success) throw new Error(res.error || `Failed to delete train schedule #${id}`);
-      return res.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["train-schedules"] });
-    },
-  });
-}
-
 
 // ==========================================
 // Train Movements Queries & Mutations
@@ -368,36 +321,6 @@ export function useTrainMovements() {
     staleTime: TIMETABLE_STALE_TIME,
     gcTime: TIMETABLE_GC_TIME,
     refetchOnWindowFocus: false,
-  });
-}
-
-export function useTrainMovement(id?: number | string | null) {
-  return useQuery({
-    queryKey: ["train-movements", id],
-    queryFn: async () => {
-      if (!id) return null;
-      const res = await getTrainMovementById(id);
-      if (!res.success) throw new Error(res.error || `Failed to fetch train movement #${id}`);
-      return res.data ?? null;
-    },
-    enabled: !!id,
-    staleTime: TIMETABLE_STALE_TIME,
-    gcTime: TIMETABLE_GC_TIME,
-    refetchOnWindowFocus: false,
-  });
-}
-
-export function useCreateTrainMovement() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (data: CreateTrainMovementInput) => {
-      const res = await createTrainMovement(data);
-      if (!res.success) throw new Error(res.error || "Failed to create train movement");
-      return res.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["train-movements"] });
-    },
   });
 }
 

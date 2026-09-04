@@ -27,8 +27,6 @@ import {
   useTrainSchedules,
   useTrainMovements,
   useTrackedTrainOperations,
-  useCreateTrainSchedule,
-  useCreateTrainMovement,
 } from "@/hooks";
 import {
   TrackedTrainOperation,
@@ -339,8 +337,6 @@ export default function TrainsPage() {
   const { data: schedules = [], refetch: refetchSchedules } = useTrainSchedules();
   const { data: movements = [], refetch: refetchMovements } = useTrainMovements();
 
-  const createScheduleMutation = useCreateTrainSchedule();
-  const createMovementMutation = useCreateTrainMovement();
 
   const corridorStations = useMemo<{ code: string; name: string }[]>(() => {
     const stationMap = new Map<string, string>();
@@ -527,18 +523,6 @@ export default function TrainsPage() {
     is_active: true,
   });
 
-  const handleCreateScheduleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    createScheduleMutation.mutate(newScheduleData, {
-      onSuccess: () => {
-        setIsCreateScheduleModalOpen(false);
-        refetchSchedules();
-      },
-      onError: (err) => {
-        alert(err instanceof Error ? err.message : "Failed to create schedule");
-      },
-    });
-  };
 
   const [movementForm, setMovementForm] = useState<{
     scheduleId: number | string;
@@ -571,24 +555,6 @@ export default function TrainsPage() {
     setIsLogMovementModalOpen(true);
   };
 
-  const handleLogMovementSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    createMovementMutation.mutate({
-      schedule: Number(movementForm.scheduleId),
-      service_date: movementForm.serviceDate,
-      actual_entry_time: `${movementForm.serviceDate}T${movementForm.actualEntry}:00Z`,
-      actual_exit_time: movementForm.actualExit ? `${movementForm.serviceDate}T${movementForm.actualExit}:00Z` : null,
-    }, {
-      onSuccess: () => {
-        setIsLogMovementModalOpen(false);
-        refetchMovements();
-        refetchTracked();
-      },
-      onError: (err) => {
-        alert(err instanceof Error ? err.message : "Failed to log movement");
-      },
-    });
-  };
 
   return (
     <div className="min-h-screen bg-brand-tertiary text-brand-secondary flex flex-col font-sans">
@@ -1521,129 +1487,6 @@ export default function TrainsPage() {
                 ✕
               </button>
             </div>
-
-            <form onSubmit={handleCreateScheduleSubmit} className="space-y-4 text-xs">
-              <div>
-                <label className="font-bold text-brand-secondary block mb-1">Target Section</label>
-                <select
-                  value={newScheduleData.section}
-                  onChange={(e) =>
-                    setNewScheduleData((prev) => ({ ...prev, section: Number(e.target.value) }))
-                  }
-                  required
-                  className="w-full bg-brand-surface border border-brand-border text-brand-secondary text-xs rounded-xl px-3 py-2 outline-none cursor-pointer font-bold"
-                >
-                  {sections.map((sec) => (
-                    <option key={sec.id} value={sec.id}>
-                      {sec.section_name} ({sec.origin_station} → {sec.end_station})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="font-bold text-brand-secondary block mb-1">Select Train</label>
-                <select
-                  value={newScheduleData.train}
-                  onChange={(e) =>
-                    setNewScheduleData((prev) => ({ ...prev, train: Number(e.target.value) }))
-                  }
-                  required
-                  className="w-full bg-brand-surface border border-brand-border text-brand-secondary text-xs rounded-xl px-3 py-2 outline-none cursor-pointer font-bold"
-                >
-                  {trains.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.train_number} — {t.name} ({t.train_type}, Priority: {t.priority}/10)
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-brand-secondary block mb-1">Scheduled Entry Time (IST)</label>
-                  <input
-                    type="time"
-                    step="1"
-                    value={newScheduleData.scheduled_entry_time.substring(0, 5)}
-                    onChange={(e) =>
-                      setNewScheduleData((prev) => ({
-                        ...prev,
-                        scheduled_entry_time: `${e.target.value}:00`,
-                      }))
-                    }
-                    required
-                    className="w-full bg-brand-surface border border-brand-border text-brand-secondary text-xs rounded-xl px-3 py-2 outline-none font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="font-bold text-brand-secondary block mb-1">Scheduled Exit Time (IST)</label>
-                  <input
-                    type="time"
-                    step="1"
-                    value={newScheduleData.scheduled_exit_time.substring(0, 5)}
-                    onChange={(e) =>
-                      setNewScheduleData((prev) => ({
-                        ...prev,
-                        scheduled_exit_time: `${e.target.value}:00`,
-                      }))
-                    }
-                    required
-                    className="w-full bg-brand-surface border border-brand-border text-brand-secondary text-xs rounded-xl px-3 py-2 outline-none font-mono"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="font-bold text-brand-secondary block mb-1.5">
-                  Weekly Operating Days (Mon → Sun)
-                </label>
-                <div className="flex items-center gap-1.5">
-                  {DAYS_FULL.map((day, idx) => {
-                    const currentDays = newScheduleData.running_days || "1111111";
-                    const isSet = currentDays[idx] === "1";
-                    return (
-                      <button
-                        type="button"
-                        key={day}
-                        onClick={() => {
-                          const arr = currentDays.split("");
-                          arr[idx] = isSet ? "0" : "1";
-                          setNewScheduleData((prev) => ({
-                            ...prev,
-                            running_days: arr.join(""),
-                          }));
-                        }}
-                        className={`flex-1 py-1.5 rounded-lg text-center font-bold text-xs transition-colors cursor-pointer ${
-                          isSet
-                            ? "bg-brand-primary text-white shadow-xs"
-                            : "bg-brand-surface text-slate-400 border border-brand-border"
-                        }`}
-                      >
-                        {day}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-brand-border">
-                <button
-                  type="button"
-                  onClick={() => setIsCreateScheduleModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-brand-secondary transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createScheduleMutation.isPending}
-                  className="px-4 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-xs font-bold text-white shadow-xs transition-all disabled:opacity-50 cursor-pointer"
-                >
-                  {createScheduleMutation.isPending ? "Saving..." : "Save Schedule"}
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}
@@ -1667,92 +1510,6 @@ export default function TrainsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleLogMovementSubmit} className="space-y-4 text-xs">
-              <div>
-                <label className="font-bold text-brand-secondary block mb-1">
-                  Select Timetable Schedule
-                </label>
-                <select
-                  value={movementForm.scheduleId}
-                  onChange={(e) =>
-                    setMovementForm((prev) => ({
-                      ...prev,
-                      scheduleId: e.target.value ? Number(e.target.value) : "",
-                    }))
-                  }
-                  required
-                  className="w-full bg-brand-surface border border-brand-border text-brand-secondary text-xs rounded-xl px-3 py-2 outline-none cursor-pointer font-bold"
-                >
-                  <option value="">-- Choose schedule --</option>
-                  {masterTimetableItems.map((item) => (
-                    <option key={item.id} value={item.scheduleId || ""}>
-                      {item.trainNumber} — {item.trainName} ({formatTimeString(item.scheduledEntryTime)} →{" "}
-                      {formatTimeString(item.scheduledExitTime)})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="font-bold text-brand-secondary block mb-1">Service Date</label>
-                <input
-                  type="date"
-                  value={movementForm.serviceDate}
-                  onChange={(e) =>
-                    setMovementForm((prev) => ({ ...prev, serviceDate: e.target.value }))
-                  }
-                  required
-                  className="w-full bg-brand-surface border border-brand-border text-brand-secondary text-xs rounded-xl px-3 py-2 outline-none cursor-pointer font-bold"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-brand-secondary block mb-1">
-                    Actual Entry Time (IST)
-                  </label>
-                  <input
-                    type="time"
-                    value={movementForm.actualEntry}
-                    onChange={(e) =>
-                      setMovementForm((prev) => ({ ...prev, actualEntry: e.target.value }))
-                    }
-                    required
-                    className="w-full bg-brand-surface border border-brand-border text-brand-secondary text-xs rounded-xl px-3 py-2 outline-none font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="font-bold text-brand-secondary block mb-1">
-                    Actual Exit Time (IST)
-                  </label>
-                  <input
-                    type="time"
-                    value={movementForm.actualExit}
-                    onChange={(e) =>
-                      setMovementForm((prev) => ({ ...prev, actualExit: e.target.value }))
-                    }
-                    className="w-full bg-brand-surface border border-brand-border text-brand-secondary text-xs rounded-xl px-3 py-2 outline-none font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-brand-border">
-                <button
-                  type="button"
-                  onClick={() => setIsLogMovementModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-brand-secondary transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createMovementMutation.isPending}
-                  className="px-4 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-xs font-bold text-white shadow-xs transition-all disabled:opacity-50 cursor-pointer"
-                >
-                  {createMovementMutation.isPending ? "Logging..." : "Save Movement Record"}
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}
