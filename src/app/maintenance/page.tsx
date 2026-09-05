@@ -16,7 +16,6 @@ import {
   Edit2,
   Trash2,
   Eye,
-  LayoutGrid,
   Table as TableIcon,
   ShieldAlert,
   Zap,
@@ -268,7 +267,7 @@ export default function MaintenancePage() {
   const [selectedUrgencyFilter, setSelectedUrgencyFilter] = useState<string>("ALL");
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>("ALL");
   const [selectedAssetFilter, setSelectedAssetFilter] = useState<string>("ALL");
-  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
+  const [viewMode, setViewMode] = useState<"table">("table");
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const showToast = (type: "success" | "error", text: string) => {
@@ -683,19 +682,19 @@ export default function MaintenancePage() {
 
               <button
                 onClick={() => handleOpenConflictModal()}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100/80 border border-amber-200 text-xs font-bold text-amber-800 transition-colors cursor-pointer shadow-2xs"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-brand-secondary/80 border text-xs font-bold text-white transition-colors cursor-pointer shadow-2xs"
                 title="Run timetable conflict simulation against active train movements"
               >
-                <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                <ShieldAlert className="w-3.5 h-3.5 text-white" />
                 <span>Check Conflict</span>
               </button>
 
               <button
                 onClick={() => handleOpenFeasibleModal()}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-50 hover:bg-purple-100/80 border border-purple-200 text-xs font-bold text-purple-800 transition-colors cursor-pointer shadow-2xs"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-brand-secondary/80 border text-xs font-bold text-white transition-colors cursor-pointer shadow-2xs"
                 title="Find feasible maintenance windows for tasks"
               >
-                <Timer className="w-3.5 h-3.5 text-purple-600" />
+                <Timer className="w-3.5 h-3.5 text-white" />
                 <span>Feasible Windows</span>
               </button>
 
@@ -712,7 +711,7 @@ export default function MaintenancePage() {
           {/* Metric Cards */}
           <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="p-4 rounded-2xl bg-brand-surface border border-brand-border shadow-sm flex items-start gap-3.5">
-              <div className="w-9 h-9 rounded-full bg-brand-blue-light text-brand-primary flex items-center justify-center flex-shrink-0 mt-0.5">
+              <div className="w-9 h-9 rounded-full bg-brand-secondary/80 text-white flex items-center justify-center flex-shrink-0 mt-0.5">
                 <Wrench className="w-4 h-4" />
               </div>
               <div>
@@ -729,7 +728,7 @@ export default function MaintenancePage() {
             </div>
 
             <div className="p-4 rounded-2xl bg-brand-surface border border-brand-border shadow-sm flex items-start gap-3.5">
-              <div className="w-9 h-9 rounded-full bg-amber-50 text-amber-700 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <div className="w-9 h-9 rounded-full bg-brand-secondary/80 text-white flex items-center justify-center flex-shrink-0 mt-0.5">
                 <Hourglass className="w-4 h-4" />
               </div>
               <div>
@@ -739,14 +738,14 @@ export default function MaintenancePage() {
                 {loadingTasks ? (
                   <Skeleton className="h-8 w-14 my-0.5 rounded-lg" />
                 ) : (
-                  <div className="text-2xl font-black text-amber-600 tracking-tight">{stats.pendingCount}</div>
+                  <div className="text-2xl font-black text-black tracking-tight">{stats.pendingCount}</div>
                 )}
                 <div className="text-[11px] text-brand-muted mt-0.5 font-medium">Needs block allocation</div>
               </div>
             </div>
 
             <div className="p-4 rounded-2xl bg-brand-surface border border-brand-border shadow-sm flex items-start gap-3.5">
-              <div className="w-9 h-9 rounded-full bg-brand-blue-light text-brand-primary flex items-center justify-center flex-shrink-0 mt-0.5">
+              <div className="w-9 h-9 rounded-full bg-brand-secondary/80 text-white flex items-center justify-center flex-shrink-0 mt-0.5">
                 <Clock className="w-4 h-4" />
               </div>
               <div>
@@ -756,14 +755,14 @@ export default function MaintenancePage() {
                 {loadingTasks ? (
                   <Skeleton className="h-8 w-14 my-0.5 rounded-lg" />
                 ) : (
-                  <div className="text-2xl font-black text-brand-primary tracking-tight">{stats.scheduledCount}</div>
+                  <div className="text-2xl font-black text-black tracking-tight">{stats.scheduledCount}</div>
                 )}
                 <div className="text-[11px] text-brand-muted mt-0.5 font-medium">Ready for dispatch</div>
               </div>
             </div>
 
             <div className="p-4 rounded-2xl bg-brand-surface border border-brand-border shadow-sm flex items-start gap-3.5">
-              <div className="w-9 h-9 rounded-full bg-red-50 text-red-600 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <div className="w-9 h-9 rounded-full bg-brand-secondary/80 text-white flex items-center justify-center flex-shrink-0 mt-0.5">
                 <ShieldAlert className="w-4 h-4" />
               </div>
               <div>
@@ -773,14 +772,14 @@ export default function MaintenancePage() {
                 {loadingTasks ? (
                   <Skeleton className="h-8 w-14 my-0.5 rounded-lg" />
                 ) : (
-                  <div className="text-2xl font-black text-red-600 tracking-tight">{stats.criticalCount}</div>
+                  <div className="text-2xl font-black text-black tracking-tight">{stats.criticalCount}</div>
                 )}
                 <div className="text-[11px] text-brand-muted mt-0.5 font-medium">High risk or urgent</div>
               </div>
             </div>
 
             <div className="p-4 rounded-2xl bg-brand-surface border border-brand-border shadow-sm flex items-start gap-3.5">
-              <div className="w-9 h-9 rounded-full bg-purple-50 text-purple-700 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <div className="w-9 h-9 rounded-full bg-brand-secondary/80 text-white flex items-center justify-center flex-shrink-0 mt-0.5">
                 <Zap className="w-4 h-4" />
               </div>
               <div>
@@ -883,17 +882,6 @@ export default function MaintenancePage() {
                 >
                   <TableIcon className="w-4 h-4" />
                 </button>
-                <button
-                  onClick={() => setViewMode("cards")}
-                  className={`p-2 rounded-xl border transition-colors cursor-pointer shadow-2xs ${
-                    viewMode === "cards"
-                      ? "bg-brand-primary text-white border-brand-primary"
-                      : "bg-brand-surface text-brand-muted border-brand-border hover:bg-brand-tertiary"
-                  }`}
-                  title="Card Grid View"
-                >
-                  <LayoutGrid className="w-4 h-4" />
-                </button>
               </div>
             </div>
 
@@ -955,8 +943,7 @@ export default function MaintenancePage() {
 
             {/* View Switching */}
             {(loadingTasks || loadingAssets || refetchingTasks) ? (
-              viewMode === "table" ? (
-                <div className="overflow-x-auto">
+              <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead className="bg-brand-surface text-brand-muted font-semibold border-b border-brand-border text-xs">
                       <tr>
@@ -1019,40 +1006,6 @@ export default function MaintenancePage() {
                     </tbody>
                   </table>
                 </div>
-              ) : (
-                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {Array.from({ length: 6 }).map((_, idx) => (
-                    <div key={idx} className="p-4 rounded-xl bg-brand-surface border border-brand-border flex flex-col justify-between space-y-3 shadow-sm">
-                      <div className="space-y-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="space-y-1.5">
-                            <Skeleton className="h-4 w-24" />
-                            <Skeleton className="h-4 w-36" />
-                          </div>
-                          <Skeleton className="h-5 w-16 rounded-md" />
-                        </div>
-                        <div className="space-y-2 pt-1">
-                          <div className="flex items-center justify-between">
-                            <Skeleton className="h-3 w-14" />
-                            <Skeleton className="h-3 w-28" />
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <Skeleton className="h-3 w-14" />
-                            <Skeleton className="h-5 w-20 rounded-md" />
-                          </div>
-                        </div>
-                      </div>
-                      <div className="pt-2 border-t border-brand-border flex items-center justify-between">
-                        <Skeleton className="h-4 w-16 rounded" />
-                        <div className="flex items-center gap-1.5">
-                          <Skeleton className="w-7 h-7 rounded-lg" />
-                          <Skeleton className="w-7 h-7 rounded-lg" />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )
             ) : filteredTasks.length === 0 ? (
               <div className="py-16 text-center text-brand-muted">
                 <div className="flex flex-col items-center justify-center gap-3">
@@ -1072,7 +1025,7 @@ export default function MaintenancePage() {
                   </button>
                 </div>
               </div>
-            ) : viewMode === "table" ? (
+            ) : (
               /* TABLE VIEW */
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
@@ -1081,7 +1034,6 @@ export default function MaintenancePage() {
                       <th className="py-3 px-4">Task Code</th>
                       <th className="py-3 px-4">Target Asset</th>
                       <th className="py-3 px-4">Corridor / Section</th>
-                      <th className="py-3 px-4">Urgency</th>
                       <th className="py-3 px-4">Risk Rating</th>
                       <th className="py-3 px-4">Duration</th>
                       <th className="py-3 px-4">Deadline</th>
@@ -1110,25 +1062,12 @@ export default function MaintenancePage() {
                             <div className="font-extrabold text-brand-secondary">
                               {task.asset_name || `Asset #${task.asset}`}
                             </div>
-                            {task.details && (
-                              <div className="text-[10px] text-brand-muted truncate max-w-xs font-medium">
-                                {task.details}
-                              </div>
-                            )}
                           </td>
                           <td className="py-3.5 px-4">
                             <div className="flex items-center gap-1.5 font-semibold text-brand-secondary text-xs">
                               <MapPin className="w-3.5 h-3.5 text-brand-primary shrink-0" />
                               <span>{corridorName}</span>
                             </div>
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <span
-                              className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-extrabold border ${urg.badge}`}
-                            >
-                              <span className={`w-1.5 h-1.5 rounded-full ${urg.dot}`}></span>
-                              {task.urgency}
-                            </span>
                           </td>
                           <td className="py-3.5 px-4">
                             <span className="font-mono font-bold text-brand-secondary text-xs">
@@ -1151,13 +1090,6 @@ export default function MaintenancePage() {
                           </td>
                           <td className="py-3.5 px-4 text-right">
                             <div className="flex items-center justify-end gap-1.5">
-                              <button
-                                onClick={() => handleOpenFeasibleModal(task)}
-                                className="p-1.5 rounded-lg bg-brand-surface hover:bg-purple-50 border border-brand-border hover:border-purple-200 text-purple-600 shadow-xs transition-colors cursor-pointer"
-                                title="Check Feasible Windows"
-                              >
-                                <Timer className="w-3.5 h-3.5" />
-                              </button>
                               <button
                                 onClick={() => setInspectingTask(task)}
                                 className="p-1.5 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-brand-primary shadow-xs transition-colors cursor-pointer"
@@ -1186,116 +1118,6 @@ export default function MaintenancePage() {
                     })}
                   </tbody>
                 </table>
-              </div>
-            ) : (
-              /* CARD GRID VIEW */
-              <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredTasks.map((task) => {
-                  const urgKey = (task.urgency as MaintenancePriority) || MaintenancePriority.MEDIUM;
-                  const statKey = (task.task_status as MaintenanceStatus) || MaintenanceStatus.PENDING;
-                  const urg = URGENCY_CONFIG[urgKey] || URGENCY_CONFIG[MaintenancePriority.MEDIUM];
-                  const stat = STATUS_CONFIG[statKey] || STATUS_CONFIG[MaintenanceStatus.PENDING];
-
-                  return (
-                    <div
-                      key={task.id}
-                      className="p-4 rounded-xl bg-brand-surface border border-brand-border hover:border-brand-primary/50 transition-all flex flex-col justify-between space-y-3 shadow-sm"
-                    >
-                      <div className="space-y-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <span className="font-mono font-black text-brand-primary text-sm">
-                              {task.task_code}
-                            </span>
-                            <h3 className="text-sm font-bold text-brand-secondary">
-                              {task.asset_name || `Asset #${task.asset}`}
-                            </h3>
-                          </div>
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold border ${urg.badge}`}
-                          >
-                            <span className={`w-1.5 h-1.5 rounded-full ${urg.dot}`}></span>
-                            {task.urgency}
-                          </span>
-                        </div>
-
-                        {task.details && (
-                          <p className="text-xs text-brand-muted line-clamp-2 font-medium">
-                            {task.details}
-                          </p>
-                        )}
-
-                        <div className="space-y-1 pt-1 text-xs">
-                          <div className="flex items-center justify-between text-brand-muted">
-                            <span>Corridor:</span>
-                            <span className="font-bold text-brand-secondary flex items-center gap-1">
-                              <MapPin className="w-3 h-3 text-brand-primary shrink-0" />
-                              {task.section_name || assets.find((a) => a.id === task.asset)?.section_name || "General Corridor"}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between text-brand-muted">
-                            <span>Duration:</span>
-                            <span className="font-mono font-bold text-brand-secondary">
-                              {task.estimated_duration} mins
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between text-brand-muted">
-                            <span>Risk Rating:</span>
-                            <span className="font-mono font-bold text-brand-secondary">
-                              {task.risk_rating}/10
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between text-brand-muted">
-                            <span>Deadline:</span>
-                            <span className="font-mono text-brand-secondary font-medium">
-                              {formatDate(task.deadline)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="pt-2 border-t border-brand-border flex items-center justify-between">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${stat.badge}`}
-                        >
-                          <stat.icon className="w-3 h-3" />
-                          {stat.label}
-                        </span>
-
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => handleOpenFeasibleModal(task)}
-                            className="p-1.5 rounded-lg bg-brand-surface hover:bg-purple-50 border border-brand-border hover:border-purple-200 text-purple-600 transition-colors cursor-pointer"
-                            title="Check Feasible Windows"
-                          >
-                            <Timer className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => setInspectingTask(task)}
-                            className="p-1.5 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-brand-primary transition-colors cursor-pointer"
-                            title="Inspect"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleOpenEditModal(task)}
-                            className="p-1.5 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-brand-primary transition-colors cursor-pointer"
-                            title="Edit"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => setDeletingTask(task)}
-                            className="p-1.5 rounded-lg bg-brand-surface hover:bg-red-50 border border-brand-border text-red-600 transition-colors cursor-pointer"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
             )}
           </section>
