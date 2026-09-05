@@ -1,4 +1,5 @@
-export type AssetDepartment = "ENGINEERING" | "SNT" | "TRACTION";
+import { AssetDepartment } from "@/enums/assets";
+export { AssetDepartment };
 
 export interface Asset {
   id: number;

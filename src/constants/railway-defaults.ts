@@ -4,6 +4,7 @@ import {
   TrainSchedule,
   TrainOperationsResponse,
 } from "@/types";
+import { TrainType, RunningDaysPattern } from "@/enums";
 
 export const DEFAULT_RAILWAY_SECTIONS: RailwaySection[] = [
   {
@@ -109,25 +110,25 @@ export const DEFAULT_RAILWAY_SECTIONS: RailwaySection[] = [
 ];
 
 export const DEFAULT_TRAINS: Train[] = [
-  { id: 219, train_number: "12442", name: "BSP RAJDHNI EXP", train_type: "RAJDHANI", priority: 10 },
-  { id: 220, train_number: "12612", name: "MAS GARIB RATH", train_type: "EXPRESS", priority: 7 },
-  { id: 221, train_number: "12550", name: "MCTM DURG SF EXP", train_type: "EXPRESS", priority: 8 },
-  { id: 200, train_number: "12716", name: "ASR NED SF EXP", train_type: "EXPRESS", priority: 7 },
-  { id: 178, train_number: "22458", name: "AADR NED SF EXP", train_type: "EXPRESS", priority: 8 },
-  { id: 170, train_number: "12722", name: "DAKSHIN EXP", train_type: "EXPRESS", priority: 6 },
-  { id: 101, train_number: "64074", name: "NDLS-DHO EMU", train_type: "PASSENGER", priority: 5 },
-  { id: 102, train_number: "12138", name: "PUNJAB MAIL", train_type: "EXPRESS", priority: 6 },
-  { id: 103, train_number: "12002", name: "SHATABDI EXPRES", train_type: "SHATABDI", priority: 10 },
-  { id: 104, train_number: "12280", name: "TAJ EXPRESS", train_type: "EXPRESS", priority: 6 },
-  { id: 105, train_number: "20452", name: "NDLS SGAC SF EX", train_type: "EXPRESS", priority: 8 },
-  { id: 106, train_number: "11906", name: "HSX AGC EXP", train_type: "EXPRESS", priority: 6 },
-  { id: 107, train_number: "11078", name: "JHELUM EXPRESS", train_type: "EXPRESS", priority: 6 },
-  { id: 108, train_number: "12724", name: "TELANGANA EXP", train_type: "EXPRESS", priority: 6 },
-  { id: 109, train_number: "12616", name: "GRAND TRUNK EXP", train_type: "EXPRESS", priority: 6 },
-  { id: 110, train_number: "14212", name: "INTERCITY EXP", train_type: "EXPRESS", priority: 6 },
-  { id: 111, train_number: "12628", name: "KARNATAKA EXP", train_type: "EXPRESS", priority: 6 },
-  { id: 112, train_number: "12920", name: "MALWA EXPRESS", train_type: "EXPRESS", priority: 6 },
-  { id: 113, train_number: "11058", name: "ASR CSMT EXP", train_type: "EXPRESS", priority: 6 },
+  { id: 219, train_number: "12442", name: "BSP RAJDHNI EXP", train_type: TrainType.RAJDHANI, priority: 10 },
+  { id: 220, train_number: "12612", name: "MAS GARIB RATH", train_type: TrainType.EXPRESS, priority: 7 },
+  { id: 221, train_number: "12550", name: "MCTM DURG SF EXP", train_type: TrainType.EXPRESS, priority: 8 },
+  { id: 200, train_number: "12716", name: "ASR NED SF EXP", train_type: TrainType.EXPRESS, priority: 7 },
+  { id: 178, train_number: "22458", name: "AADR NED SF EXP", train_type: TrainType.EXPRESS, priority: 8 },
+  { id: 170, train_number: "12722", name: "DAKSHIN EXP", train_type: TrainType.EXPRESS, priority: 6 },
+  { id: 101, train_number: "64074", name: "NDLS-DHO EMU", train_type: TrainType.PASSENGER, priority: 5 },
+  { id: 102, train_number: "12138", name: "PUNJAB MAIL", train_type: TrainType.EXPRESS, priority: 6 },
+  { id: 103, train_number: "12002", name: "SHATABDI EXPRES", train_type: TrainType.SHATABDI, priority: 10 },
+  { id: 104, train_number: "12280", name: "TAJ EXPRESS", train_type: TrainType.EXPRESS, priority: 6 },
+  { id: 105, train_number: "20452", name: "NDLS SGAC SF EX", train_type: TrainType.EXPRESS, priority: 8 },
+  { id: 106, train_number: "11906", name: "HSX AGC EXP", train_type: TrainType.EXPRESS, priority: 6 },
+  { id: 107, train_number: "11078", name: "JHELUM EXPRESS", train_type: TrainType.EXPRESS, priority: 6 },
+  { id: 108, train_number: "12724", name: "TELANGANA EXP", train_type: TrainType.EXPRESS, priority: 6 },
+  { id: 109, train_number: "12616", name: "GRAND TRUNK EXP", train_type: TrainType.EXPRESS, priority: 6 },
+  { id: 110, train_number: "14212", name: "INTERCITY EXP", train_type: TrainType.EXPRESS, priority: 6 },
+  { id: 111, train_number: "12628", name: "KARNATAKA EXP", train_type: TrainType.EXPRESS, priority: 6 },
+  { id: 112, train_number: "12920", name: "MALWA EXPRESS", train_type: TrainType.EXPRESS, priority: 6 },
+  { id: 113, train_number: "11058", name: "ASR CSMT EXP", train_type: TrainType.EXPRESS, priority: 6 },
 ];
 
 export const DEFAULT_TRACKED_OPERATIONS: TrainOperationsResponse = {
@@ -478,7 +479,7 @@ export const DEFAULT_TRAIN_SCHEDULES: TrainSchedule[] = [
     section_name: "Gwalior-Jhansi",
     scheduled_entry_time: "03:22:00",
     scheduled_exit_time: "05:02:00",
-    running_days: "1111111",
+    running_days: RunningDaysPattern.DAILY,
     is_active: true,
   },
   {
@@ -511,7 +512,7 @@ export const DEFAULT_TRAIN_SCHEDULES: TrainSchedule[] = [
     section_name: "Gwalior-Jhansi",
     scheduled_entry_time: "05:00:00",
     scheduled_exit_time: "07:15:00",
-    running_days: "1111111",
+    running_days: RunningDaysPattern.DAILY,
     is_active: true,
   },
   {
@@ -533,7 +534,7 @@ export const DEFAULT_TRAIN_SCHEDULES: TrainSchedule[] = [
     section_name: "New Delhi - Mathura",
     scheduled_entry_time: "04:15:00",
     scheduled_exit_time: "08:10:00",
-    running_days: "1111111",
+    running_days: RunningDaysPattern.DAILY,
     is_active: true,
   },
   {
@@ -544,7 +545,7 @@ export const DEFAULT_TRAIN_SCHEDULES: TrainSchedule[] = [
     section_name: "New Delhi - Mathura",
     scheduled_entry_time: "05:10:00",
     scheduled_exit_time: "07:23:00",
-    running_days: "1111111",
+    running_days: RunningDaysPattern.DAILY,
     is_active: true,
   },
   {

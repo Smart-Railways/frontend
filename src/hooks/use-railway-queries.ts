@@ -18,6 +18,7 @@ import {
   getTrainById,
   getTrackedTrainOperations,
   getTrainSchedules,
+  getPaginatedTrainSchedules,
   getTrainScheduleById,
   getTrainMovements,
   getBlockWindows,
@@ -32,6 +33,7 @@ import {
   UpdateMaintenanceTaskInput,
   CreateTrainScheduleInput,
   UpdateTrainScheduleInput,
+  GetTrainSchedulesParams,
   CreateTrainMovementInput,
   ConflictCheckInput,
   FeasibleWindowsInput,
@@ -275,13 +277,27 @@ export function useTrackedTrainOperations(params: GetTrainOperationsParams) {
 // Train Schedules (Master Time Table TT) Queries & Mutations
 // ==========================================
 
-export function useTrainSchedules() {
+export function useTrainSchedules(params?: GetTrainSchedulesParams) {
   return useQuery({
-    queryKey: ["train-schedules"],
+    queryKey: ["train-schedules", params],
     queryFn: async () => {
-      const res = await getTrainSchedules();
+      const res = await getTrainSchedules(params);
       if (!res.success) throw new Error(res.error || "Failed to fetch train schedules");
       return res.data ?? [];
+    },
+    staleTime: TIMETABLE_STALE_TIME,
+    gcTime: TIMETABLE_GC_TIME,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function usePaginatedTrainSchedules(params?: GetTrainSchedulesParams) {
+  return useQuery({
+    queryKey: ["train-schedules-paginated", params],
+    queryFn: async () => {
+      const res = await getPaginatedTrainSchedules(params);
+      if (!res.success) throw new Error(res.error || "Failed to fetch paginated train schedules");
+      return res.data;
     },
     staleTime: TIMETABLE_STALE_TIME,
     gcTime: TIMETABLE_GC_TIME,

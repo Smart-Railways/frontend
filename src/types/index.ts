@@ -6,4 +6,6 @@ export * from "./trains";
 export * from "./schedules";
 export * from "./train-movements";
 export * from "./blocks";
+export * from "./planning";
+export * from "@/enums";
 

@@ -67,18 +67,6 @@ export function VerticalNavbar({
       icon: Wrench,
       href: "/maintenance",
     },
-    {
-      id: "orders",
-      label: "Orders",
-      icon: ClipboardList,
-      href: "/maintenance",
-    },
-    {
-      id: "alerts",
-      label: "Alerts",
-      icon: Bell,
-      href: "/",
-    },
   ];
 
   return (
@@ -189,56 +177,7 @@ export function VerticalNavbar({
           })}
         </nav>
       </div>
-
-      {/* =========================
-          BOTTOM SECTION
-      ========================== */}
-      <div className="p-3 space-y-2 border-t border-[#262b34]/60">
-        {/* System Status Box */}
-        {!collapsed ? (
-          <div className="p-3 rounded-xl bg-[#0f141a] border border-[#262b34] space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-primary"></span>
-              </span>
-              <span className="text-[11px] font-semibold text-slate-300">
-                System Status
-              </span>
-            </div>
-            <div className="text-[10px] font-medium text-emerald-400 pl-4">
-              All Systems Operational
-            </div>
-          </div>
-        ) : (
-          <div className="flex justify-center py-2" title="System Status: Operational">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-            </span>
-          </div>
-        )}
-
-        {/* User Profile Box */}
-        <div className="flex items-center justify-between p-2 rounded-xl hover:bg-[#1f242d] transition-colors cursor-pointer">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-full bg-brand-surface text-brand-secondary font-bold text-xs flex items-center justify-center flex-shrink-0 shadow-sm">
-              AD
-            </div>
-            {!collapsed && (
-              <div className="min-w-0">
-                <div className="text-xs font-bold text-white truncate">
-                  Admin User
-                </div>
-                <div className="text-[10px] text-slate-400 truncate">
-                  Control Room
-                </div>
-              </div>
-            )}
-          </div>
-          {!collapsed && <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
-        </div>
-      </div>
+      
     </aside>
   );
 }

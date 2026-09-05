@@ -1,3 +1,7 @@
+import { RunningDaysPattern } from "@/enums/schedules";
+import { PaginatedResponse } from "@/types/common";
+export { RunningDaysPattern };
+
 export interface TrainSchedule {
   id: number;
   train: number;
@@ -10,6 +14,16 @@ export interface TrainSchedule {
   running_days?: string;
   is_active?: boolean;
 }
+
+export interface GetTrainSchedulesParams {
+  date?: string;
+  source?: string;
+  destination?: string;
+  page?: number;
+  page_size?: number;
+}
+
+export type PaginatedTrainSchedulesResponse = PaginatedResponse<TrainSchedule>;
 
 export interface CreateTrainScheduleInput {
   train: number;

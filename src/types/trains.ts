@@ -1,10 +1,5 @@
-export type TrainType =
-  | "PASSENGER"
-  | "EXPRESS"
-  | "RAJDHANI"
-  | "VB"
-  | "SHATABDI"
-  | "FREIGHT";
+import { TrainType } from "@/enums/trains";
+export { TrainType };
 
 export interface Train {
   id: number;

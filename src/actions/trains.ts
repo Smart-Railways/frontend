@@ -1,6 +1,7 @@
 "use server";
 
 import { api, safeApiCall } from "@/lib/axios";
+import { normalizeTrainOperationsResponse } from "@/lib/train-operations-normalizer";
 import {
   Train,
   CreateTrainInput,
@@ -61,7 +62,14 @@ export async function getTrackedTrainOperations(
     };
   }
 
-  return res;
+  // Re-compute delay_minutes from IST-converted timestamps.
+  // The backend calculates delay by diffing UTC movement timestamps against
+  // IST timetable strings without applying the +05:30 offset, producing
+  // phantom 1440-min (24 h) delays. The normalizer corrects this client-side.
+  return {
+    ...res,
+    data: res.data ? normalizeTrainOperationsResponse(res.data) : res.data,
+  };
 }
 
 export async function getTrainById(

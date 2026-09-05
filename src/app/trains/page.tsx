@@ -26,237 +26,29 @@ import {
   useRailwaySections,
   useTrains,
   useTrainSchedules,
+  usePaginatedTrainSchedules,
   useTrainMovements,
   useTrackedTrainOperations,
 } from "@/hooks";
 import {
   TrackedTrainOperation,
   TrainSchedule,
-  CreateTrainScheduleInput,
   CreateTrainMovementInput,
 } from "@/types";
+import { TrainType } from "@/enums";
 import { DEFAULT_RAILWAY_SECTIONS } from "@/constants/railway-defaults";
-import { formatTrainTimeIST, formatTimeString } from "@/lib/time-utils";
+import {
+  formatTrainTimeIST,
+  formatTimeString,
+  formatDateToISO,
+  formatDisplayDate,
+  formatDelayMetric,
+  calculateTimeDuration,
+} from "@/lib/time-utils";
+import { getTrainTypeTheme } from "@/lib/train-theme";
 
-const DAYS_SHORT = ["M", "T", "W", "T", "F", "S", "S"];
 const DAYS_FULL = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-// Helper to format date as YYYY-MM-DD
-function formatDateToISO(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-// Helper to format date display (e.g. "Fri, 04 Sept, 2026")
-function formatDisplayDate(dateStr: string): string {
-  try {
-    const [y, m, d] = dateStr.split("-").map(Number);
-    const date = new Date(y, m - 1, d);
-    return date.toLocaleDateString("en-IN", {
-      weekday: "short",
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  } catch {
-    return dateStr;
-  }
-}
-
-// Format minutes delay into hours and minutes
-function formatDelayMetric(delayMinutes: number | null): {
-  text: string;
-  subText: string;
-  isLate: boolean;
-  isHighLate: boolean;
-  isOnTime: boolean;
-  badgeClass: string;
-  dotClass: string;
-} {
-  if (delayMinutes === null || delayMinutes === undefined) {
-    return {
-      text: "Awaiting Log",
-      subText: "Pending Entry",
-      isLate: false,
-      isHighLate: false,
-      isOnTime: false,
-      badgeClass: "bg-slate-100 text-slate-600 border-slate-200",
-      dotClass: "bg-slate-400",
-    };
-  }
-
-  if (delayMinutes <= 0) {
-    const earlyMins = Math.abs(delayMinutes);
-    return {
-      text: earlyMins > 0 ? `On Time (${earlyMins}m Early)` : "On Time",
-      subText: "Strict Adherence",
-      isLate: false,
-      isHighLate: false,
-      isOnTime: true,
-      badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-300",
-      dotClass: "bg-emerald-500",
-    };
-  }
-
-  const hours = Math.floor(delayMinutes / 60);
-  const mins = delayMinutes % 60;
-  const isHighLate = delayMinutes >= 60;
-
-  let formattedDelay = "";
-  if (hours > 0) {
-    formattedDelay = `+${hours}h ${mins > 0 ? `${mins}m ` : "0m "}Late`;
-  } else {
-    formattedDelay = `+${mins}m Late`;
-  }
-
-  return {
-    text: formattedDelay,
-    subText: `${delayMinutes} mins total delay`,
-    isLate: true,
-    isHighLate,
-    isOnTime: false,
-    badgeClass: isHighLate
-      ? "bg-red-50 text-red-700 border-red-300 shadow-2xs"
-      : "bg-amber-50 text-amber-700 border-amber-300 shadow-2xs",
-    dotClass: isHighLate ? "bg-red-500 animate-pulse" : "bg-amber-500",
-  };
-}
-
-// Calculate duration between two time strings
-function calculateTimeDuration(
-  entryTime?: string | null,
-  exitTime?: string | null
-): { durationMins: number; formatted: string } {
-  if (!entryTime || !exitTime) return { durationMins: 0, formatted: "--" };
-
-  const parseToMins = (t: string) => {
-    const formatted = formatTrainTimeIST(t);
-    if (!formatted || formatted === "--:--") return 0;
-    const [hh, mm] = formatted.split(":").map(Number);
-    return (hh || 0) * 60 + (mm || 0);
-  };
-
-  const startMins = parseToMins(entryTime);
-  let endMins = parseToMins(exitTime);
-  if (endMins < startMins) {
-    endMins += 24 * 60; // Next day offset
-  }
-
-  const diff = endMins - startMins;
-  const hours = Math.floor(diff / 60);
-  const mins = diff % 60;
-  const formatted = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
-  return { durationMins: diff, formatted };
-}
-
-// Train Type Styling & Symbolic Presence
-export function getTrainTypeTheme(trainType?: string, trainName?: string) {
-  const t = (trainType || "").toUpperCase();
-  const n = (trainName || "").toUpperCase();
-
-  if (t.includes("RAJDHANI") || n.includes("RAJDHANI")) {
-    return {
-      typeKey: "RAJDHANI",
-      displayName: "Rajdhani Express",
-      badge: "bg-red-50 text-red-700 border-red-200 font-bold",
-      accentBg: "bg-red-500",
-      textColor: "text-red-700",
-      lineColor: "bg-red-600",
-      borderColor: "border-r-4 border-r-red-600",
-      lightBg: "bg-red-50/50",
-      iconColor: "text-red-600",
-    };
-  }
-
-  if (t.includes("SHATABDI") || n.includes("SHATABDI")) {
-    return {
-      typeKey: "SHATABDI",
-      displayName: "Shatabdi Express",
-      badge: "bg-blue-50 text-blue-700 border-blue-200 font-bold",
-      accentBg: "bg-blue-600",
-      textColor: "text-blue-700",
-      lineColor: "bg-blue-600",
-      borderColor: "border-r-4 border-r-blue-600",
-      lightBg: "bg-blue-50/50",
-      iconColor: "text-blue-600",
-    };
-  }
-
-  if (t.includes("TEJAS") || n.includes("TEJAS")) {
-    return {
-      typeKey: "TEJAS",
-      displayName: "Tejas Express",
-      badge: "bg-sky-50 text-sky-700 border-sky-200 font-bold",
-      accentBg: "bg-sky-600",
-      textColor: "text-sky-700",
-      lineColor: "bg-sky-600",
-      borderColor: "border-r-4 border-r-sky-600",
-      lightBg: "bg-sky-50/50",
-      iconColor: "text-sky-600",
-    };
-  }
-
-  if (
-    t.includes("VB") ||
-    t.includes("VANDE BHARAT") ||
-    n.includes("VANDE BHARAT") ||
-    n.includes("VB")
-  ) {
-    return {
-      typeKey: "VB",
-      displayName: "Vande Bharat",
-      badge: "bg-slate-100 text-slate-800 border-slate-300 font-bold",
-      accentBg: "bg-slate-700",
-      textColor: "text-slate-800",
-      lineColor: "bg-slate-700",
-      borderColor: "border-r-4 border-r-slate-700",
-      lightBg: "bg-slate-100/60",
-      iconColor: "text-slate-700",
-    };
-  }
-
-  if (t.includes("EXPRESS") || t.includes("SUPERFAST") || t.includes("SF")) {
-    return {
-      typeKey: "EXPRESS",
-      displayName: "Superfast / Express",
-      badge: "bg-emerald-50 text-emerald-700 border-emerald-200 font-bold",
-      accentBg: "bg-emerald-600",
-      textColor: "text-emerald-700",
-      lineColor: "bg-emerald-600",
-      borderColor: "border-r-4 border-r-emerald-600",
-      lightBg: "bg-emerald-50/50",
-      iconColor: "text-emerald-600",
-    };
-  }
-
-  if (t.includes("FREIGHT") || t.includes("GOODS")) {
-    return {
-      typeKey: "FREIGHT",
-      displayName: "Freight Cargo",
-      badge: "bg-amber-50 text-amber-700 border-amber-200 font-bold",
-      accentBg: "bg-amber-600",
-      textColor: "text-amber-700",
-      lineColor: "bg-amber-500",
-      borderColor: "border-r-4 border-r-amber-500",
-      lightBg: "bg-amber-50/50",
-      iconColor: "text-amber-600",
-    };
-  }
-
-  return {
-    typeKey: "PASSENGER",
-    displayName: "Passenger / General",
-    badge: "bg-slate-100 text-slate-700 border-slate-200 font-bold",
-    accentBg: "bg-slate-500",
-    textColor: "text-slate-700",
-    lineColor: "bg-slate-400",
-    borderColor: "border-r-4 border-r-slate-400",
-    lightBg: "bg-slate-50",
-    iconColor: "text-slate-500",
-  };
-}
 
 // Item structure for Master Schedules Table
 interface MasterScheduleItem {
@@ -279,6 +71,217 @@ interface MasterScheduleItem {
   statusText: string;
   statusBadge: string;
   statusDot: string;
+}
+
+// ---------------------------------------------------------------------------
+// Full-page skeleton shown on initial load until ALL data sources resolve
+// ---------------------------------------------------------------------------
+function TrainsPageSkeleton() {
+  return (
+    <div className="min-h-screen bg-brand-tertiary text-brand-secondary flex flex-col font-sans">
+      {/* Sidebar placeholder */}
+      <div className="flex-1 flex pl-20 lg:pl-64">
+        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-7 flex flex-col space-y-6 max-w-[1680px] mx-auto w-full">
+
+          {/* ---- Header ---- */}
+          <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-brand-border/80">
+            <div className="flex items-center gap-2.5">
+              <Skeleton className="w-8 h-8 rounded-xl" />
+              <Skeleton className="h-7 w-56" />
+            </div>
+            <div className="flex items-center gap-2.5">
+              <Skeleton className="w-8 h-8 rounded-xl" />
+              <Skeleton className="h-8 w-36 rounded-xl" />
+            </div>
+          </header>
+
+          {/* ---- View-mode tab bar skeleton ---- */}
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-8 w-24 rounded-xl" />
+            <Skeleton className="h-8 w-32 rounded-xl" />
+            <Skeleton className="h-8 w-24 rounded-xl" />
+          </div>
+
+          {/* ---- Section 1: Tracked Trains Operations ---- */}
+          <section className="rounded-2xl bg-brand-surface border border-brand-border shadow-sm overflow-hidden space-y-4 p-4 sm:p-5">
+            {/* Section header */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-brand-border/80">
+              <Skeleton className="h-6 w-52" />
+              <Skeleton className="h-5 w-72 rounded-lg" />
+            </div>
+
+            {/* Controls card */}
+            <div className="p-4 rounded-xl bg-brand-tertiary/70 border border-brand-border/70 space-y-3.5">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                <div className="md:col-span-4 space-y-1">
+                  <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-8 w-full rounded-xl" />
+                </div>
+                <div className="md:col-span-6 space-y-1">
+                  <Skeleton className="h-3 w-32" />
+                  <Skeleton className="h-8 w-full rounded-xl" />
+                </div>
+                <div className="md:col-span-2">
+                  <Skeleton className="h-8 w-full rounded-xl" />
+                </div>
+              </div>
+              {/* Status bar */}
+              <div className="flex items-center justify-between gap-3 pt-3 border-t border-brand-border/60">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-3 w-28" />
+                  <Skeleton className="h-5 w-24 rounded-lg" />
+                </div>
+                <Skeleton className="h-5 w-28 rounded-full" />
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className="overflow-x-auto border border-brand-border/80 rounded-xl">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-brand-surface border-b border-brand-border">
+                  <tr>
+                    {["Train No. & Name","Type & Priority","Section","Window","Actuals","Delay Matrix (IST)","Actions"].map((h) => (
+                      <th key={h} className="py-3 px-4"><Skeleton className="h-3 w-20" /></th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-brand-border/60">
+                  {Array.from({ length: 6 }).map((_, idx) => (
+                    <tr key={idx} className="hover:bg-brand-tertiary/40">
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2.5">
+                          <Skeleton className="w-1.5 h-8 rounded-full shrink-0" />
+                          <div className="space-y-1.5">
+                            <Skeleton className="h-4 w-16" />
+                            <Skeleton className="h-3 w-28" />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4"><Skeleton className="h-4 w-12" /></td>
+                      <td className="py-3 px-4"><Skeleton className="h-4 w-28" /></td>
+                      <td className="py-3 px-4"><Skeleton className="h-4 w-24" /></td>
+                      <td className="py-3 px-4"><Skeleton className="h-4 w-24" /></td>
+                      <td className="py-3 px-4"><Skeleton className="h-6 w-20 rounded-full" /></td>
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end">
+                          <Skeleton className="w-7 h-7 rounded-lg" />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination stub */}
+            <div className="flex items-center justify-between pt-2">
+              <Skeleton className="h-5 w-44" />
+              <div className="flex items-center gap-1">
+                <Skeleton className="w-7 h-7 rounded-lg" />
+                <Skeleton className="w-7 h-7 rounded-lg" />
+                <Skeleton className="w-7 h-7 rounded-lg" />
+              </div>
+            </div>
+          </section>
+
+          {/* ---- Section 2: Master Timetable Schedules ---- */}
+          <section className="rounded-2xl bg-brand-surface border border-brand-border shadow-sm overflow-hidden space-y-4 p-4 sm:p-5">
+            {/* Section header */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-brand-border/80">
+              <div className="space-y-1.5">
+                <Skeleton className="h-6 w-60" />
+                <Skeleton className="h-3 w-72" />
+              </div>
+            </div>
+
+            {/* Controls card */}
+            <div className="p-4 rounded-xl bg-brand-tertiary/70 border border-brand-border/70 space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                <div className="md:col-span-6 space-y-1">
+                  <Skeleton className="h-3 w-40" />
+                  <Skeleton className="h-8 w-full rounded-xl" />
+                </div>
+                <div className="md:col-span-6 space-y-1">
+                  <Skeleton className="h-3 w-36" />
+                  <Skeleton className="h-8 w-full rounded-xl" />
+                </div>
+              </div>
+              {/* Filter chips */}
+              <div className="flex items-center gap-1.5 pt-2 border-t border-brand-border/60">
+                <Skeleton className="h-8 w-40 rounded-xl" />
+                {["All","Rajdhani","VB","Shatabdi","Express"].map((l) => (
+                  <Skeleton key={l} className="h-6 w-16 rounded-lg" />
+                ))}
+              </div>
+            </div>
+
+            {/* KPI Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {["Total Schedules","Runs Today","High Priority"].map((label) => (
+                <div key={label} className="p-3.5 rounded-xl bg-brand-surface border border-brand-border shadow-2xs flex items-center gap-3">
+                  <Skeleton className="w-8 h-8 rounded-lg shrink-0" />
+                  <div className="space-y-1.5">
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-7 w-12" />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Table */}
+            <div className="overflow-x-auto border border-brand-border/80 rounded-xl">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-brand-surface border-b border-brand-border">
+                  <tr>
+                    {["Train No. & Name","Priority & Type","Section / Corridor","Scheduled Entry (IST)","Scheduled Exit (IST)","Transit Duration","Actions"].map((h) => (
+                      <th key={h} className="py-3 px-4"><Skeleton className="h-3 w-20" /></th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-brand-border/60">
+                  {Array.from({ length: 6 }).map((_, idx) => (
+                    <tr key={idx}>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2.5">
+                          <Skeleton className="w-1.5 h-8 rounded-full shrink-0" />
+                          <div className="space-y-1.5">
+                            <Skeleton className="h-4 w-16" />
+                            <Skeleton className="h-3 w-28" />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4"><Skeleton className="h-4 w-12" /></td>
+                      <td className="py-3 px-4"><Skeleton className="h-4 w-28" /></td>
+                      <td className="py-3 px-4"><Skeleton className="h-4 w-14" /></td>
+                      <td className="py-3 px-4"><Skeleton className="h-4 w-14" /></td>
+                      <td className="py-3 px-4"><Skeleton className="h-4 w-14" /></td>
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end">
+                          <Skeleton className="w-7 h-7 rounded-lg" />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination stub */}
+            <div className="flex items-center justify-between pt-2">
+              <Skeleton className="h-5 w-48" />
+              <div className="flex items-center gap-1">
+                <Skeleton className="w-7 h-7 rounded-lg" />
+                <Skeleton className="w-7 h-7 rounded-lg" />
+                <Skeleton className="w-7 h-7 rounded-lg" />
+              </div>
+            </div>
+          </section>
+
+        </main>
+      </div>
+    </div>
+  );
 }
 
 export default function TrainsPage() {
@@ -315,17 +318,56 @@ export default function TrainsPage() {
   const [schedulesPageSize, setSchedulesPageSize] = useState<number>(10);
 
   const [inspectScheduleItem, setInspectScheduleItem] = useState<MasterScheduleItem | null>(null);
-  const [isCreateScheduleModalOpen, setIsCreateScheduleModalOpen] = useState<boolean>(false);
   const [isLogMovementModalOpen, setIsLogMovementModalOpen] = useState<boolean>(false);
 
   const { data: sections = [], isLoading: loadingSections, refetch: refetchSections } = useRailwaySections();
   const { data: trains = [], isLoading: loadingTrains, refetch: refetchTrains } = useTrains();
-  const { data: schedules = [], isLoading: loadingSchedules, refetch: refetchSchedules } = useTrainSchedules();
   const { data: movements = [], isLoading: loadingMovements, refetch: refetchMovements } = useTrainMovements();
 
   const availableSections = useMemo(() => {
     return sections && sections.length > 0 ? sections : DEFAULT_RAILWAY_SECTIONS;
   }, [sections]);
+
+  const selectedScheduleSection = useMemo(() => {
+    if (!selectedSectionId) return null;
+    return availableSections.find((s) => s.id === selectedSectionId) || null;
+  }, [availableSections, selectedSectionId]);
+
+  const scheduleQueryParams = useMemo(() => {
+    return {
+      date: selectedScheduleDate || undefined,
+      source: selectedScheduleSection
+        ? selectedScheduleSection.source_station_code || selectedScheduleSection.origin_station
+        : undefined,
+      destination: selectedScheduleSection
+        ? selectedScheduleSection.destination_station_code || selectedScheduleSection.end_station
+        : undefined,
+      page: schedulesCurrentPage,
+      page_size: schedulesPageSize,
+    };
+  }, [selectedScheduleDate, selectedScheduleSection, schedulesCurrentPage, schedulesPageSize]);
+
+  const {
+    data: paginatedSchedulesData,
+    isLoading: loadingSchedules,
+    isFetching: fetchingSchedules,
+    isRefetching: refetchingSchedules,
+    refetch: refetchSchedules,
+  } = usePaginatedTrainSchedules(scheduleQueryParams);
+
+  const isSchedulesLoading = loadingSchedules || fetchingSchedules || refetchingSchedules;
+
+  // Gate: show full-page skeleton until every first-load fetch resolves
+  const isPageLoading =
+    loadingSections ||
+    loadingTrains ||
+    loadingMovements ||
+    loadingTracked ||
+    loadingSchedules;
+
+  const schedules = useMemo(() => {
+    return paginatedSchedulesData?.results || [];
+  }, [paginatedSchedulesData]);
 
   const currentSection = useMemo(() => {
     return (
@@ -335,26 +377,6 @@ export default function TrainsPage() {
     );
   }, [availableSections, selectedSectionId]);
 
-  const corridorStations = useMemo<{ code: string; name: string }[]>(() => {
-    const stationMap = new Map<string, string>();
-
-    availableSections.forEach((sec) => {
-      const srcCode = sec.source_station_code || sec.origin_station;
-      const srcName = sec.origin_station || sec.source_station_code || srcCode;
-      if (srcCode) {
-        stationMap.set(srcCode, srcName);
-      }
-      const dstCode = sec.destination_station_code || sec.end_station;
-      const dstName = sec.end_station || sec.destination_station_code || dstCode;
-      if (dstCode) {
-        stationMap.set(dstCode, dstName);
-      }
-    });
-
-    return Array.from(stationMap.entries())
-      .map(([code, name]) => ({ code, name }))
-      .sort((a, b) => a.code.localeCompare(b.code));
-  }, [availableSections]);
 
   useEffect(() => {
     if (availableSections && availableSections.length > 0) {
@@ -421,17 +443,6 @@ export default function TrainsPage() {
 
   const totalTrackedPages = Math.max(1, Math.ceil(filteredTrackedTrains.length / trackedPageSize));
 
-  const trackedStats = useMemo(() => {
-    const list = trackedOperationsData?.trains || [];
-    const total = list.length;
-    const onTimeCount = list.filter((t) => (t.delay_minutes ?? 0) <= 0).length;
-    const delayedCount = list.filter((t) => (t.delay_minutes ?? 0) > 0).length;
-    const delays = list.map((t) => t.delay_minutes).filter((d): d is number => d !== null);
-    const avgDelay = delays.length > 0 ? Math.round(delays.reduce((a, b) => a + b, 0) / delays.length) : 0;
-    const maxDelay = delays.length > 0 ? Math.max(...delays) : 0;
-    return { total, onTimeCount, delayedCount, avgDelay, maxDelay };
-  }, [trackedOperationsData]);
-
   const masterTimetableItems = useMemo<MasterScheduleItem[]>(() => {
     if (!schedules) return [];
     return schedules.map((sch) => {
@@ -451,7 +462,7 @@ export default function TrainsPage() {
         trainId: trainObj?.id,
         trainNumber: trainObj?.train_number || sch.train_number || "---",
         trainName: trainObj?.name || sch.train_name || "Express",
-        trainType: trainObj?.train_type || "EXPRESS",
+        trainType: trainObj?.train_type || TrainType.EXPRESS,
         priority: trainObj?.priority || 5,
         scheduledEntryTime: sch.scheduled_entry_time,
         scheduledExitTime: sch.scheduled_exit_time,
@@ -472,7 +483,14 @@ export default function TrainsPage() {
   const filteredSchedules = useMemo(() => {
     return masterTimetableItems.filter((item) => {
       if (runsTodayOnly && !item.runsToday) return false;
-      if (scheduleTypeFilter !== "ALL" && item.trainType !== scheduleTypeFilter) return false;
+      if (scheduleTypeFilter !== "ALL") {
+        if (scheduleTypeFilter === "TEJAS") {
+          // TEJAS isn't a TrainType enum — match by name
+          if (!item.trainName.toUpperCase().includes("TEJAS")) return false;
+        } else {
+          if (item.trainType !== scheduleTypeFilter) return false;
+        }
+      }
       if (scheduleSearchQuery.trim()) {
         const q = scheduleSearchQuery.toLowerCase();
         if (!item.trainNumber.toLowerCase().includes(q) && !item.trainName.toLowerCase().includes(q) && !item.sectionName.toLowerCase().includes(q)) return false;
@@ -485,29 +503,19 @@ export default function TrainsPage() {
     setSchedulesCurrentPage(1);
   }, [scheduleSearchQuery, scheduleTypeFilter, runsTodayOnly, selectedSectionId, selectedScheduleDate]);
 
-  const paginatedSchedules = useMemo(() => {
-    const startIndex = (schedulesCurrentPage - 1) * schedulesPageSize;
-    return filteredSchedules.slice(startIndex, startIndex + schedulesPageSize);
-  }, [filteredSchedules, schedulesCurrentPage, schedulesPageSize]);
+  // Backend already paginates; we only apply local filters (search/type/runsToday) on the current page.
+  // Do NOT slice again — use filteredSchedules directly for rendering.
+  const paginatedSchedules = filteredSchedules;
 
-  const totalSchedulePages = Math.max(1, Math.ceil(filteredSchedules.length / schedulesPageSize));
+  const totalScheduleCount = paginatedSchedulesData?.count || masterTimetableItems.length;
+  const totalSchedulePages = Math.max(1, Math.ceil(totalScheduleCount / schedulesPageSize));
 
   const scheduleStats = useMemo(() => {
-    const total = masterTimetableItems.length;
+    const total = totalScheduleCount;
     const runningToday = masterTimetableItems.filter((t) => t.runsToday).length;
     const highPriority = masterTimetableItems.filter((t) => t.priority >= 8).length;
     return { total, runningToday, highPriority };
-  }, [masterTimetableItems]);
-
-  const [newScheduleData, setNewScheduleData] = useState<CreateTrainScheduleInput>({
-    train: trains.length > 0 ? trains[0].id : 1,
-    section: currentSection ? currentSection.id : 1,
-    scheduled_entry_time: "06:00:00",
-    scheduled_exit_time: "07:30:00",
-    running_days: "1111111",
-    is_active: true,
-  });
-
+  }, [totalScheduleCount, masterTimetableItems]);
 
   const [movementForm, setMovementForm] = useState<{
     scheduleId: number | string;
@@ -521,25 +529,14 @@ export default function TrainsPage() {
     actualExit: "07:45",
   });
 
-  const handleOpenMovementModal = (item?: MasterScheduleItem | TrackedTrainOperation) => {
-    if (item && "scheduleId" in item && item.scheduleId) {
-      setMovementForm({
-        scheduleId: item.scheduleId,
-        serviceDate: trackedDate,
-        actualEntry: formatTrainTimeIST(item.scheduledEntryTime),
-        actualExit: formatTrainTimeIST(item.scheduledExitTime),
-      });
-    } else {
-      setMovementForm({
-        scheduleId: schedules.length > 0 ? schedules[0].id : "",
-        serviceDate: trackedDate,
-        actualEntry: "06:00",
-        actualExit: "07:45",
-      });
-    }
-    setIsLogMovementModalOpen(true);
-  };
-
+  if (isPageLoading) {
+    return (
+      <div className="min-h-screen bg-brand-tertiary flex flex-col font-sans">
+        <VerticalNavbar activeTab={activeNavTab} onTabChange={setActiveNavTab} unreadCount={1} />
+        <TrainsPageSkeleton />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-brand-tertiary text-brand-secondary flex flex-col font-sans">
@@ -557,12 +554,6 @@ export default function TrainsPage() {
               </div>
             </div>
             <div className="flex items-center gap-2.5">
-              <button
-                onClick={handleRefetchAll}
-                className="p-2 rounded-xl bg-brand-surface border border-brand-border hover:bg-brand-tertiary shadow-2xs transition-colors cursor-pointer"
-              >
-                <RefreshCw className="w-4 h-4" />
-              </button>
               <LiveClock />
             </div>
           </header>
@@ -575,11 +566,7 @@ export default function TrainsPage() {
                     <span>Tracked Trains Operations</span>
                   </h2>
                 </div>
-                <div className="flex items-center gap-2 flex-wrap text-xs">
-                  <span className="px-2.5 py-1 rounded-lg bg-brand-blue-light/70 text-brand-primary border border-brand-primary/20 font-mono font-bold">
-                    GET railways/trains/operations/?date={trackedDate}&source={sourceCode}&destination={destinationCode}
-                  </span>
-                </div>
+                
               </div>
 
               <div className="p-4 rounded-xl bg-brand-tertiary/70 border border-brand-border/70 space-y-3.5">
@@ -621,15 +608,15 @@ export default function TrainsPage() {
                     </div>
                   </div>
 
-                  {/* Fetch Button */}
+                  {/* Refresh Button */}
                   <div className="md:col-span-2 flex justify-end">
                     <button
                       onClick={() => refetchTracked()}
-                      disabled={refetchingTracked}
-                      className="w-full px-4 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition-all disabled:opacity-50"
+                      disabled={refetchingTracked || loadingTracked}
+                      className="w-full px-4 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition-all disabled:opacity-60"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${refetchingTracked ? "animate-spin" : ""}`} />
-                      <span>{refetchingTracked ? "Fetching..." : "Fetch"}</span>
+                      <span>{refetchingTracked ? "Refreshing..." : "Refresh"}</span>
                     </button>
                   </div>
                 </div>
@@ -682,7 +669,7 @@ export default function TrainsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-border/60 text-brand-secondary">
-                    {loadingTracked ? (
+                    {(loadingTracked || refetchingTracked) ? (
                       Array.from({ length: 5 }).map((_, idx) => (
                         <tr key={idx} className="hover:bg-brand-tertiary/40 transition-colors">
                           <td className="py-3 px-4">
@@ -890,16 +877,7 @@ export default function TrainsPage() {
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-brand-border/80">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2.5 flex-wrap">
-                    <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-brand-blue-light text-brand-primary font-extrabold text-xs border border-brand-primary/20">
-                      2
-                    </span>
-                    <h2 className="text-base sm:text-lg font-black text-brand-secondary tracking-tight flex items-center gap-2">
-                      <span>Today&apos;s Master Train Schedules (TT)</span>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-brand-blue-light text-brand-primary border border-brand-primary/20">
-                        <CalendarCheck className="w-3 h-3" />
-                        Master Timetable
-                      </span>
-                    </h2>
+                    <h2 className="text-base sm:text-lg font-black text-brand-secondary tracking-tight">Master Train Schedules</h2>
                   </div>
                   <p className="text-xs text-brand-muted font-medium">
                     Scheduled timetable specifications and operating pattern for{" "}
@@ -907,19 +885,14 @@ export default function TrainsPage() {
                   </p>
                 </div>
 
-                {/* Endpoint badge & Create Schedule button */}
-                <div className="flex items-center gap-2.5 flex-wrap text-xs">
-                  <span className="px-2.5 py-1 rounded-lg bg-brand-blue-light/70 text-brand-primary border border-brand-primary/20 font-mono text-[11px] font-bold">
-                    GET /api/train-schedules/
-                  </span>
-                  <button
-                    onClick={() => setIsCreateScheduleModalOpen(true)}
-                    className="px-3.5 py-1.5 rounded-xl bg-brand-primary hover:bg-blue-700 text-white font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Schedule</span>
-                  </button>
-                </div>
+                <button
+                  onClick={() => refetchSchedules()}
+                  disabled={isSchedulesLoading}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-brand-secondary transition-colors disabled:opacity-60 cursor-pointer shadow-2xs shrink-0"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-brand-primary ${isSchedulesLoading ? "animate-spin" : ""}`} />
+                  <span>{isSchedulesLoading ? "Refreshing..." : "Refresh Schedules"}</span>
+                </button>
               </div>
 
               {/* Master Schedule Controls Card */}
@@ -981,19 +954,29 @@ export default function TrainsPage() {
                   </div>
 
                   <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
-                    {["ALL", "RAJDHANI", "VB", "SHATABDI", "TEJAS", "EXPRESS", "FREIGHT", "PASSENGER"].map((type) => (
+                    {([
+                      { key: "ALL",      label: "All",         activeClass: "bg-brand-primary text-white shadow-xs",                         hoverClass: "hover:bg-brand-surface/80 hover:text-brand-secondary" },
+                      { key: "RAJDHANI", label: "Rajdhani",    activeClass: "bg-red-600 text-white shadow-xs",                                hoverClass: "hover:bg-red-50 hover:text-red-700" },
+                      { key: "VB",       label: "Vande Bharat",activeClass: "bg-slate-700 text-white shadow-xs",                             hoverClass: "hover:bg-slate-100 hover:text-slate-800" },
+                      { key: "SHATABDI", label: "Shatabdi",    activeClass: "bg-blue-600 text-white shadow-xs",                               hoverClass: "hover:bg-blue-50 hover:text-blue-700" },
+                      { key: "TEJAS",    label: "Tejas",        activeClass: "bg-yellow-500 text-white shadow-xs",                               hoverClass: "hover:bg-sky-50 hover:text-sky-700" },
+                      { key: "EXPRESS",  label: "Express",      activeClass: "bg-emerald-600 text-white shadow-xs",                           hoverClass: "hover:bg-emerald-50 hover:text-emerald-700" },
+                      { key: "FREIGHT",  label: "Freight",      activeClass: "bg-amber-500 text-white shadow-xs",                             hoverClass: "hover:bg-amber-50 hover:text-amber-700" },
+                      { key: "PASSENGER",label: "Passenger",    activeClass: "bg-slate-500 text-white shadow-xs",                             hoverClass: "hover:bg-slate-100 hover:text-slate-700" },
+                    ] as const).map(({ key, label, activeClass, hoverClass }) => (
                       <button
-                        key={type}
-                        onClick={() => setScheduleTypeFilter(type)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${scheduleTypeFilter === type
-                            ? "bg-brand-primary text-white shadow-xs"
-                            : "text-brand-muted hover:text-brand-secondary hover:bg-brand-surface"
-                          }`}
+                        key={key}
+                        onClick={() => setScheduleTypeFilter(key)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer border ${
+                          scheduleTypeFilter === key
+                            ? `${activeClass} border-transparent`
+                            : `text-brand-muted border-transparent ${hoverClass}`
+                        }`}
                       >
-                        {type === "VB" ? "Vande Bharat" :
-                         type.charAt(0) + type.slice(1).toLowerCase()}
+                        {label}
                       </button>
                     ))}
+
 
                     <button
                       onClick={() => setRunsTodayOnly(!runsTodayOnly)}
@@ -1017,7 +1000,7 @@ export default function TrainsPage() {
                   </div>
                   <div>
                     <div className="text-xs font-bold text-brand-muted">Total Schedules</div>
-                    {loadingSchedules ? (
+                    {isSchedulesLoading ? (
                       <Skeleton className="h-7 w-12 my-0.5 rounded" />
                     ) : (
                       <div className="text-xl font-black text-brand-secondary">{scheduleStats.total}</div>
@@ -1031,7 +1014,7 @@ export default function TrainsPage() {
                   </div>
                   <div>
                     <div className="text-xs font-bold text-brand-muted">Runs Today</div>
-                    {loadingSchedules ? (
+                    {isSchedulesLoading ? (
                       <Skeleton className="h-7 w-12 my-0.5 rounded" />
                     ) : (
                       <div className="text-xl font-black text-emerald-700">{scheduleStats.runningToday}</div>
@@ -1045,7 +1028,7 @@ export default function TrainsPage() {
                   </div>
                   <div>
                     <div className="text-xs font-bold text-brand-muted">High Priority</div>
-                    {loadingSchedules ? (
+                    {isSchedulesLoading ? (
                       <Skeleton className="h-7 w-12 my-0.5 rounded" />
                     ) : (
                       <div className="text-xl font-black text-amber-700">{scheduleStats.highPriority}</div>
@@ -1055,7 +1038,16 @@ export default function TrainsPage() {
               </div>
 
               {/* Table 2 Data View */}
-              <div className="overflow-x-auto border border-brand-border/80 rounded-xl">
+              <div className="relative overflow-x-auto border border-brand-border/80 rounded-xl">
+                {/* Smooth overlay loader shown when refetching (corridor/date/page change) */}
+                {isSchedulesLoading && !loadingSchedules && (
+                  <div className="absolute inset-0 bg-brand-surface/60 backdrop-blur-[1px] z-10 flex items-center justify-center rounded-xl">
+                    <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-brand-surface border border-brand-border shadow-md text-xs font-bold text-brand-primary">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Loading schedules…</span>
+                    </div>
+                  </div>
+                )}
                 <table className="w-full text-left text-xs">
                   <thead className="bg-brand-surface text-brand-muted font-bold tracking-wider border-b border-brand-border text-[12px]">
                     <tr>
@@ -1069,7 +1061,7 @@ export default function TrainsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-border/60 text-brand-secondary">
-                    {loadingSchedules ? (
+                    {isSchedulesLoading ? (
                       Array.from({ length: 5 }).map((_, idx) => (
                         <tr key={idx} className="hover:bg-brand-tertiary/40 transition-colors">
                           <td className="py-3 px-4">
@@ -1220,15 +1212,15 @@ export default function TrainsPage() {
                     <span>
                       Showing{" "}
                       <strong className="text-brand-secondary">
-                        {(schedulesCurrentPage - 1) * schedulesPageSize + 1}
+                        {totalScheduleCount === 0 ? 0 : (schedulesCurrentPage - 1) * schedulesPageSize + 1}
                       </strong>{" "}
                       to{" "}
                       <strong className="text-brand-secondary">
-                        {Math.min(schedulesCurrentPage * schedulesPageSize, filteredSchedules.length)}
+                        {Math.min(schedulesCurrentPage * schedulesPageSize, totalScheduleCount)}
                       </strong>{" "}
                       of{" "}
                       <strong className="text-brand-secondary">
-                        {filteredSchedules.length}
+                        {totalScheduleCount}
                       </strong>{" "}
                       master schedules
                     </span>
@@ -1487,50 +1479,6 @@ export default function TrainsPage() {
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* MODAL 3: Create Master Train Schedule */}
-      {/* ========================================================================= */}
-      {isCreateScheduleModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-brand-surface border border-brand-border rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-brand-border">
-              <div className="flex items-center gap-2">
-                <CalendarCheck className="w-5 h-5 text-brand-primary" />
-                <h3 className="text-base font-bold text-brand-secondary">Create Master Train Schedule</h3>
-              </div>
-              <button
-                onClick={() => setIsCreateScheduleModalOpen(false)}
-                className="text-brand-muted hover:text-brand-secondary text-lg font-bold cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* MODAL 4: Log Live Train Movement */}
-      {/* ========================================================================= */}
-      {isLogMovementModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-brand-surface border border-brand-border rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-brand-border">
-              <div className="flex items-center gap-2">
-                <Clock className="w-5 h-5 text-brand-primary" />
-                <h3 className="text-base font-bold text-brand-secondary">Log Live Train Movement</h3>
-              </div>
-              <button
-                onClick={() => setIsLogMovementModalOpen(false)}
-                className="text-brand-muted hover:text-brand-secondary text-lg font-bold cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-          </div>
-        </div>
-      )}
     </div>
   );
 }
