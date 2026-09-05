@@ -1,5 +1,5 @@
-export type MaintenancePriority = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
-export type MaintenanceStatus = "PENDING" | "SCHEDULED" | "COMPLETED" | "CANCELLED";
+import { MaintenancePriority, MaintenanceStatus } from "@/enums/maintenance";
+export { MaintenancePriority, MaintenanceStatus };
 
 export interface MaintenanceTask {
   id: number;

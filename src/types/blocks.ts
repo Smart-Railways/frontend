@@ -1,4 +1,5 @@
-export type BlockStatus = "AVAILABLE" | "RESERVED" | "BLOCKED";
+import { BlockStatus } from "@/enums/blocks";
+export { BlockStatus };
 
 export interface BlockWindow {
   id: number;

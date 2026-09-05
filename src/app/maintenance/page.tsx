@@ -41,37 +41,41 @@ import {
 import {
   MaintenanceTask,
   CreateMaintenanceTaskInput,
-  MaintenancePriority,
-  MaintenanceStatus,
   ConflictCheckResponse,
   FeasibleWindowsResponse,
 } from "@/types";
+import {
+  MaintenancePriority,
+  MaintenanceStatus,
+  MAINTENANCE_PRIORITY_LABELS,
+  MAINTENANCE_STATUS_LABELS,
+} from "@/enums";
 
 // Urgency metadata & styling (Light brand tokens)
 const URGENCY_CONFIG: Record<
-  string,
+  MaintenancePriority,
   { label: string; color: string; badge: string; dot: string }
 > = {
-  CRITICAL: {
-    label: "Critical Urgency",
+  [MaintenancePriority.CRITICAL]: {
+    label: `${MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.CRITICAL]} Urgency`,
     color: "text-red-700",
     badge: "bg-red-50 border-red-200 text-red-700",
     dot: "bg-red-500 animate-pulse",
   },
-  HIGH: {
-    label: "High Urgency",
+  [MaintenancePriority.HIGH]: {
+    label: `${MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.HIGH]} Urgency`,
     color: "text-orange-700",
     badge: "bg-orange-50 border-orange-200 text-orange-700",
     dot: "bg-orange-500",
   },
-  MEDIUM: {
-    label: "Medium Urgency",
+  [MaintenancePriority.MEDIUM]: {
+    label: `${MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.MEDIUM]} Urgency`,
     color: "text-amber-700",
     badge: "bg-amber-50 border-amber-200 text-amber-700",
     dot: "bg-amber-500",
   },
-  LOW: {
-    label: "Low Urgency",
+  [MaintenancePriority.LOW]: {
+    label: `${MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.LOW]} Urgency`,
     color: "text-brand-primary",
     badge: "bg-brand-blue-light border-blue-200 text-brand-primary",
     dot: "bg-brand-primary",
@@ -80,26 +84,26 @@ const URGENCY_CONFIG: Record<
 
 // Status metadata & styling (Light brand tokens)
 const STATUS_CONFIG: Record<
-  string,
+  MaintenanceStatus,
   { label: string; badge: string; icon: typeof Clock }
 > = {
-  PENDING: {
-    label: "Pending",
+  [MaintenanceStatus.PENDING]: {
+    label: MAINTENANCE_STATUS_LABELS[MaintenanceStatus.PENDING],
     badge: "bg-amber-50 border-amber-200 text-amber-700",
     icon: Hourglass,
   },
-  SCHEDULED: {
-    label: "Scheduled",
+  [MaintenanceStatus.SCHEDULED]: {
+    label: MAINTENANCE_STATUS_LABELS[MaintenanceStatus.SCHEDULED],
     badge: "bg-brand-blue-light border-blue-200 text-brand-primary",
     icon: Clock,
   },
-  COMPLETED: {
-    label: "Completed",
+  [MaintenanceStatus.COMPLETED]: {
+    label: MAINTENANCE_STATUS_LABELS[MaintenanceStatus.COMPLETED],
     badge: "bg-emerald-50 border-emerald-200 text-emerald-700",
     icon: CheckCircle2,
   },
-  CANCELLED: {
-    label: "Cancelled",
+  [MaintenanceStatus.CANCELLED]: {
+    label: MAINTENANCE_STATUS_LABELS[MaintenanceStatus.CANCELLED],
     badge: "bg-slate-100 border-slate-200 text-slate-600",
     icon: XCircle,
   },
@@ -121,6 +125,124 @@ function formatDate(dateStr?: string | null): string {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Full-page skeleton shown on initial load until ALL data sources resolve
+// ---------------------------------------------------------------------------
+function MaintenancePageSkeleton() {
+  return (
+    <div className="min-h-screen bg-brand-tertiary text-brand-secondary flex flex-col font-sans">
+      <div className="flex-1 flex pl-20 lg:pl-64">
+        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-7 flex flex-col space-y-5 max-w-[1600px] mx-auto w-full">
+
+          {/* Header */}
+          <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-brand-border/80">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2.5">
+                <Skeleton className="w-8 h-8 rounded-full" />
+                <Skeleton className="h-7 w-80" />
+              </div>
+              <Skeleton className="h-3 w-96" />
+            </div>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <Skeleton className="h-8 w-32 rounded-xl" />
+              <Skeleton className="h-8 w-32 rounded-xl" />
+              <Skeleton className="h-8 w-32 rounded-xl" />
+              <Skeleton className="h-8 w-24 rounded-xl" />
+              <Skeleton className="h-8 w-36 rounded-xl" />
+            </div>
+          </header>
+
+          {/* KPI Cards */}
+          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            {["Total Tasks","Pending Execution","Scheduled Blocks","Critical Priority","Total Block Time"].map((label) => (
+              <div key={label} className="p-4 rounded-2xl bg-brand-surface border border-brand-border shadow-sm flex items-start gap-3.5">
+                <Skeleton className="w-9 h-9 rounded-full shrink-0" />
+                <div className="space-y-1.5">
+                  <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-8 w-14" />
+                  <Skeleton className="h-2.5 w-28" />
+                </div>
+              </div>
+            ))}
+          </section>
+
+          {/* Filter Bar */}
+          <section className="p-4 sm:p-5 rounded-2xl bg-brand-surface border border-brand-border shadow-sm space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-center">
+              <div className="lg:col-span-4"><Skeleton className="h-9 w-full rounded-xl" /></div>
+              <div className="lg:col-span-3"><Skeleton className="h-9 w-full rounded-xl" /></div>
+              <div className="lg:col-span-2"><Skeleton className="h-9 w-full rounded-xl" /></div>
+              <div className="lg:col-span-2"><Skeleton className="h-9 w-full rounded-xl" /></div>
+              <div className="lg:col-span-1 flex justify-end gap-1.5">
+                <Skeleton className="w-9 h-9 rounded-xl" />
+                <Skeleton className="w-9 h-9 rounded-xl" />
+              </div>
+            </div>
+            <div className="flex items-center gap-2 pt-3 border-t border-brand-border/60">
+              <Skeleton className="h-3 w-16" />
+              {[1,2,3,4,5].map((i) => <Skeleton key={i} className="h-6 w-20 rounded-lg" />)}
+            </div>
+          </section>
+
+          {/* Table */}
+          <section className="rounded-2xl bg-brand-surface border border-brand-border shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-brand-border flex items-center justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-5 w-48" />
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                </div>
+                <Skeleton className="h-3 w-64" />
+              </div>
+              <Skeleton className="h-5 w-36 rounded" />
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-brand-surface border-b border-brand-border">
+                  <tr>
+                    {["ID","Task Code","Asset","Corridor","Urgency","Status","Risk","Deadline","Duration","Actions"].map((h) => (
+                      <th key={h} className="py-3 px-3"><Skeleton className="h-3 w-14" /></th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-brand-border/60">
+                  {Array.from({ length: 7 }).map((_, idx) => (
+                    <tr key={idx}>
+                      <td className="py-3 px-3"><Skeleton className="h-4 w-6" /></td>
+                      <td className="py-3 px-3"><Skeleton className="h-5 w-20 rounded-md" /></td>
+                      <td className="py-3 px-3">
+                        <div className="space-y-1">
+                          <Skeleton className="h-4 w-32" />
+                          <Skeleton className="h-2.5 w-16" />
+                        </div>
+                      </td>
+                      <td className="py-3 px-3"><Skeleton className="h-4 w-28" /></td>
+                      <td className="py-3 px-3"><Skeleton className="h-5 w-20 rounded-full" /></td>
+                      <td className="py-3 px-3"><Skeleton className="h-5 w-24 rounded-full" /></td>
+                      <td className="py-3 px-3"><Skeleton className="h-4 w-10" /></td>
+                      <td className="py-3 px-3"><Skeleton className="h-4 w-20" /></td>
+                      <td className="py-3 px-3"><Skeleton className="h-4 w-12" /></td>
+                      <td className="py-3 px-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Skeleton className="w-7 h-7 rounded-lg" />
+                          <Skeleton className="w-7 h-7 rounded-lg" />
+                          <Skeleton className="w-7 h-7 rounded-lg" />
+                          <Skeleton className="w-7 h-7 rounded-lg" />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+        </main>
+      </div>
+    </div>
+  );
+}
+
 export default function MaintenancePage() {
   const [activeNavTab, setActiveNavTab] = useState<string>("maintenance");
 
@@ -129,6 +251,9 @@ export default function MaintenancePage() {
   const { data: assets = [], isLoading: loadingAssets, refetch: refetchAssets } = useAssets();
   const { data: sections = [] } = useRailwaySections();
   const { data: blockWindows = [], isLoading: loadingBlockWindows } = useBlockWindows();
+
+  // Gate: show full-page skeleton until every first-load fetch resolves
+  const isPageLoading = loadingTasks || loadingAssets || loadingBlockWindows;
 
   // Mutations
   const createTaskMutation = useCreateMaintenanceTask();
@@ -189,10 +314,10 @@ export default function MaintenancePage() {
     asset: 1,
     details: "",
     risk_rating: 8,
-    urgency: "HIGH",
+    urgency: MaintenancePriority.HIGH,
     deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
     estimated_duration: 45,
-    task_status: "PENDING",
+    task_status: MaintenanceStatus.PENDING,
   });
 
   // Open Create Modal with auto-suggested task code
@@ -204,10 +329,10 @@ export default function MaintenancePage() {
       asset: assets.length > 0 ? assets[0].id : 1,
       details: "",
       risk_rating: 8,
-      urgency: "HIGH",
+      urgency: MaintenancePriority.HIGH,
       deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
       estimated_duration: 45,
-      task_status: "PENDING",
+      task_status: MaintenanceStatus.PENDING,
     });
     setIsFormModalOpen(true);
   };
@@ -477,9 +602,11 @@ export default function MaintenancePage() {
   // Metric Summary
   const stats = useMemo(() => {
     const total = tasks.length;
-    const pendingCount = tasks.filter((t) => t.task_status === "PENDING").length;
-    const scheduledCount = tasks.filter((t) => t.task_status === "SCHEDULED").length;
-    const criticalCount = tasks.filter((t) => t.urgency === "CRITICAL" || t.risk_rating >= 8).length;
+    const pendingCount = tasks.filter((t) => t.task_status === MaintenanceStatus.PENDING).length;
+    const scheduledCount = tasks.filter((t) => t.task_status === MaintenanceStatus.SCHEDULED).length;
+    const criticalCount = tasks.filter(
+      (t) => t.urgency === MaintenancePriority.CRITICAL || t.risk_rating >= 8
+    ).length;
     const totalMinutes = tasks.reduce((sum, t) => sum + (t.estimated_duration || 0), 0);
 
     return {
@@ -493,6 +620,15 @@ export default function MaintenancePage() {
 
   const isSaving = createTaskMutation.isPending || updateTaskMutation.isPending;
   const isDeleting = deleteTaskMutation.isPending;
+
+  if (isPageLoading) {
+    return (
+      <div className="min-h-screen bg-brand-tertiary flex flex-col font-sans">
+        <VerticalNavbar activeTab={activeNavTab} onTabChange={setActiveNavTab} unreadCount={1} />
+        <MaintenancePageSkeleton />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-brand-tertiary text-brand-secondary flex flex-col font-sans selection:bg-brand-primary/20 selection:text-brand-primary">
@@ -561,18 +697,6 @@ export default function MaintenancePage() {
               >
                 <Timer className="w-3.5 h-3.5 text-purple-600" />
                 <span>Feasible Windows</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  refetchTasks();
-                  refetchAssets();
-                }}
-                disabled={refetchingTasks}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-brand-secondary transition-colors disabled:opacity-50 cursor-pointer shadow-2xs"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 text-brand-primary ${refetchingTasks ? "animate-spin" : ""}`} />
-                <span>{refetchingTasks ? "Refreshing..." : "Refresh"}</span>
               </button>
 
               <button
@@ -715,10 +839,18 @@ export default function MaintenancePage() {
                   className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none cursor-pointer font-bold shadow-2xs"
                 >
                   <option value="ALL">All Statuses</option>
-                  <option value="PENDING">Pending Execution</option>
-                  <option value="SCHEDULED">Scheduled</option>
-                  <option value="COMPLETED">Completed</option>
-                  <option value="CANCELLED">Cancelled</option>
+                  <option value={MaintenanceStatus.PENDING}>
+                    {MAINTENANCE_STATUS_LABELS[MaintenanceStatus.PENDING]}
+                  </option>
+                  <option value={MaintenanceStatus.SCHEDULED}>
+                    {MAINTENANCE_STATUS_LABELS[MaintenanceStatus.SCHEDULED]}
+                  </option>
+                  <option value={MaintenanceStatus.COMPLETED}>
+                    {MAINTENANCE_STATUS_LABELS[MaintenanceStatus.COMPLETED]}
+                  </option>
+                  <option value={MaintenanceStatus.CANCELLED}>
+                    {MAINTENANCE_STATUS_LABELS[MaintenanceStatus.CANCELLED]}
+                  </option>
                 </select>
               </div>
 
@@ -806,13 +938,23 @@ export default function MaintenancePage() {
                 </p>
               </div>
 
-              <div className="text-xs text-brand-muted font-mono">
-                REST Endpoint: <code className="text-brand-primary bg-brand-blue-light px-2 py-0.5 rounded border border-brand-primary/20 font-bold">/railways/maintenance-tasks/</code>
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="text-xs text-brand-muted font-mono">
+                  REST Endpoint: <code className="text-brand-primary bg-brand-blue-light px-2 py-0.5 rounded border border-brand-primary/20 font-bold">/railways/maintenance-tasks/</code>
+                </div>
+                <button
+                  onClick={() => { refetchTasks(); refetchAssets(); }}
+                  disabled={refetchingTasks || loadingTasks}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-brand-secondary transition-colors disabled:opacity-60 cursor-pointer shadow-2xs shrink-0"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-brand-primary ${refetchingTasks ? "animate-spin" : ""}`} />
+                  <span>{refetchingTasks ? "Refreshing..." : "Refresh"}</span>
+                </button>
               </div>
             </div>
 
             {/* View Switching */}
-            {loadingTasks || loadingAssets ? (
+            {(loadingTasks || loadingAssets || refetchingTasks) ? (
               viewMode === "table" ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
@@ -949,8 +1091,10 @@ export default function MaintenancePage() {
                   </thead>
                   <tbody className="divide-y divide-brand-border/60 text-brand-secondary">
                     {filteredTasks.map((task) => {
-                      const urg = URGENCY_CONFIG[task.urgency || "MEDIUM"] || URGENCY_CONFIG.MEDIUM;
-                      const stat = STATUS_CONFIG[task.task_status || "PENDING"] || STATUS_CONFIG.PENDING;
+                      const urgKey = (task.urgency as MaintenancePriority) || MaintenancePriority.MEDIUM;
+                      const statKey = (task.task_status as MaintenanceStatus) || MaintenanceStatus.PENDING;
+                      const urg = URGENCY_CONFIG[urgKey] || URGENCY_CONFIG[MaintenancePriority.MEDIUM];
+                      const stat = STATUS_CONFIG[statKey] || STATUS_CONFIG[MaintenanceStatus.PENDING];
                       const taskAsset = assets.find((a) => a.id === task.asset);
                       const corridorName = task.section_name || taskAsset?.section_name || "General Corridor";
 
@@ -1047,8 +1191,10 @@ export default function MaintenancePage() {
               /* CARD GRID VIEW */
               <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredTasks.map((task) => {
-                  const urg = URGENCY_CONFIG[task.urgency || "MEDIUM"] || URGENCY_CONFIG.MEDIUM;
-                  const stat = STATUS_CONFIG[task.task_status || "PENDING"] || STATUS_CONFIG.PENDING;
+                  const urgKey = (task.urgency as MaintenancePriority) || MaintenancePriority.MEDIUM;
+                  const statKey = (task.task_status as MaintenanceStatus) || MaintenanceStatus.PENDING;
+                  const urg = URGENCY_CONFIG[urgKey] || URGENCY_CONFIG[MaintenancePriority.MEDIUM];
+                  const stat = STATUS_CONFIG[statKey] || STATUS_CONFIG[MaintenanceStatus.PENDING];
 
                   return (
                     <div
@@ -1240,10 +1386,10 @@ export default function MaintenancePage() {
                     onChange={(e) => setFormData({ ...formData, urgency: e.target.value as MaintenancePriority })}
                     className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none cursor-pointer font-bold shadow-2xs"
                   >
-                    <option value="CRITICAL">CRITICAL</option>
-                    <option value="HIGH">HIGH</option>
-                    <option value="MEDIUM">MEDIUM</option>
-                    <option value="LOW">LOW</option>
+                    <option value={MaintenancePriority.CRITICAL}>{MaintenancePriority.CRITICAL} ({MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.CRITICAL]})</option>
+                    <option value={MaintenancePriority.HIGH}>{MaintenancePriority.HIGH} ({MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.HIGH]})</option>
+                    <option value={MaintenancePriority.MEDIUM}>{MaintenancePriority.MEDIUM} ({MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.MEDIUM]})</option>
+                    <option value={MaintenancePriority.LOW}>{MaintenancePriority.LOW} ({MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.LOW]})</option>
                   </select>
                 </div>
 
@@ -1256,10 +1402,10 @@ export default function MaintenancePage() {
                     onChange={(e) => setFormData({ ...formData, task_status: e.target.value as MaintenanceStatus })}
                     className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none cursor-pointer font-bold shadow-2xs"
                   >
-                    <option value="PENDING">PENDING</option>
-                    <option value="SCHEDULED">SCHEDULED</option>
-                    <option value="COMPLETED">COMPLETED</option>
-                    <option value="CANCELLED">CANCELLED</option>
+                    <option value={MaintenanceStatus.PENDING}>{MaintenanceStatus.PENDING} ({MAINTENANCE_STATUS_LABELS[MaintenanceStatus.PENDING]})</option>
+                    <option value={MaintenanceStatus.SCHEDULED}>{MaintenanceStatus.SCHEDULED} ({MAINTENANCE_STATUS_LABELS[MaintenanceStatus.SCHEDULED]})</option>
+                    <option value={MaintenanceStatus.COMPLETED}>{MaintenanceStatus.COMPLETED} ({MAINTENANCE_STATUS_LABELS[MaintenanceStatus.COMPLETED]})</option>
+                    <option value={MaintenanceStatus.CANCELLED}>{MaintenanceStatus.CANCELLED} ({MAINTENANCE_STATUS_LABELS[MaintenanceStatus.CANCELLED]})</option>
                   </select>
                 </div>
               </div>

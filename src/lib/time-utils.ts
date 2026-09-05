@@ -96,3 +96,116 @@ export function formatTrainTimeIST(
  * Drop-in backward-compatible alias for formatTrainTimeIST.
  */
 export const formatTimeString = formatTrainTimeIST;
+
+// Helper to format date as YYYY-MM-DD
+export function formatDateToISO(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+// Helper to format date display (e.g. "Fri, 04 Sept, 2026")
+export function formatDisplayDate(dateStr: string): string {
+  try {
+    const [y, m, d] = dateStr.split("-").map(Number);
+    const date = new Date(y, m - 1, d);
+    return date.toLocaleDateString("en-IN", {
+      weekday: "short",
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
+export interface DelayMetric {
+  text: string;
+  subText: string;
+  isLate: boolean;
+  isHighLate: boolean;
+  isOnTime: boolean;
+  badgeClass: string;
+  dotClass: string;
+}
+
+// Format minutes delay into hours and minutes
+export function formatDelayMetric(delayMinutes: number | null): DelayMetric {
+  if (delayMinutes === null || delayMinutes === undefined) {
+    return {
+      text: "Awaiting Log",
+      subText: "Pending Entry",
+      isLate: false,
+      isHighLate: false,
+      isOnTime: false,
+      badgeClass: "bg-slate-100 text-slate-600 border-slate-200",
+      dotClass: "bg-slate-400",
+    };
+  }
+
+  if (delayMinutes <= 0) {
+    const earlyMins = Math.abs(delayMinutes);
+    return {
+      text: earlyMins > 0 ? `On Time (${earlyMins}m Early)` : "On Time",
+      subText: "Strict Adherence",
+      isLate: false,
+      isHighLate: false,
+      isOnTime: true,
+      badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-300",
+      dotClass: "bg-emerald-500",
+    };
+  }
+
+  const hours = Math.floor(delayMinutes / 60);
+  const mins = delayMinutes % 60;
+  const isHighLate = delayMinutes >= 60;
+
+  let formattedDelay = "";
+  if (hours > 0) {
+    formattedDelay = `+${hours}h ${mins > 0 ? `${mins}m ` : "0m "}Late`;
+  } else {
+    formattedDelay = `+${mins}m Late`;
+  }
+
+  return {
+    text: formattedDelay,
+    subText: `${delayMinutes} mins total delay`,
+    isLate: true,
+    isHighLate,
+    isOnTime: false,
+    badgeClass: isHighLate
+      ? "bg-red-50 text-red-700 border-red-300 shadow-2xs"
+      : "bg-amber-50 text-amber-700 border-amber-300 shadow-2xs",
+    dotClass: isHighLate ? "bg-red-500 animate-pulse" : "bg-amber-500",
+  };
+}
+
+// Calculate duration between two time strings
+export function calculateTimeDuration(
+  entryTime?: string | null,
+  exitTime?: string | null
+): { durationMins: number; formatted: string } {
+  if (!entryTime || !exitTime) return { durationMins: 0, formatted: "--" };
+
+  const parseToMins = (t: string) => {
+    const formatted = formatTrainTimeIST(t);
+    if (!formatted || formatted === "--:--") return 0;
+    const [hh, mm] = formatted.split(":").map(Number);
+    return (hh || 0) * 60 + (mm || 0);
+  };
+
+  const startMins = parseToMins(entryTime);
+  let endMins = parseToMins(exitTime);
+  if (endMins < startMins) {
+    endMins += 24 * 60; // Next day offset
+  }
+
+  const diff = endMins - startMins;
+  const hours = Math.floor(diff / 60);
+  const mins = diff % 60;
+  const formatted = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+  return { durationMins: diff, formatted };
+}
+
