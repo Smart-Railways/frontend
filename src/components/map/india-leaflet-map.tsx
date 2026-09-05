@@ -19,7 +19,6 @@ import {
   Maximize2,
   Train as TrainIcon,
   Clock,
-  Wrench,
   AlertTriangle,
   ExternalLink,
 } from "lucide-react";
@@ -409,49 +408,10 @@ export function IndiaLeafletMap({
     }
   };
 
-  const corridorTitle = sourceStation && targetStation
-    ? `${sourceStation.name} - ${targetStation.name}`
-    : "NEW DELHI - MUMBAI";
-
-  const hasRouteMaintenance = routeSegments.some((s) => s.hasMaintenance);
-  const totalMaintenanceSectionsCount = scheduledMaintenanceSections.length;
 
   return (
     <div className="relative w-full h-[600px] lg:h-[680px] rounded-2xl bg-brand-surface border border-brand-border shadow-sm overflow-hidden flex flex-col z-0">
       
-      {/* Top Left Active Corridor Header Badge */}
-      <div
-        style={{ zIndex: 400 }}
-        className="absolute top-4 left-4 flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-brand-surface/95 backdrop-blur-md border border-brand-border shadow-sm pointer-events-auto flex-wrap"
-      >
-        <span className="w-2.5 h-2.5 rounded-full bg-brand-primary flex-shrink-0"></span>
-        <span className="text-xs font-bold text-brand-secondary tracking-wide">
-          Corridor Section:
-        </span>
-        <span className="text-xs font-extrabold text-brand-primary uppercase">
-          {corridorTitle}
-        </span>
-        <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-brand-muted font-bold border border-brand-border">
-          {visibleStations.length} STATIONS
-        </span>
-
-        {hasRouteMaintenance ? (
-          <span className="text-[10px] px-2.5 py-0.5 rounded-md bg-red-100 text-red-800 border border-red-300 font-extrabold flex items-center gap-1 animate-pulse">
-            <AlertTriangle className="w-3 h-3 text-red-600" />
-            <span>CORRIDOR MAINTENANCE SCHEDULED</span>
-          </span>
-        ) : totalMaintenanceSectionsCount > 0 ? (
-          <span className="text-[10px] px-2.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-300 font-bold flex items-center gap-1">
-            <Wrench className="w-3 h-3 text-amber-600" />
-            <span>NETWORK MAINTENANCE: {totalMaintenanceSectionsCount} ACTIVE SECTION{totalMaintenanceSectionsCount > 1 ? "S" : ""}</span>
-          </span>
-        ) : (
-          <span className="text-[10px] px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold flex items-center gap-1">
-            <Wrench className="w-3 h-3 text-emerald-600" />
-            <span>ALL TRACKS CLEAR</span>
-          </span>
-        )}
-      </div>
 
       {/* Bottom Left Map Legend */}
       <div
