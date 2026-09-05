@@ -46,6 +46,12 @@ import {
   calculateTimeDuration,
 } from "@/lib/time-utils";
 import { getTrainTypeTheme } from "@/lib/train-theme";
+import { getDateBounds, validateDate, clampDate } from "@/lib/date-schemas";
+import {
+  TrainsPageSkeleton,
+  TrackedTrainsTableSkeleton,
+  MasterSchedulesTableSkeleton,
+} from "./skeletons";
 
 const DAYS_FULL = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -73,222 +79,15 @@ interface MasterScheduleItem {
   statusDot: string;
 }
 
-// ---------------------------------------------------------------------------
-// Full-page skeleton shown on initial load until ALL data sources resolve
-// ---------------------------------------------------------------------------
-function TrainsPageSkeleton() {
-  return (
-    <div className="min-h-screen bg-brand-tertiary text-brand-secondary flex flex-col font-sans">
-      {/* Sidebar placeholder */}
-      <div className="flex-1 flex pl-20 lg:pl-64">
-        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-7 flex flex-col space-y-6 max-w-[1680px] mx-auto w-full">
-
-          {/* ---- Header ---- */}
-          <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-brand-border/80">
-            <div className="flex items-center gap-2.5">
-              <Skeleton className="w-8 h-8 rounded-xl" />
-              <Skeleton className="h-7 w-56" />
-            </div>
-            <div className="flex items-center gap-2.5">
-              <Skeleton className="w-8 h-8 rounded-xl" />
-              <Skeleton className="h-8 w-36 rounded-xl" />
-            </div>
-          </header>
-
-          {/* ---- View-mode tab bar skeleton ---- */}
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-8 w-24 rounded-xl" />
-            <Skeleton className="h-8 w-32 rounded-xl" />
-            <Skeleton className="h-8 w-24 rounded-xl" />
-          </div>
-
-          {/* ---- Section 1: Tracked Trains Operations ---- */}
-          <section className="rounded-2xl bg-brand-surface border border-brand-border shadow-sm overflow-hidden space-y-4 p-4 sm:p-5">
-            {/* Section header */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-brand-border/80">
-              <Skeleton className="h-6 w-52" />
-              <Skeleton className="h-5 w-72 rounded-lg" />
-            </div>
-
-            {/* Controls card */}
-            <div className="p-4 rounded-xl bg-brand-tertiary/70 border border-brand-border/70 space-y-3.5">
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-                <div className="md:col-span-4 space-y-1">
-                  <Skeleton className="h-3 w-24" />
-                  <Skeleton className="h-8 w-full rounded-xl" />
-                </div>
-                <div className="md:col-span-6 space-y-1">
-                  <Skeleton className="h-3 w-32" />
-                  <Skeleton className="h-8 w-full rounded-xl" />
-                </div>
-                <div className="md:col-span-2">
-                  <Skeleton className="h-8 w-full rounded-xl" />
-                </div>
-              </div>
-              {/* Status bar */}
-              <div className="flex items-center justify-between gap-3 pt-3 border-t border-brand-border/60">
-                <div className="flex items-center gap-2">
-                  <Skeleton className="h-3 w-20" />
-                  <Skeleton className="h-3 w-28" />
-                  <Skeleton className="h-5 w-24 rounded-lg" />
-                </div>
-                <Skeleton className="h-5 w-28 rounded-full" />
-              </div>
-            </div>
-
-            {/* Table */}
-            <div className="overflow-x-auto border border-brand-border/80 rounded-xl">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-brand-surface border-b border-brand-border">
-                  <tr>
-                    {["Train No. & Name","Type & Priority","Section","Window","Actuals","Delay Matrix (IST)","Actions"].map((h) => (
-                      <th key={h} className="py-3 px-4"><Skeleton className="h-3 w-20" /></th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-brand-border/60">
-                  {Array.from({ length: 6 }).map((_, idx) => (
-                    <tr key={idx} className="hover:bg-brand-tertiary/40">
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2.5">
-                          <Skeleton className="w-1.5 h-8 rounded-full shrink-0" />
-                          <div className="space-y-1.5">
-                            <Skeleton className="h-4 w-16" />
-                            <Skeleton className="h-3 w-28" />
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4"><Skeleton className="h-4 w-12" /></td>
-                      <td className="py-3 px-4"><Skeleton className="h-4 w-28" /></td>
-                      <td className="py-3 px-4"><Skeleton className="h-4 w-24" /></td>
-                      <td className="py-3 px-4"><Skeleton className="h-4 w-24" /></td>
-                      <td className="py-3 px-4"><Skeleton className="h-6 w-20 rounded-full" /></td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end">
-                          <Skeleton className="w-7 h-7 rounded-lg" />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination stub */}
-            <div className="flex items-center justify-between pt-2">
-              <Skeleton className="h-5 w-44" />
-              <div className="flex items-center gap-1">
-                <Skeleton className="w-7 h-7 rounded-lg" />
-                <Skeleton className="w-7 h-7 rounded-lg" />
-                <Skeleton className="w-7 h-7 rounded-lg" />
-              </div>
-            </div>
-          </section>
-
-          {/* ---- Section 2: Master Timetable Schedules ---- */}
-          <section className="rounded-2xl bg-brand-surface border border-brand-border shadow-sm overflow-hidden space-y-4 p-4 sm:p-5">
-            {/* Section header */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-brand-border/80">
-              <div className="space-y-1.5">
-                <Skeleton className="h-6 w-60" />
-                <Skeleton className="h-3 w-72" />
-              </div>
-            </div>
-
-            {/* Controls card */}
-            <div className="p-4 rounded-xl bg-brand-tertiary/70 border border-brand-border/70 space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-                <div className="md:col-span-6 space-y-1">
-                  <Skeleton className="h-3 w-40" />
-                  <Skeleton className="h-8 w-full rounded-xl" />
-                </div>
-                <div className="md:col-span-6 space-y-1">
-                  <Skeleton className="h-3 w-36" />
-                  <Skeleton className="h-8 w-full rounded-xl" />
-                </div>
-              </div>
-              {/* Filter chips */}
-              <div className="flex items-center gap-1.5 pt-2 border-t border-brand-border/60">
-                <Skeleton className="h-8 w-40 rounded-xl" />
-                {["All","Rajdhani","VB","Shatabdi","Express"].map((l) => (
-                  <Skeleton key={l} className="h-6 w-16 rounded-lg" />
-                ))}
-              </div>
-            </div>
-
-            {/* KPI Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {["Total Schedules","Runs Today","High Priority"].map((label) => (
-                <div key={label} className="p-3.5 rounded-xl bg-brand-surface border border-brand-border shadow-2xs flex items-center gap-3">
-                  <Skeleton className="w-8 h-8 rounded-lg shrink-0" />
-                  <div className="space-y-1.5">
-                    <Skeleton className="h-3 w-24" />
-                    <Skeleton className="h-7 w-12" />
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Table */}
-            <div className="overflow-x-auto border border-brand-border/80 rounded-xl">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-brand-surface border-b border-brand-border">
-                  <tr>
-                    {["Train No. & Name","Priority & Type","Section / Corridor","Scheduled Entry (IST)","Scheduled Exit (IST)","Transit Duration","Actions"].map((h) => (
-                      <th key={h} className="py-3 px-4"><Skeleton className="h-3 w-20" /></th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-brand-border/60">
-                  {Array.from({ length: 6 }).map((_, idx) => (
-                    <tr key={idx}>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2.5">
-                          <Skeleton className="w-1.5 h-8 rounded-full shrink-0" />
-                          <div className="space-y-1.5">
-                            <Skeleton className="h-4 w-16" />
-                            <Skeleton className="h-3 w-28" />
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4"><Skeleton className="h-4 w-12" /></td>
-                      <td className="py-3 px-4"><Skeleton className="h-4 w-28" /></td>
-                      <td className="py-3 px-4"><Skeleton className="h-4 w-14" /></td>
-                      <td className="py-3 px-4"><Skeleton className="h-4 w-14" /></td>
-                      <td className="py-3 px-4"><Skeleton className="h-4 w-14" /></td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end">
-                          <Skeleton className="w-7 h-7 rounded-lg" />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination stub */}
-            <div className="flex items-center justify-between pt-2">
-              <Skeleton className="h-5 w-48" />
-              <div className="flex items-center gap-1">
-                <Skeleton className="w-7 h-7 rounded-lg" />
-                <Skeleton className="w-7 h-7 rounded-lg" />
-                <Skeleton className="w-7 h-7 rounded-lg" />
-              </div>
-            </div>
-          </section>
-
-        </main>
-      </div>
-    </div>
-  );
-}
-
 export default function TrainsPage() {
   const [activeNavTab, setActiveNavTab] = useState<string>("trains");
   const [activeViewMode, setActiveViewMode] = useState<"all" | "tracked" | "schedules">("all");
   // Default to 2026-09-04 where active train operations are seeded in the backend database
-  const [trackedDate, setTrackedDate] = useState<string>("2026-09-04");
+  // Clamped to valid live-tracking range (today - 7 days → today)
+  const [trackedDate, setTrackedDate] = useState<string>(() => clampDate("2026-09-04", "live-tracking"));
+  const [trackedDateError, setTrackedDateError] = useState<string | null>(null);
+  const [scheduleDateError, setScheduleDateError] = useState<string | null>(null);
+  const [trackedSectionId, setTrackedSectionId] = useState<number>(1);
   const [sourceCode, setSourceCode] = useState<string>("NDLS");
   const [destinationCode, setDestinationCode] = useState<string>("MTJ");
   const [trackedSearchQuery, setTrackedSearchQuery] = useState<string>("");
@@ -328,6 +127,25 @@ export default function TrainsPage() {
     return sections && sections.length > 0 ? sections : DEFAULT_RAILWAY_SECTIONS;
   }, [sections]);
 
+  const currentTrackedSection = useMemo(() => {
+    return (
+      availableSections.find((s) => s.id === trackedSectionId) ||
+      availableSections[0] ||
+      DEFAULT_RAILWAY_SECTIONS[0]
+    );
+  }, [availableSections, trackedSectionId]);
+
+  const handleSelectTrackedSection = (secId: number) => {
+    setTrackedSectionId(secId);
+    const sec = availableSections.find((s) => s.id === secId);
+    if (sec) {
+      const src = sec.source_station_code || sec.origin_station || "NDLS";
+      const dst = sec.destination_station_code || sec.end_station || "MTJ";
+      setSourceCode(src);
+      setDestinationCode(dst);
+    }
+  };
+
   const selectedScheduleSection = useMemo(() => {
     if (!selectedSectionId) return null;
     return availableSections.find((s) => s.id === selectedSectionId) || null;
@@ -357,51 +175,15 @@ export default function TrainsPage() {
 
   const isSchedulesLoading = loadingSchedules || fetchingSchedules || refetchingSchedules;
 
-  // Gate: show full-page skeleton until every first-load fetch resolves
+  // Gate: show full-page skeleton only on initial load of core metadata
   const isPageLoading =
     loadingSections ||
     loadingTrains ||
-    loadingMovements ||
-    loadingTracked ||
-    loadingSchedules;
+    loadingMovements;
 
   const schedules = useMemo(() => {
     return paginatedSchedulesData?.results || [];
   }, [paginatedSchedulesData]);
-
-  const currentSection = useMemo(() => {
-    return (
-      availableSections.find((s) => s.id === selectedSectionId) ||
-      availableSections[0] ||
-      DEFAULT_RAILWAY_SECTIONS[0]
-    );
-  }, [availableSections, selectedSectionId]);
-
-
-  useEffect(() => {
-    if (availableSections && availableSections.length > 0) {
-      const active =
-        availableSections.find((s) => s.id === selectedSectionId) ||
-        availableSections[0];
-      if (active) {
-        const defaultSrc = active.source_station_code || active.origin_station || "NDLS";
-        const defaultDst = active.destination_station_code || active.end_station || "MTJ";
-        setSourceCode(defaultSrc);
-        setDestinationCode(defaultDst);
-      }
-    }
-  }, [availableSections, selectedSectionId]);
-
-  const handleSelectSection = (secId: number) => {
-    setSelectedSectionId(secId);
-    const sec = availableSections.find((s) => s.id === secId);
-    if (sec) {
-      const src = sec.source_station_code || sec.origin_station;
-      const dst = sec.destination_station_code || sec.end_station;
-      if (src) setSourceCode(src);
-      if (dst) setDestinationCode(dst);
-    }
-  };
 
   const handleRefetchAll = () => {
     refetchTracked();
@@ -419,11 +201,6 @@ export default function TrainsPage() {
     } catch { return 0; }
   }, [selectedScheduleDate]);
 
-  const handleSwapStations = () => {
-    const temp = sourceCode;
-    setSourceCode(destinationCode);
-    setDestinationCode(temp);
-  };
 
   const filteredTrackedTrains = useMemo<TrackedTrainOperation[]>(() => {
     const rawList = trackedOperationsData?.trains || [];
@@ -542,12 +319,12 @@ export default function TrainsPage() {
     <div className="min-h-screen bg-brand-tertiary text-brand-secondary flex flex-col font-sans">
       <VerticalNavbar activeTab={activeNavTab} onTabChange={setActiveNavTab} unreadCount={1} />
 
-      <div className="flex-1 flex pl-20 lg:pl-64">
+      <div className="flex-1 flex pl-0 lg:pl-64 pt-14 lg:pt-0">
         <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-7 flex flex-col space-y-6 max-w-[1680px] mx-auto w-full">
           <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-brand-border/80">
             <div>
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-brand-primary text-white flex items-center justify-center shadow-xs">
+                <div className="w-8 h-8 rounded-xl bg-brand-secondary/80 text-white flex items-center justify-center shadow-xs">
                   <TrainIcon className="w-4 h-4" />
                 </div>
                 <h1 className="text-xl sm:text-2xl font-extrabold text-brand-secondary tracking-tight">Train Operations & Schedules</h1>
@@ -571,17 +348,35 @@ export default function TrainsPage() {
 
               <div className="p-4 rounded-xl bg-brand-tertiary/70 border border-brand-border/70 space-y-3.5">
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-                  {/* Operation Date */}
+                  {/* Operation Date — Live Tracking: Today − 7 days → Today */}
                   <div className="md:col-span-4 space-y-1">
-                    <label className="text-[12px] font-extrabold text-brand-muted tracking-wider block">
-                      Operation Date
+                    <label className="text-[12px] font-extrabold text-brand-muted tracking-wider flex items-center justify-between">
+                      <span>Operation Date</span>
                     </label>
                     <input
                       type="date"
                       value={trackedDate}
-                      onChange={(e) => setTrackedDate(e.target.value)}
-                      className="w-full bg-brand-surface border border-brand-border text-brand-secondary text-xs rounded-xl px-3 py-2 outline-none font-bold cursor-pointer"
+                      min={getDateBounds("live-tracking").min}
+                      max={getDateBounds("live-tracking").max}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const error = validateDate(val, "live-tracking");
+                        setTrackedDateError(error);
+                        if (!error) {
+                          setTrackedDate(val);
+                        }
+                      }}
+                      className={`w-full bg-brand-surface border text-brand-secondary text-xs rounded-xl px-3 py-2 outline-none font-bold cursor-pointer ${
+                        trackedDateError
+                          ? "border-red-400 focus:border-red-500"
+                          : "border-brand-border"
+                      }`}
                     />
+                    {trackedDateError && (
+                      <p className="text-[10px] text-red-500 font-semibold mt-0.5">
+                        {trackedDateError}
+                      </p>
+                    )}
                   </div>
 
                   {/* Single Section Name Dropdown (Replaces the 2 separate station dropdowns & swap button) */}
@@ -594,8 +389,8 @@ export default function TrainsPage() {
                     </label>
                     <div className="relative">
                       <select
-                        value={currentSection.id}
-                        onChange={(e) => handleSelectSection(Number(e.target.value))}
+                        value={currentTrackedSection.id}
+                        onChange={(e) => handleSelectTrackedSection(Number(e.target.value))}
                         className="w-full bg-brand-surface border border-brand-border text-xs text-brand-secondary font-bold rounded-xl px-3.5 py-2 outline-none cursor-pointer appearance-none pr-8 shadow-2xs"
                       >
                         {availableSections.map((sec) => (
@@ -621,38 +416,7 @@ export default function TrainsPage() {
                   </div>
                 </div>
 
-                {/* Live Corridor Status Bar */}
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-brand-border/60 text-xs">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[11px] font-extrabold text-brand-muted uppercase tracking-wider">
-                      Active Corridor:
-                    </span>
-                    <span className="font-black text-brand-secondary text-xs">
-                      {currentSection.section_name}
-                    </span>
-                    <span className="px-2.5 py-0.5 rounded-lg bg-brand-surface border border-brand-border font-mono text-[11px] font-bold text-brand-primary">
-                      {currentSection.source_station_code || currentSection.origin_station} → {currentSection.destination_station_code || currentSection.end_station}
-                    </span>
-                    <span className="text-[11px] text-brand-muted font-bold">
-                      • {currentSection.distance} km
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-brand-muted font-bold">Corridor Status:</span>
-                    {currentSection.status !== false ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-300 text-[10px] font-black">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                        <span>OPERATIONAL / LIVE</span>
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-300 text-[10px] font-black">
-                        <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                        <span>MAINTENANCE BLOCK</span>
-                      </span>
-                    )}
-                  </div>
-                </div>
+             
               </div>
 
               <div className="overflow-x-auto border border-brand-border/80 rounded-xl">
@@ -662,51 +426,15 @@ export default function TrainsPage() {
                       <th className="py-3 px-4">Train No. & Name</th>
                       <th className="py-3 px-4">Type & Priority</th>
                       <th className="py-3 px-4">Section</th>
-                      <th className="py-3 px-4">Window</th>
+                      <th className="py-3 px-4 font-semibold">Window</th>
                       <th className="py-3 px-4">Actuals</th>
-                      <th className="py-3 px-4">Delay Matrix (IST)</th>
+                      <th className="py-3 px-4 text-center">Delay Matrix (IST)</th>
                       <th className="py-3 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-border/60 text-brand-secondary">
                     {(loadingTracked || refetchingTracked) ? (
-                      Array.from({ length: 5 }).map((_, idx) => (
-                        <tr key={idx} className="hover:bg-brand-tertiary/40 transition-colors">
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-2.5">
-                              <Skeleton className="w-1.5 h-8 rounded-full shrink-0" />
-                              <div className="space-y-1.5">
-                                <Skeleton className="h-4 w-16" />
-                                <Skeleton className="h-3 w-28" />
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-2">
-                              <Skeleton className="h-5 w-16 rounded-md" />
-                              <Skeleton className="h-4 w-8" />
-                            </div>
-                          </td>
-                          <td className="py-3 px-4">
-                            <Skeleton className="h-4 w-28" />
-                          </td>
-                          <td className="py-3 px-4 font-mono">
-                            <Skeleton className="h-4 w-24" />
-                          </td>
-                          <td className="py-3 px-4 font-mono">
-                            <Skeleton className="h-4 w-24" />
-                          </td>
-                          <td className="py-3 px-4">
-                            <Skeleton className="h-6 w-24 rounded-full" />
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <Skeleton className="w-2.5 h-6 rounded-xs" />
-                              <Skeleton className="w-7 h-7 rounded-lg" />
-                            </div>
-                          </td>
-                        </tr>
-                      ))
+                      <TrackedTrainsTableSkeleton count={5} />
                     ) : filteredTrackedTrains.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="py-12 text-center text-brand-muted">
@@ -716,15 +444,21 @@ export default function TrainsPage() {
                             <p className="text-xs text-brand-muted">
                               No operation logs recorded in the backend database for {formatDisplayDate(trackedDate)} on corridor {sourceCode} → {destinationCode}.
                             </p>
-                            {trackedDate !== "2026-09-04" && (
-                              <button
-                                onClick={() => setTrackedDate("2026-09-04")}
-                                className="mt-2 px-4 py-2 rounded-xl bg-brand-primary text-white text-xs font-bold hover:bg-blue-700 transition-all shadow-xs cursor-pointer flex items-center gap-2"
-                              >
-                                <span>Switch to 04-Sep-2026</span>
-                                <span className="px-1.5 py-0.5 rounded-full bg-white/20 text-[10px]">14 trains available</span>
-                              </button>
-                            )}
+                            {(() => {
+                              const fallbackDate = clampDate("2026-09-04", "live-tracking");
+                              return trackedDate !== fallbackDate ? (
+                                <button
+                                  onClick={() => {
+                                    setTrackedDateError(null);
+                                    setTrackedDate(fallbackDate);
+                                  }}
+                                  className="mt-2 px-4 py-2 rounded-xl bg-brand-primary text-white text-xs font-bold hover:bg-blue-700 transition-all shadow-xs cursor-pointer flex items-center gap-2"
+                                >
+                                  <span>Switch to {formatDisplayDate(fallbackDate)}</span>
+                                  <span className="px-1.5 py-0.5 rounded-full bg-white/20 text-[10px]">14 trains available</span>
+                                </button>
+                              ) : null;
+                            })()}
                           </div>
                         </td>
                       </tr>
@@ -749,7 +483,7 @@ export default function TrainsPage() {
                             <td className="py-3 px-4">{item.section.name}</td>
                             <td className="py-3 px-4 font-mono">{formatTimeString(item.schedule.entry_time)} → {formatTimeString(item.schedule.exit_time)}</td>
                             <td className="py-3 px-4 font-mono">{formatTimeString(item.movement?.actual_entry_time)} → {formatTimeString(item.movement?.actual_exit_time)}</td>
-                            <td className="py-3 px-4">
+                            <td className="py-3 px-4 text-center">
                               <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold border ${delayObj.badgeClass}`}>
                                 {delayObj.text}
                               </span>
@@ -888,9 +622,9 @@ export default function TrainsPage() {
                 <button
                   onClick={() => refetchSchedules()}
                   disabled={isSchedulesLoading}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-brand-secondary transition-colors disabled:opacity-60 cursor-pointer shadow-2xs shrink-0"
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-primary text-xs font-bold text-white transition-colors disabled:opacity-60 cursor-pointer shadow-2xs shrink-0"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 text-brand-primary ${isSchedulesLoading ? "animate-spin" : ""}`} />
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSchedulesLoading ? "animate-spin" : ""}`} />
                   <span>{isSchedulesLoading ? "Refreshing..." : "Refresh Schedules"}</span>
                 </button>
               </div>
@@ -917,7 +651,7 @@ export default function TrainsPage() {
                     </select>
                   </div>
 
-                  {/* Day Date Navigator */}
+                  {/* Day Date Navigator — Master Timetable: Today − 7 days → Today + 30 days */}
                   <div className="md:col-span-6 space-y-1">
                     <label className="text-[10px] font-extrabold text-brand-muted uppercase tracking-wider flex items-center justify-between">
                       <span>Schedule Date & Active Day</span>
@@ -927,16 +661,37 @@ export default function TrainsPage() {
                       <input
                         type="date"
                         value={selectedScheduleDate}
-                        onChange={(e) => setSelectedScheduleDate(e.target.value)}
-                        className="flex-1 bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3 py-2 outline-none font-bold cursor-pointer shadow-2xs"
+                        min={getDateBounds("master-timetable").min}
+                        max={getDateBounds("master-timetable").max}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const error = validateDate(val, "master-timetable");
+                          setScheduleDateError(error);
+                          if (!error) {
+                            setSelectedScheduleDate(val);
+                          }
+                        }}
+                        className={`flex-1 bg-brand-surface border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3 py-2 outline-none font-bold cursor-pointer shadow-2xs ${
+                          scheduleDateError
+                            ? "border-red-400 focus:border-red-500"
+                            : "border-brand-border"
+                        }`}
                       />
                       <button
-                        onClick={() => setSelectedScheduleDate(formatDateToISO(new Date()))}
+                        onClick={() => {
+                          setScheduleDateError(null);
+                          setSelectedScheduleDate(formatDateToISO(new Date()));
+                        }}
                         className="px-2.5 py-2 rounded-xl bg-brand-surface border border-brand-border hover:bg-brand-surface/80 text-[11px] font-bold text-brand-primary transition-colors cursor-pointer shadow-2xs"
                       >
                         Today
                       </button>
                     </div>
+                    {scheduleDateError && (
+                      <p className="text-[10px] text-red-500 font-semibold mt-0.5">
+                        {scheduleDateError}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -953,49 +708,13 @@ export default function TrainsPage() {
                     <Search className="w-3 h-3 text-brand-muted absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   </div>
 
-                  <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
-                    {([
-                      { key: "ALL",      label: "All",         activeClass: "bg-brand-primary text-white shadow-xs",                         hoverClass: "hover:bg-brand-surface/80 hover:text-brand-secondary" },
-                      { key: "RAJDHANI", label: "Rajdhani",    activeClass: "bg-red-600 text-white shadow-xs",                                hoverClass: "hover:bg-red-50 hover:text-red-700" },
-                      { key: "VB",       label: "Vande Bharat",activeClass: "bg-slate-700 text-white shadow-xs",                             hoverClass: "hover:bg-slate-100 hover:text-slate-800" },
-                      { key: "SHATABDI", label: "Shatabdi",    activeClass: "bg-blue-600 text-white shadow-xs",                               hoverClass: "hover:bg-blue-50 hover:text-blue-700" },
-                      { key: "TEJAS",    label: "Tejas",        activeClass: "bg-yellow-500 text-white shadow-xs",                               hoverClass: "hover:bg-sky-50 hover:text-sky-700" },
-                      { key: "EXPRESS",  label: "Express",      activeClass: "bg-emerald-600 text-white shadow-xs",                           hoverClass: "hover:bg-emerald-50 hover:text-emerald-700" },
-                      { key: "FREIGHT",  label: "Freight",      activeClass: "bg-amber-500 text-white shadow-xs",                             hoverClass: "hover:bg-amber-50 hover:text-amber-700" },
-                      { key: "PASSENGER",label: "Passenger",    activeClass: "bg-slate-500 text-white shadow-xs",                             hoverClass: "hover:bg-slate-100 hover:text-slate-700" },
-                    ] as const).map(({ key, label, activeClass, hoverClass }) => (
-                      <button
-                        key={key}
-                        onClick={() => setScheduleTypeFilter(key)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer border ${
-                          scheduleTypeFilter === key
-                            ? `${activeClass} border-transparent`
-                            : `text-brand-muted border-transparent ${hoverClass}`
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-
-
-                    <button
-                      onClick={() => setRunsTodayOnly(!runsTodayOnly)}
-                      className={`flex items-center gap-1 px-3 py-1 rounded-xl text-xs font-bold border transition-all whitespace-nowrap cursor-pointer shadow-2xs ${runsTodayOnly
-                          ? "bg-brand-blue-light text-brand-primary border-brand-primary/30"
-                          : "bg-brand-surface text-brand-secondary border-brand-border hover:bg-brand-surface/80"
-                        }`}
-                    >
-                      <span>Runs Today</span>
-                      <ChevronDown className="w-3 h-3" />
-                    </button>
-                  </div>
                 </div>
               </div>
 
               {/* KPI Stat Cards for Master Schedules */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div className="p-3.5 rounded-xl bg-brand-surface border border-brand-border shadow-2xs flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-brand-blue-light text-brand-primary flex items-center justify-center flex-shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-brand-secondary/80 text-white flex items-center justify-center flex-shrink-0">
                     <TrainIcon className="w-4 h-4" />
                   </div>
                   <div>
@@ -1009,7 +728,7 @@ export default function TrainsPage() {
                 </div>
 
                 <div className="p-3.5 rounded-xl bg-brand-surface border border-brand-border shadow-2xs flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-brand-secondary/80 text-white flex items-center justify-center flex-shrink-0">
                     <CalendarCheck className="w-4 h-4" />
                   </div>
                   <div>
@@ -1017,13 +736,13 @@ export default function TrainsPage() {
                     {isSchedulesLoading ? (
                       <Skeleton className="h-7 w-12 my-0.5 rounded" />
                     ) : (
-                      <div className="text-xl font-black text-emerald-700">{scheduleStats.runningToday}</div>
+                      <div className="text-xl font-black text-brand-secondary">{scheduleStats.runningToday}</div>
                     )}
                   </div>
                 </div>
 
                 <div className="p-3.5 rounded-xl bg-brand-surface border border-brand-border shadow-2xs flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-brand-secondary/80 text-white flex items-center justify-center flex-shrink-0">
                     <Crown className="w-4 h-4" />
                   </div>
                   <div>
@@ -1031,7 +750,7 @@ export default function TrainsPage() {
                     {isSchedulesLoading ? (
                       <Skeleton className="h-7 w-12 my-0.5 rounded" />
                     ) : (
-                      <div className="text-xl font-black text-amber-700">{scheduleStats.highPriority}</div>
+                      <div className="text-xl font-black text-brand-secondary">{scheduleStats.highPriority}</div>
                     )}
                   </div>
                 </div>
@@ -1054,61 +773,15 @@ export default function TrainsPage() {
                       <th className="py-3 px-4">Train No. & Name</th>
                       <th className="py-3 px-4">Priority & Type</th>
                       <th className="py-3 px-4">Section / Corridor</th>
-                      <th className="py-3 px-4">Scheduled Entry (IST)</th>
-                      <th className="py-3 px-4">Scheduled Exit (IST)</th>
-                      <th className="py-3 px-4">Transit Duration</th>
+                      <th className="py-3 px-4 text-center">Scheduled Entry (IST)</th>
+                      <th className="py-3 px-4 text-center">Scheduled Exit (IST)</th>
+                      <th className="py-3 px-4 text-center">Transit Duration</th>
                       <th className="py-3 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-border/60 text-brand-secondary">
                     {isSchedulesLoading ? (
-                      Array.from({ length: 5 }).map((_, idx) => (
-                        <tr key={idx} className="hover:bg-brand-tertiary/40 transition-colors">
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-2.5">
-                              <Skeleton className="w-1.5 h-8 rounded-full shrink-0" />
-                              <div className="space-y-1.5">
-                                <Skeleton className="h-4 w-16" />
-                                <Skeleton className="h-3 w-28" />
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-2">
-                              <Skeleton className="h-5 w-16 rounded-md" />
-                              <Skeleton className="h-4 w-8" />
-                            </div>
-                          </td>
-                          <td className="py-3 px-4">
-                            <Skeleton className="h-4 w-28" />
-                          </td>
-                          <td className="py-3 px-4 font-mono">
-                            <Skeleton className="h-4 w-14" />
-                          </td>
-                          <td className="py-3 px-4 font-mono">
-                            <Skeleton className="h-4 w-14" />
-                          </td>
-                          <td className="py-3 px-4 font-mono">
-                            <Skeleton className="h-4 w-14" />
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-1">
-                              {Array.from({ length: 7 }).map((_, i) => (
-                                <Skeleton key={i} className="w-4 h-4 rounded-full" />
-                              ))}
-                            </div>
-                          </td>
-                          <td className="py-3 px-4">
-                            <Skeleton className="h-5 w-16 rounded-md" />
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <Skeleton className="w-2.5 h-6 rounded-xs" />
-                              <Skeleton className="w-7 h-7 rounded-lg" />
-                            </div>
-                          </td>
-                        </tr>
-                      ))
+                      <MasterSchedulesTableSkeleton count={5} />
                     ) : filteredSchedules.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="py-14 text-center text-brand-muted">
@@ -1162,7 +835,7 @@ export default function TrainsPage() {
                             </td>
 
                             {/* Scheduled Entry */}
-                            <td className="py-3 px-4">
+                            <td className="py-3 px-4 text-center">
                               <div className="text-brand-primary font-semibold text-xs font-mono">
                                 {formatTrainTimeIST(item.scheduledEntryTime)}
                               </div>
@@ -1170,7 +843,7 @@ export default function TrainsPage() {
                             </td>
 
                             {/* Scheduled Exit */}
-                            <td className="py-3 px-4">
+                            <td className="py-3 px-4 text-center">
                               <div className="text-brand-primary font-semibold text-xs font-mono">
                                 {formatTrainTimeIST(item.scheduledExitTime)}
                               </div>
@@ -1178,7 +851,7 @@ export default function TrainsPage() {
                             </td>
 
                             {/* Transit Duration */}
-                            <td className="py-3 px-4">
+                            <td className="py-3 px-4 text-center">
                               <div className="text-brand-secondary font-bold">
                                 {item.durationFormatted}
                               </div>
@@ -1364,13 +1037,13 @@ export default function TrainsPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <span className="text-brand-muted block text-[10px]">Actual Entry Time:</span>
-                  <span className="font-mono text-brand-secondary font-bold">
+                  <span className=" text-brand-secondary font-bold">
                     {formatTrainTimeIST(inspectTrackedTrain.movement?.actual_entry_time, "Not logged yet")}
                   </span>
                 </div>
                 <div>
                   <span className="text-brand-muted block text-[10px]">Actual Exit Time:</span>
-                  <span className="font-mono text-brand-secondary font-bold">
+                  <span className=" text-brand-secondary font-bold">
                     {formatTrainTimeIST(inspectTrackedTrain.movement?.actual_exit_time, "Not logged yet")}
                   </span>
                 </div>

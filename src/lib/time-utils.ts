@@ -140,8 +140,8 @@ export function formatDelayMetric(delayMinutes: number | null): DelayMetric {
       isLate: false,
       isHighLate: false,
       isOnTime: false,
-      badgeClass: "bg-slate-100 text-slate-600 border-slate-200",
-      dotClass: "bg-slate-400",
+      badgeClass: "bg-slate-500 text-white border-transparent shadow-2xs font-semibold",
+      dotClass: "bg-slate-300",
     };
   }
 
@@ -153,8 +153,8 @@ export function formatDelayMetric(delayMinutes: number | null): DelayMetric {
       isLate: false,
       isHighLate: false,
       isOnTime: true,
-      badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-300",
-      dotClass: "bg-emerald-500",
+      badgeClass: "bg-emerald-600 text-white border-transparent shadow-2xs font-semibold",
+      dotClass: "bg-white",
     };
   }
 
@@ -176,9 +176,9 @@ export function formatDelayMetric(delayMinutes: number | null): DelayMetric {
     isHighLate,
     isOnTime: false,
     badgeClass: isHighLate
-      ? "bg-red-50 text-red-700 border-red-300 shadow-2xs"
-      : "bg-amber-50 text-amber-700 border-amber-300 shadow-2xs",
-    dotClass: isHighLate ? "bg-red-500 animate-pulse" : "bg-amber-500",
+      ? "bg-red-600 text-white border-transparent shadow-2xs font-semibold"
+      : "bg-red-500 text-white border-transparent shadow-2xs font-semibold",
+    dotClass: isHighLate ? "bg-white animate-pulse" : "bg-white",
   };
 }
 

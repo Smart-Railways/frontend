@@ -19,8 +19,6 @@ import {
   CheckCircle2,
   XCircle,
   Filter,
-  LayoutGrid,
-  Table as TableIcon,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -38,6 +36,8 @@ import {
   AssetCategory,
   ASSET_CATEGORY_LABELS,
 } from "@/enums";
+import { formatDateToISO } from "@/lib/time-utils";
+import { AssetsPageSkeleton } from "./skeletons";
 
 // Category options helper derived directly from AssetCategory enum and labels
 const ASSET_CATEGORIES = Object.values(AssetCategory).map((cat) => ({
@@ -71,28 +71,28 @@ const DIVISIONS: { value: AssetDepartment; label: string; desc: string; color: s
 function getRiskBadge(level: number) {
   if (level >= 8) {
     return {
-      bg: "bg-red-50 border-red-200 text-red-700",
-      dot: "bg-red-500 animate-pulse",
+      bg: "bg-red-600 border-transparent text-white",
+      dot: "bg-white animate-pulse",
       label: "Critical Risk",
     };
   }
   if (level >= 6) {
     return {
-      bg: "bg-orange-50 border-orange-200 text-orange-700",
-      dot: "bg-orange-500",
+      bg: "bg-orange-500 border-transparent text-white",
+      dot: "bg-white",
       label: "High Risk",
     };
   }
   if (level >= 4) {
     return {
-      bg: "bg-amber-50 border-amber-200 text-amber-700",
-      dot: "bg-amber-500",
+      bg: "bg-amber-500 border-transparent text-white",
+      dot: "bg-white",
       label: "Moderate",
     };
   }
   return {
-    bg: "bg-emerald-50 border-emerald-200 text-emerald-700",
-    dot: "bg-emerald-500",
+    bg: "bg-emerald-600 border-transparent text-white",
+    dot: "bg-white",
     label: "Low Risk",
   };
 }
@@ -113,134 +113,7 @@ function formatDate(dateStr?: string | null): string {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Full-page skeleton shown on initial load until ALL data sources resolve
-// ---------------------------------------------------------------------------
-function AssetsPageSkeleton() {
-  return (
-    <div className="min-h-screen bg-brand-tertiary text-brand-secondary flex flex-col font-sans">
-      <div className="flex-1 flex pl-20 lg:pl-64">
-        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-7 flex flex-col space-y-5 max-w-[1600px] mx-auto w-full">
 
-          {/* Header */}
-          <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-brand-border/80">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2.5">
-                <Skeleton className="w-8 h-8 rounded-full" />
-                <Skeleton className="h-7 w-72" />
-              </div>
-              <Skeleton className="h-3 w-96" />
-            </div>
-            <div className="flex items-center gap-3">
-              <Skeleton className="h-8 w-32 rounded-xl" />
-              <Skeleton className="h-8 w-28 rounded-xl" />
-              <Skeleton className="h-8 w-36 rounded-xl" />
-            </div>
-          </header>
-
-          {/* KPI Cards */}
-          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            {["Total Assets","High Risk Assets","S&T Division","Civil Engineering","Traction / OHE"].map((label) => (
-              <div key={label} className="p-4 rounded-2xl bg-brand-surface border border-brand-border shadow-sm flex items-start gap-3.5">
-                <Skeleton className="w-9 h-9 rounded-full shrink-0" />
-                <div className="space-y-1.5">
-                  <Skeleton className="h-3 w-20" />
-                  <Skeleton className="h-8 w-12" />
-                  <Skeleton className="h-2.5 w-24" />
-                </div>
-              </div>
-            ))}
-          </section>
-
-          {/* Filter Controls */}
-          <section className="p-4 sm:p-5 rounded-2xl bg-brand-surface border border-brand-border shadow-sm space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-              <div className="md:col-span-4"><Skeleton className="h-9 w-full rounded-xl" /></div>
-              <div className="md:col-span-3"><Skeleton className="h-9 w-full rounded-xl" /></div>
-              <div className="md:col-span-3"><Skeleton className="h-9 w-full rounded-xl" /></div>
-              <div className="md:col-span-2 flex justify-end gap-1.5">
-                <Skeleton className="w-9 h-9 rounded-xl" />
-                <Skeleton className="w-9 h-9 rounded-xl" />
-              </div>
-            </div>
-            <div className="flex items-center gap-2 pt-3 border-t border-brand-border/60">
-              <Skeleton className="h-3 w-16" />
-              {[1,2,3,4].map((i) => <Skeleton key={i} className="h-6 w-20 rounded-lg" />)}
-              <div className="ml-auto flex items-center gap-2">
-                <Skeleton className="h-3 w-16" />
-                <Skeleton className="h-7 w-28 rounded-xl" />
-              </div>
-            </div>
-          </section>
-
-          {/* Table Section */}
-          <section className="rounded-2xl bg-brand-surface border border-brand-border shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-brand-border flex items-center justify-between">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <Skeleton className="h-5 w-48" />
-                  <Skeleton className="h-5 w-16 rounded-full" />
-                </div>
-                <Skeleton className="h-3 w-64" />
-              </div>
-              <Skeleton className="h-5 w-36 rounded" />
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-brand-surface border-b border-brand-border">
-                  <tr>
-                    {["ID","Asset Title","Category","Division","Section","Risk Level","Setup Date","Actions"].map((h) => (
-                      <th key={h} className="py-3 px-4"><Skeleton className="h-3 w-16" /></th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-brand-border/60">
-                  {Array.from({ length: 6 }).map((_, idx) => (
-                    <tr key={idx}>
-                      <td className="py-3.5 px-4"><Skeleton className="h-4 w-8" /></td>
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-2.5">
-                          <Skeleton className="w-8 h-8 rounded-lg shrink-0" />
-                          <div className="space-y-1.5">
-                            <Skeleton className="h-4 w-36" />
-                            <Skeleton className="h-2.5 w-16" />
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4"><Skeleton className="h-5 w-20 rounded-md" /></td>
-                      <td className="py-3.5 px-4"><Skeleton className="h-5 w-16 rounded-md" /></td>
-                      <td className="py-3.5 px-4"><Skeleton className="h-4 w-28" /></td>
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-2">
-                          <Skeleton className="h-5 w-14 rounded-md" />
-                          <Skeleton className="h-3 w-12" />
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-1.5">
-                          <Skeleton className="w-3.5 h-3.5 rounded-full" />
-                          <Skeleton className="h-3.5 w-20" />
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <Skeleton className="w-7 h-7 rounded-lg" />
-                          <Skeleton className="w-7 h-7 rounded-lg" />
-                          <Skeleton className="w-7 h-7 rounded-lg" />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-        </main>
-      </div>
-    </div>
-  );
-}
 
 export default function AssetsPage() {
   const [activeNavTab, setActiveNavTab] = useState<string>("assets");
@@ -270,7 +143,6 @@ export default function AssetsPage() {
   const [selectedDivisionFilter, setSelectedDivisionFilter] = useState<string>("ALL");
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>("ALL");
   const [minRiskFilter, setMinRiskFilter] = useState<number>(0);
-  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
 
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -397,7 +269,7 @@ export default function AssetsPage() {
   return (
     <div className="min-h-screen bg-brand-tertiary text-brand-secondary flex flex-col font-sans selection:bg-brand-primary/20 selection:text-brand-primary">
       <VerticalNavbar activeTab={activeNavTab} onTabChange={setActiveNavTab} unreadCount={1} />
-      <div className="flex-1 flex pl-20 lg:pl-64">
+      <div className="flex-1 flex pl-0 lg:pl-64 pt-14 lg:pt-0">
         <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-7 flex flex-col space-y-5 max-w-[1600px] mx-auto w-full">
           {toastMessage && (
             <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl border transition-all animate-in fade-in slide-in-from-top-3 ${toastMessage.type === "success" ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-red-50 border-red-200 text-red-800"}`}>
@@ -409,20 +281,16 @@ export default function AssetsPage() {
           <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-brand-border/80">
             <div>
               <div className="flex items-center gap-2.5">
-                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-brand-primary text-brand-tertiary">
+                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-brand-secondary/80 text-brand-tertiary">
                   <Building2 className="w-4 h-4" />
                 </div>
                 <h1 className="text-xl sm:text-2xl font-extrabold text-brand-secondary tracking-tight">Railway Asset Inventory & Management</h1>
               </div>
-              <p className="text-xs text-brand-muted mt-1 font-medium">CRUD operations for railway assets, risk assessments, division assignments, and corridor mapping.</p>
+              <p className="text-xs text-brand-muted mt-2 font-medium">Operations for railway assets, risk assessments, division assignments, and corridor mapping.</p>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
               <LiveClock />
             
-              <button onClick={handleOpenCreateModal} className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer">
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add Railway Asset</span>
-              </button>
             </div>
           </header>
           <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -493,21 +361,17 @@ export default function AssetsPage() {
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
                 <input type="text" placeholder="Search asset title, ID, section..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-xs text-brand-secondary placeholder:text-brand-muted rounded-xl pl-9 pr-3 py-2.5 outline-none transition-colors font-medium shadow-2xs" />
               </div>
-              <div className="md:col-span-3">
+              <div className="md:col-span-4">
                 <select value={selectedSectionFilter} onChange={(e) => setSelectedSectionFilter(e.target.value)} className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none cursor-pointer font-bold shadow-2xs">
                   <option value="ALL">All Railway Sections</option>
                   {sections.map((sec) => <option key={sec.id} value={String(sec.id)}>{sec.section_name}</option>)}
                 </select>
               </div>
-              <div className="md:col-span-3">
+              <div className="md:col-span-4">
                 <select value={selectedCategoryFilter} onChange={(e) => setSelectedCategoryFilter(e.target.value)} className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none cursor-pointer font-bold shadow-2xs">
                   <option value="ALL">All Asset Categories</option>
                   {ASSET_CATEGORIES.map((cat) => <option key={cat.value} value={cat.value}>{cat.label}</option>)}
                 </select>
-              </div>
-              <div className="md:col-span-2 flex items-center justify-end gap-1.5">
-                <button onClick={() => setViewMode("table")} className={`p-2 rounded-xl border transition-colors cursor-pointer shadow-2xs ${viewMode === "table" ? "bg-brand-primary text-white border-brand-primary" : "bg-brand-surface text-brand-muted border-brand-border hover:bg-brand-tertiary"}`} title="Table View"><TableIcon className="w-4 h-4" /></button>
-                <button onClick={() => setViewMode("cards")} className={`p-2 rounded-xl border transition-colors cursor-pointer shadow-2xs ${viewMode === "cards" ? "bg-brand-primary text-white border-brand-primary" : "bg-brand-surface text-brand-muted border-brand-border hover:bg-brand-tertiary"}`} title="Card Grid View"><LayoutGrid className="w-4 h-4" /></button>
               </div>
             </div>
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-3 border-t border-brand-border/60">
@@ -544,140 +408,192 @@ export default function AssetsPage() {
               </div>
             </div>
           </section>
+     
           <section className="rounded-2xl bg-brand-surface border border-brand-border shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-brand-border flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-brand-surface">
-              <div>
+            <div className="p-4 border-b border-brand-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-brand-surface">
+              <div className="flex flex-col justify-center">
                 <h2 className="text-sm font-bold text-brand-secondary flex items-center gap-2">
                   <span>Tracked Infrastructure Assets</span>
-                  {loadingAssets || loadingSections ? (
-                    <Skeleton className="h-5 w-14 rounded-full" />
-                  ) : (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-brand-blue-light text-brand-primary border border-brand-primary/20 font-bold">
-                      {filteredAssets.length} of {assets.length}
-                    </span>
-                  )}
                 </h2>
                 <p className="text-xs text-brand-muted mt-0.5 font-medium">Railway network equipment, health scores, and division ownership</p>
               </div>
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="text-xs text-brand-muted font-mono">REST Endpoint: <code className="text-brand-primary bg-brand-blue-light px-2 py-0.5 rounded border border-brand-primary/20 font-bold">/railways/assets/</code></div>
+              <div className="flex items-center justify-center gap-2.5 shrink-0 sm:self-center">
                 <button
-                  onClick={() => { refetchAssets(); refetchSections(); }}
+                  onClick={() => {
+                    refetchAssets();
+                    refetchSections();
+                  }}
                   disabled={refetchingAssets || loadingAssets}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-brand-secondary transition-colors disabled:opacity-60 cursor-pointer shadow-2xs shrink-0"
+                  className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-brand-secondary text-xs font-bold shadow-2xs transition-all cursor-pointer disabled:opacity-60"
+                  title="Refresh Assets"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 text-brand-primary ${refetchingAssets ? "animate-spin" : ""}`} />
+                  <RefreshCw className={`w-3.5 h-3.5 ${refetchingAssets ? "animate-spin" : ""}`} />
                   <span>{refetchingAssets ? "Refreshing..." : "Refresh"}</span>
+                </button>
+                <button
+                  onClick={handleOpenCreateModal}
+                  className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Railway Asset</span>
                 </button>
               </div>
             </div>
             {(loadingAssets || loadingSections || refetchingAssets) ? (
-              viewMode === "table" ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-brand-surface text-brand-muted font-semibold border-b border-brand-border text-xs">
-                      <tr>
-                        <th className="py-3 px-4">ID</th>
-                        <th className="py-3 px-4">Asset Title</th>
-                        <th className="py-3 px-4">Category</th>
-                        <th className="py-3 px-4">Division</th>
-                        <th className="py-3 px-4">Section</th>
-                        <th className="py-3 px-4">Risk Level</th>
-                        <th className="py-3 px-4">Setup Date</th>
-                        <th className="py-3 px-4 text-right">Actions</th>
+              <div className="overflow-x-auto">
+                <table className="w-full text-center text-xs">
+                  <thead className="bg-brand-surface text-brand-muted font-semibold border-b border-brand-border text-xs">
+                    <tr>
+                      <th className="py-3 px-4 text-center">ID</th>
+                      <th className="py-3 px-4 text-center">Asset Title</th>
+                      <th className="py-3 px-4 text-center">Category</th>
+                      <th className="py-3 px-4 text-center">Section</th>
+                      <th className="py-3 px-4 text-center">Risk Level</th>
+                      <th className="py-3 px-4 text-center">Setup Date</th>
+                      <th className="py-3 px-4 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-brand-border/60">
+                    {Array.from({ length: 5 }).map((_, idx) => (
+                      <tr key={idx} className="hover:bg-brand-tertiary/40 transition-colors">
+                        <td className="py-3.5 px-4 font-mono font-bold">
+                          <Skeleton className="h-4 w-8 mx-auto" />
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center justify-center gap-2.5">
+                            <Skeleton className="w-8 h-8 rounded-lg shrink-0" />
+                            <div className="space-y-1.5">
+                              <Skeleton className="h-4 w-36" />
+                              <Skeleton className="h-2.5 w-16" />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <Skeleton className="h-5 w-20 mx-auto rounded-md" />
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <Skeleton className="h-4 w-28 mx-auto rounded" />
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center justify-center gap-2">
+                            <Skeleton className="h-5 w-14 rounded-md" />
+                            <Skeleton className="h-3 w-12 rounded" />
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <Skeleton className="w-3.5 h-3.5 rounded-full shrink-0" />
+                            <Skeleton className="h-3.5 w-20 rounded" />
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <Skeleton className="w-7 h-7 rounded-lg" />
+                            <Skeleton className="w-7 h-7 rounded-lg" />
+                            <Skeleton className="w-7 h-7 rounded-lg" />
+                          </div>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-brand-border/60">
-                      {Array.from({ length: 5 }).map((_, idx) => (
-                        <tr key={idx} className="hover:bg-brand-tertiary/40 transition-colors">
-                          <td className="py-3.5 px-4 font-mono font-bold">
-                            <Skeleton className="h-4 w-8" />
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <div className="flex items-center gap-2.5">
-                              <Skeleton className="w-8 h-8 rounded-lg shrink-0" />
-                              <div className="space-y-1.5">
-                                <Skeleton className="h-4 w-36" />
-                                <Skeleton className="h-2.5 w-16" />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : filteredAssets.length === 0 ? (
+              <div className="py-16 text-center text-brand-muted">
+                <div className="flex flex-col items-center justify-center gap-3">
+                  <Building2 className="w-10 h-10 text-brand-muted opacity-60" />
+                  <div className="text-sm font-bold text-brand-secondary">No matching assets found</div>
+                  <button
+                    onClick={handleOpenCreateModal}
+                    className="mt-2 flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-xs font-bold text-white shadow-xs transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Create First Asset
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-center text-xs">
+                  <thead className="bg-brand-surface text-brand-muted font-semibold border-b border-brand-border text-xs">
+                    <tr>
+                      <th className="py-3 px-4 text-center">ID</th>
+                      <th className="py-3 px-4 text-center">Asset Title</th>
+                      <th className="py-3 px-4 text-center">Category</th>
+                      <th className="py-3 px-4 text-center">Section</th>
+                      <th className="py-3 px-4 text-center">Risk Level</th>
+                      <th className="py-3 px-4 text-center">Setup Date</th>
+                      <th className="py-3 px-4 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-brand-border/60 text-brand-secondary">
+                    {filteredAssets.map((asset) => {
+                      const risk = getRiskBadge(asset.risk_level);
+                      return (
+                        <tr key={asset.id} className="hover:bg-brand-tertiary/60 transition-colors group">
+                          <td className="py-3.5 px-4 font-mono font-bold text-brand-muted text-center">#{asset.id}</td>
+                          <td className="py-3.5 px-4 text-center">
+                            <div className="flex items-center justify-center gap-2.5">
+                              <div>
+                                <div className="font-semibold text-brand-secondary text-sm">{asset.asset_title}</div>
                               </div>
                             </div>
                           </td>
-                          <td className="py-3.5 px-4">
-                            <Skeleton className="h-5 w-20 rounded-md" />
+                          <td className="py-3.5 px-4 text-center">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-[10px] font-semibold bg-brand-tertiary border border-brand-border text-brand-secondary">
+                              {asset.category.replace(/_/g, " ")}
+                            </span>
                           </td>
-                          <td className="py-3.5 px-4">
-                            <Skeleton className="h-5 w-16 rounded-md" />
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <Skeleton className="h-4 w-28 rounded" />
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <div className="flex items-center gap-2">
-                              <Skeleton className="h-5 w-14 rounded-md" />
-                              <Skeleton className="h-3 w-12 rounded" />
+                          <td className="py-3.5 px-4 text-center">
+                            <div className="text-brand-secondary font-semibold">
+                              {asset.section_name || `Section #${asset.section}`}
                             </div>
                           </td>
-                          <td className="py-3.5 px-4">
-                            <div className="flex items-center gap-1.5">
-                              <Skeleton className="w-3.5 h-3.5 rounded-full shrink-0" />
-                              <Skeleton className="h-3.5 w-20 rounded" />
+                          <td className="py-3.5 px-4 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[10px] font-semibold border ${risk.bg}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${risk.dot}`}></span>
+                                {asset.risk_level}/10
+                              </span>
                             </div>
                           </td>
-                          <td className="py-3.5 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <Skeleton className="w-7 h-7 rounded-lg" />
-                              <Skeleton className="w-7 h-7 rounded-lg" />
-                              <Skeleton className="w-7 h-7 rounded-lg" />
+                          <td className="py-3.5 px-4 font-mono text-brand-secondary text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <Calendar className="w-3 h-3 text-brand-muted" />
+                              <span>{formatDate(asset.setup_date)}</span>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => setInspectingAsset(asset)}
+                                className="p-1.5 rounded-lg bg-brand-secondary/80 text-brand-tertiary shadow-xs transition-colors cursor-pointer"
+                                title="Inspect"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleOpenEditModal(asset)}
+                                className="p-1.5 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-brand-primary shadow-xs transition-colors cursor-pointer"
+                                title="Edit"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setDeletingAsset(asset)}
+                                className="p-1.5 rounded-lg bg-brand-surface hover:bg-red-50 border border-brand-border hover:border-red-200 text-red-600 shadow-xs transition-colors cursor-pointer"
+                                title="Delete"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {Array.from({ length: 6 }).map((_, idx) => (
-                    <div key={idx} className="p-4 rounded-xl bg-brand-surface border border-brand-border flex flex-col justify-between space-y-3 shadow-sm">
-                      <div className="space-y-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <Skeleton className="w-8 h-8 rounded-lg shrink-0" />
-                            <div className="space-y-1.5">
-                              <Skeleton className="h-4 w-32" />
-                              <Skeleton className="h-2.5 w-20" />
-                            </div>
-                          </div>
-                          <Skeleton className="h-5 w-16 rounded-md" />
-                        </div>
-                        <div className="space-y-2 pt-1">
-                          <div className="flex items-center justify-between">
-                            <Skeleton className="h-3 w-14" />
-                            <Skeleton className="h-3 w-28" />
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <Skeleton className="h-3 w-14" />
-                            <Skeleton className="h-5 w-16 rounded-md" />
-                          </div>
-                        </div>
-                      </div>
-                      <div className="pt-2 border-t border-brand-border flex items-center justify-between">
-                        <Skeleton className="h-4 w-14 rounded" />
-                        <div className="flex items-center gap-1.5">
-                          <Skeleton className="w-7 h-7 rounded-lg" />
-                          <Skeleton className="w-7 h-7 rounded-lg" />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )
-            ) : filteredAssets.length === 0 ? (
-              <div className="py-16 text-center text-brand-muted"><div className="flex flex-col items-center justify-center gap-3"><Building2 className="w-10 h-10 text-brand-muted opacity-60" /><div className="text-sm font-bold text-brand-secondary">No matching assets found</div><button onClick={handleOpenCreateModal} className="mt-2 flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-xs font-bold text-white shadow-xs transition-colors cursor-pointer"><Plus className="w-4 h-4" />Create First Asset</button></div></div>
-            ) : viewMode === "table" ? (
-              <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="bg-brand-surface text-brand-muted font-semibold border-b border-brand-border text-xs"><tr><th className="py-3 px-4">ID</th><th className="py-3 px-4">Asset Title</th><th className="py-3 px-4">Category</th><th className="py-3 px-4">Division</th><th className="py-3 px-4">Section</th><th className="py-3 px-4">Risk Level</th><th className="py-3 px-4">Setup Date</th><th className="py-3 px-4 text-right">Actions</th></tr></thead><tbody className="divide-y divide-brand-border/60 text-brand-secondary">{filteredAssets.map((asset) => { const risk = getRiskBadge(asset.risk_level); const divInfo = DIVISIONS.find((d) => d.value === asset.division); return (<tr key={asset.id} className="hover:bg-brand-tertiary/60 transition-colors group"><td className="py-3.5 px-4 font-mono font-bold text-brand-muted">#{asset.id}</td><td className="py-3.5 px-4"><div className="flex items-center gap-2.5"><div><div className="font-extrabold text-brand-secondary text-sm">{asset.asset_title}</div></div></div></td><td className="py-3.5 px-4"><span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-brand-tertiary border border-brand-border text-brand-secondary">{asset.category.replace(/_/g, " ")}</span></td><td className="py-3.5 px-4"><span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-extrabold border ${divInfo ? divInfo.color : "bg-brand-primary text-white border-transparent"}`}>{asset.division}</span></td><td className="py-3.5 px-4"><div className="text-brand-secondary font-bold">{asset.section_name || `Section #${asset.section}`}</div></td><td className="py-3.5 px-4"><div className="flex items-center gap-2"><span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-extrabold border ${risk.bg}`}><span className={`w-1.5 h-1.5 rounded-full ${risk.dot}`}></span>{asset.risk_level}/10</span></div></td><td className="py-3.5 px-4 font-mono text-brand-secondary"><div className="flex items-center gap-1.5"><Calendar className="w-3 h-3 text-brand-muted" /><span>{formatDate(asset.setup_date)}</span></div></td><td className="py-3.5 px-4 text-right"><div className="flex items-center justify-end gap-1.5"><button onClick={() => setInspectingAsset(asset)} className="p-1.5 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-brand-primary shadow-xs transition-colors cursor-pointer" title="Inspect"><Eye className="w-3.5 h-3.5" /></button><button onClick={() => handleOpenEditModal(asset)} className="p-1.5 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-brand-primary shadow-xs transition-colors cursor-pointer" title="Edit"><Edit2 className="w-3.5 h-3.5" /></button><button onClick={() => setDeletingAsset(asset)} className="p-1.5 rounded-lg bg-brand-surface hover:bg-red-50 border border-brand-border hover:border-red-200 text-red-600 shadow-xs transition-colors cursor-pointer" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button></div></td></tr>); })}</tbody></table></div>
-            ) : (
-              <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{filteredAssets.map((asset) => { const risk = getRiskBadge(asset.risk_level); const divInfo = DIVISIONS.find((d) => d.value === asset.division); return (<div key={asset.id} className="p-4 rounded-xl bg-brand-surface border border-brand-border hover:border-brand-primary/50 transition-all flex flex-col justify-between space-y-3 shadow-sm"><div className="space-y-2"><div className="flex items-start justify-between gap-2"><div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-brand-primary flex items-center justify-center text-brand-tertiary font-bold"><Zap className="w-4 h-4" /></div><div><h3 className="text-sm font-bold text-brand-secondary leading-tight">{asset.asset_title}</h3><span className="text-[10px] text-brand-muted font-mono">ID: #{asset.id} • {asset.category}</span></div></div><span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold border ${risk.bg}`}><span className={`w-1.5 h-1.5 rounded-full ${risk.dot}`}></span>Risk {asset.risk_level}/10</span></div><div className="space-y-1 pt-1 text-xs"><div className="flex items-center justify-between text-brand-muted"><span>Corridor:</span><span className="text-brand-secondary font-bold truncate max-w-[180px]">{asset.section_name || `Section #${asset.section}`}</span></div><div className="flex items-center justify-between text-brand-muted"><span>Division:</span><span className={`px-1.5 py-0.2 rounded text-[10px] font-extrabold border ${divInfo ? divInfo.color : "bg-brand-primary text-white border-transparent"}`}>{asset.division}</span></div></div></div><div className="pt-2 border-t border-brand-border flex items-center justify-between"><button onClick={() => setInspectingAsset(asset)} className="flex items-center gap-1 text-[11px] font-bold text-brand-primary hover:underline cursor-pointer"><Eye className="w-3.5 h-3.5" /><span>Inspect</span></button><div className="flex items-center gap-1.5"><button onClick={() => handleOpenEditModal(asset)} className="p-1.5 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-brand-primary transition-colors cursor-pointer" title="Edit"><Edit2 className="w-3.5 h-3.5" /></button><button onClick={() => setDeletingAsset(asset)} className="p-1.5 rounded-lg bg-brand-surface hover:bg-red-50 border border-brand-border text-red-600 transition-colors cursor-pointer" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button></div></div></div>); })}</div>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
           </section>
         </main>
@@ -686,12 +602,53 @@ export default function AssetsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="bg-brand-surface border border-brand-border rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-brand-border">
-              <div className="flex items-center gap-2.5"><div className="w-8 h-8 rounded-lg bg-brand-primary flex items-center justify-center text-brand-tertiary"><Building2 className="w-4 h-4" /></div><div><h3 className="text-base font-extrabold text-brand-secondary">{editingAsset ? `Edit Asset #${editingAsset.id}` : "Create New Railway Asset"}</h3></div></div>
-              <button onClick={() => setIsCreateModalOpen(false)} className="text-brand-muted hover:text-brand-secondary text-lg font-bold cursor-pointer">✕</button>
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-brand-primary flex items-center justify-center text-brand-tertiary">
+                  <Building2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-brand-secondary">
+                    {editingAsset ? `Edit Asset #${editingAsset.id}` : "Create New Railway Asset"}
+                  </h3>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsCreateModalOpen(false)}
+                className="text-brand-muted hover:text-brand-secondary text-lg font-bold cursor-pointer"
+              >
+                ✕
+              </button>
             </div>
             <form onSubmit={handleSubmitForm} className="space-y-4 text-xs">
-              <div><label className="font-extrabold text-brand-secondary block mb-1">Asset Title / Identification <span className="text-red-500">*</span></label><input type="text" value={formData.asset_title} onChange={(e) => setFormData({ ...formData, asset_title: e.target.value })} required className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none font-bold shadow-2xs" /></div>
-              <div><label className="font-extrabold text-brand-secondary block mb-1">Corridor Section <span className="text-red-500">*</span></label><select value={formData.section} onChange={(e) => setFormData({ ...formData, section: Number(e.target.value) })} required className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none font-bold shadow-2xs">{sections.map((sec) => <option key={sec.id} value={sec.id}>{sec.section_name}</option>)}</select></div>
+              <div>
+                <label className="font-extrabold text-brand-secondary block mb-1">
+                  Asset Title / Identification <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.asset_title}
+                  onChange={(e) => setFormData({ ...formData, asset_title: e.target.value })}
+                  required
+                  className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none font-bold shadow-2xs"
+                />
+              </div>
+              <div>
+                <label className="font-extrabold text-brand-secondary block mb-1">
+                  Corridor Section <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={formData.section}
+                  onChange={(e) => setFormData({ ...formData, section: Number(e.target.value) })}
+                  required
+                  className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none font-bold shadow-2xs"
+                >
+                  {sections.map((sec) => (
+                    <option key={sec.id} value={sec.id}>
+                      {sec.section_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="font-extrabold text-brand-secondary block mb-1">
@@ -728,8 +685,56 @@ export default function AssetsPage() {
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><div><div className="flex items-center justify-between mb-1"><label className="font-extrabold text-brand-secondary">Risk Level (1 - 10)</label><span className="font-mono font-black text-brand-primary">{formData.risk_level} / 10</span></div><input type="range" min={1} max={10} step={1} value={formData.risk_level} onChange={(e) => setFormData({ ...formData, risk_level: Number(e.target.value) })} className="w-full accent-brand-primary cursor-pointer h-2 bg-brand-tertiary rounded-lg" /></div><div><label className="font-extrabold text-brand-secondary block mb-1">Setup / Commission Date</label><input type="date" value={formData.setup_date || ""} onChange={(e) => setFormData({ ...formData, setup_date: e.target.value })} className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2 outline-none font-bold shadow-2xs" /></div></div>
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-brand-border"><button type="button" onClick={() => setIsCreateModalOpen(false)} className="px-4 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-brand-secondary transition-colors cursor-pointer">Cancel</button><button type="submit" disabled={isSaving} className="px-4 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-xs font-bold text-white shadow-xs transition-all disabled:opacity-50 cursor-pointer">{isSaving ? "Saving..." : editingAsset ? "Update Asset" : "Create Asset"}</button></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-extrabold text-brand-secondary">Risk Level (1 - 10)</label>
+                    <span className="font-mono font-black text-brand-primary">{formData.risk_level} / 10</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={1}
+                    max={10}
+                    step={1}
+                    value={formData.risk_level}
+                    onChange={(e) => setFormData({ ...formData, risk_level: Number(e.target.value) })}
+                    className="w-full accent-brand-primary cursor-pointer h-2 bg-brand-tertiary rounded-lg"
+                  />
+                </div>
+                <div>
+                  <label className="font-extrabold text-brand-secondary block mb-1">
+                    Setup / Commission Date
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.setup_date || ""}
+                    max={formatDateToISO(new Date())}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const today = formatDateToISO(new Date());
+                      if (val > today) return;
+                      setFormData({ ...formData, setup_date: val });
+                    }}
+                    className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2 outline-none font-bold shadow-2xs"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-brand-border">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-brand-secondary transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="px-4 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-xs font-bold text-white shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {isSaving ? "Saving..." : editingAsset ? "Update Asset" : "Create Asset"}
+                </button>
+              </div>
             </form>
           </div>
         </div>
@@ -737,9 +742,55 @@ export default function AssetsPage() {
       {inspectingAsset && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="bg-brand-surface border border-brand-border rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-brand-border"><div className="flex items-center gap-2.5"><div className="w-8 h-8 rounded-lg bg-brand-primary text-brand-tertiary flex items-center justify-center"><Eye className="w-4 h-4" /></div><div><h3 className="text-base font-extrabold text-brand-secondary">{inspectingAsset.asset_title}</h3><span className="text-xs text-brand-muted">Asset ID #{inspectingAsset.id}</span></div></div><button onClick={() => setInspectingAsset(null)} className="text-brand-muted hover:text-brand-secondary text-lg font-bold cursor-pointer">✕</button></div>
-            <div className="grid grid-cols-2 gap-3 text-xs"><div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border"><span className="text-brand-muted block text-xs font-semibold">Category</span><span className="font-bold text-brand-secondary mt-0.5 block">{inspectingAsset.category}</span></div><div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border"><span className="text-brand-muted block text-xs font-semibold">Division</span><span className="font-bold text-brand-primary mt-0.5 block">{inspectingAsset.division}</span></div><div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border"><span className="text-brand-muted block text-xs font-semibold">Risk Level</span><span className="font-bold text-red-600 mt-0.5 block">{inspectingAsset.risk_level} / 10</span></div><div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border"><span className="text-brand-muted block text-xs font-semibold">Setup Date</span><span className="font-bold text-brand-secondary mt-0.5 block">{formatDate(inspectingAsset.setup_date)}</span></div><div className="col-span-2 p-3 rounded-xl bg-brand-tertiary border border-brand-border"><span className="text-brand-muted block text-xs font-semibold">Corridor Section</span><span className="font-bold text-brand-secondary mt-0.5 block">{inspectingAsset.section_name || `Section #${inspectingAsset.section}`}</span></div></div>
-            <div className="pt-2 flex justify-end"><button onClick={() => setInspectingAsset(null)} className="px-4 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-brand-secondary transition-colors cursor-pointer">Close</button></div>
+            <div className="flex items-center justify-between pb-3 border-b border-brand-border">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-brand-secondary/80 text-brand-tertiary flex items-center justify-center">
+                  <Eye className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-brand-secondary">{inspectingAsset.asset_title}</h3>
+                  <span className="text-xs text-brand-muted">Asset ID #{inspectingAsset.id}</span>
+                </div>
+              </div>
+              <button
+                onClick={() => setInspectingAsset(null)}
+                className="text-brand-muted hover:text-brand-secondary text-lg font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
+                <span className="text-brand-muted block text-xs font-semibold">Category</span>
+                <span className="font-bold text-brand-secondary mt-0.5 block">{inspectingAsset.category}</span>
+              </div>
+              <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
+                <span className="text-brand-muted block text-xs font-semibold">Division</span>
+                <span className="font-bold text-brand-primary mt-0.5 block">{inspectingAsset.division}</span>
+              </div>
+              <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
+                <span className="text-brand-muted block text-xs font-semibold">Risk Level</span>
+                <span className="font-bold text-red-600 mt-0.5 block">{inspectingAsset.risk_level} / 10</span>
+              </div>
+              <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
+                <span className="text-brand-muted block text-xs font-semibold">Setup Date</span>
+                <span className="font-bold text-brand-secondary mt-0.5 block">{formatDate(inspectingAsset.setup_date)}</span>
+              </div>
+              <div className="col-span-2 p-3 rounded-xl bg-brand-tertiary border border-brand-border">
+                <span className="text-brand-muted block text-xs font-semibold">Corridor Section</span>
+                <span className="font-bold text-brand-secondary mt-0.5 block">
+                  {inspectingAsset.section_name || `Section #${inspectingAsset.section}`}
+                </span>
+              </div>
+            </div>
+            <div className="pt-2 flex justify-end">
+              <button
+                onClick={() => setInspectingAsset(null)}
+                className="px-4 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-brand-secondary transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { RailwayNotification } from "@/data/railway-notifications";
 import { useMaintenanceTasks } from "@/hooks";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface NotificationPanelProps {
   onSelectCorridor?: (stationId?: string, originId?: string) => void;
@@ -152,14 +153,10 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
   };
 
   return (
-    <aside className="w-80 lg:w-96 flex-shrink-0 bg-brand-tertiary/40 border-l border-brand-border flex flex-col h-full">
+    <aside className="w-80 lg:w-96 shrink-0 bg-brand-tertiary/40 border-l border-brand-border flex flex-col h-screen sticky top-0 overflow-hidden">
       {/* Header */}
-      <div className="p-4 border-b border-brand-border flex items-center justify-between bg-brand-surface/70">
+      <div className="p-4 border-b border-brand-border flex items-center justify-between bg-brand-surface/70 shrink-0">
         <div className="flex items-center gap-2.5">
-          <div className="relative p-2.5 rounded-xl bg-brand-surface border border-brand-border text-brand-secondary shadow-xs">
-            <Bell className="w-4 h-4" />
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-brand-primary ring-2 ring-white"></span>
-          </div>
           <div>
             <div className="flex items-center gap-1.5">
               <h2 className="text-sm font-extrabold text-brand-secondary tracking-tight">
@@ -184,19 +181,11 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefetching ? "animate-spin text-brand-primary" : ""}`} />
           </button>
-          <Link
-            href="/maintenance"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-colors"
-            title="Schedule maintenance"
-          >
-            <Calendar className="w-3.5 h-3.5" />
-            <span>Schedule</span>
-          </Link>
         </div>
       </div>
 
       {/* Filter Tabs */}
-      <div className="p-3 border-b border-brand-border flex items-center gap-1.5 overflow-x-auto no-scrollbar bg-brand-surface/30">
+      <div className="p-3 border-b border-brand-border flex items-center gap-1.5 overflow-x-auto no-scrollbar bg-brand-surface/30 shrink-0">
         {(
           [
             { id: "all", label: `All (${allNotifications.length})` },
@@ -220,14 +209,42 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
       </div>
 
       {/* Notifications List */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center h-48 text-center p-4">
-            <RefreshCw className="w-7 h-7 text-brand-primary animate-spin mb-2" />
-            <span className="text-xs font-bold text-brand-secondary">Loading Alerts...</span>
-            <p className="text-[11px] text-brand-muted mt-1">
-              Synchronizing work orders with central database.
-            </p>
+      <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-3">
+        {(isLoading || isRefetching) ? (
+          <div className="space-y-3">
+            {Array.from({ length: 3 }).map((_, idx) => (
+              <div
+                key={idx}
+                className="p-4 rounded-2xl bg-brand-surface border border-brand-border shadow-xs space-y-3"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                    <Skeleton className="h-5 w-20 rounded-md" />
+                    <Skeleton className="h-3 w-12 rounded" />
+                  </div>
+                  <Skeleton className="w-4 h-4 rounded" />
+                </div>
+                <div className="space-y-1.5">
+                  <Skeleton className="h-4 w-48 rounded" />
+                  <Skeleton className="h-3 w-36 rounded" />
+                </div>
+                <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Skeleton className="h-4 w-32 rounded" />
+                    <Skeleton className="h-4 w-14 rounded-md" />
+                  </div>
+                  <div className="flex items-center justify-between pt-1 border-t border-brand-border/60">
+                    <Skeleton className="h-3 w-16 rounded" />
+                    <Skeleton className="h-3 w-20 rounded" />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-brand-border/60">
+                  <Skeleton className="h-4 w-28 rounded" />
+                  <Skeleton className="h-3 w-24 rounded" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : filteredNotifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-center p-4">

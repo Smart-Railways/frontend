@@ -49,6 +49,7 @@ import {
   MAINTENANCE_PRIORITY_LABELS,
   MAINTENANCE_STATUS_LABELS,
 } from "@/enums";
+import { getDateBounds, validateDate } from "@/lib/date-schemas";
 
 // Urgency metadata & styling (Light brand tokens)
 const URGENCY_CONFIG: Record<
@@ -88,22 +89,22 @@ const STATUS_CONFIG: Record<
 > = {
   [MaintenanceStatus.PENDING]: {
     label: MAINTENANCE_STATUS_LABELS[MaintenanceStatus.PENDING],
-    badge: "bg-amber-50 border-amber-200 text-amber-700",
+    badge: "bg-amber-500 border-amber-600 text-white",
     icon: Hourglass,
   },
   [MaintenanceStatus.SCHEDULED]: {
     label: MAINTENANCE_STATUS_LABELS[MaintenanceStatus.SCHEDULED],
-    badge: "bg-brand-blue-light border-blue-200 text-brand-primary",
+    badge: "bg-blue-600 border-blue-700 text-white",
     icon: Clock,
   },
   [MaintenanceStatus.COMPLETED]: {
     label: MAINTENANCE_STATUS_LABELS[MaintenanceStatus.COMPLETED],
-    badge: "bg-emerald-50 border-emerald-200 text-emerald-700",
+    badge: "bg-emerald-600 border-emerald-700 text-white",
     icon: CheckCircle2,
   },
   [MaintenanceStatus.CANCELLED]: {
     label: MAINTENANCE_STATUS_LABELS[MaintenanceStatus.CANCELLED],
-    badge: "bg-slate-100 border-slate-200 text-slate-600",
+    badge: "bg-slate-600 border-slate-700 text-white",
     icon: XCircle,
   },
 };
@@ -130,7 +131,7 @@ function formatDate(dateStr?: string | null): string {
 function MaintenancePageSkeleton() {
   return (
     <div className="min-h-screen bg-brand-tertiary text-brand-secondary flex flex-col font-sans">
-      <div className="flex-1 flex pl-20 lg:pl-64">
+      <div className="flex-1 flex pl-0 lg:pl-64 pt-14 lg:pt-0">
         <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-7 flex flex-col space-y-5 max-w-[1600px] mx-auto w-full">
 
           {/* Header */}
@@ -308,6 +309,7 @@ export default function MaintenancePage() {
   const [feasibleError, setFeasibleError] = useState<string | null>(null);
 
   // Form State
+  const [deadlineError, setDeadlineError] = useState<string | null>(null);
   const [formData, setFormData] = useState<CreateMaintenanceTaskInput>({
     task_code: "",
     asset: 1,
@@ -322,6 +324,7 @@ export default function MaintenancePage() {
   // Open Create Modal with auto-suggested task code
   const handleOpenCreateModal = () => {
     setEditingTask(null);
+    setDeadlineError(null);
     const randomSuffix = Math.floor(100 + Math.random() * 900);
     setFormData({
       task_code: `TMS-${randomSuffix}`,
@@ -338,6 +341,7 @@ export default function MaintenancePage() {
 
   const handleOpenEditModal = (task: MaintenanceTask) => {
     setEditingTask(task);
+    setDeadlineError(null);
     setFormData({
       task_code: task.task_code,
       asset: task.asset,
@@ -633,7 +637,7 @@ export default function MaintenancePage() {
     <div className="min-h-screen bg-brand-tertiary text-brand-secondary flex flex-col font-sans selection:bg-brand-primary/20 selection:text-brand-primary">
       <VerticalNavbar activeTab={activeNavTab} onTabChange={setActiveNavTab} unreadCount={1} />
 
-      <div className="flex-1 flex pl-20 lg:pl-64">
+      <div className="flex-1 flex pl-0 lg:pl-64 pt-14 lg:pt-0">
         <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-7 flex flex-col space-y-5 max-w-[1600px] mx-auto w-full">
           
           {/* Toast Notification Banner */}
@@ -679,32 +683,6 @@ export default function MaintenancePage() {
             {/* Quick Actions */}
             <div className="flex items-center gap-2.5 flex-wrap">
               <LiveClock />
-
-              <button
-                onClick={() => handleOpenConflictModal()}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-brand-secondary/80 border text-xs font-bold text-white transition-colors cursor-pointer shadow-2xs"
-                title="Run timetable conflict simulation against active train movements"
-              >
-                <ShieldAlert className="w-3.5 h-3.5 text-white" />
-                <span>Check Conflict</span>
-              </button>
-
-              <button
-                onClick={() => handleOpenFeasibleModal()}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-brand-secondary/80 border text-xs font-bold text-white transition-colors cursor-pointer shadow-2xs"
-                title="Find feasible maintenance windows for tasks"
-              >
-                <Timer className="w-3.5 h-3.5 text-white" />
-                <span>Feasible Windows</span>
-              </button>
-
-              <button
-                onClick={handleOpenCreateModal}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Schedule Task</span>
-              </button>
             </div>
           </header>
 
@@ -909,34 +887,41 @@ export default function MaintenancePage() {
           {/* Task List Content */}
           <section className="rounded-2xl bg-brand-surface border border-brand-border shadow-sm overflow-hidden">
             {/* Table Header Bar */}
-            <div className="p-4 border-b border-brand-border flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-brand-surface">
+            <div className="p-4 border-b border-brand-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-brand-surface">
               <div>
                 <h2 className="text-sm font-bold text-brand-secondary flex items-center gap-2">
                   <span>Maintenance Queue & Task Registry</span>
-                  {loadingTasks || loadingAssets ? (
-                    <Skeleton className="h-5 w-14 rounded-full" />
-                  ) : (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-brand-blue-light text-brand-primary border border-brand-primary/20 font-bold">
-                      {filteredTasks.length} of {tasks.length}
-                    </span>
-                  )}
                 </h2>
                 <p className="text-xs text-brand-muted mt-0.5 font-medium">
                   Corridor maintenance requirements and duration bounds
                 </p>
               </div>
 
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="text-xs text-brand-muted font-mono">
-                  REST Endpoint: <code className="text-brand-primary bg-brand-blue-light px-2 py-0.5 rounded border border-brand-primary/20 font-bold">/railways/maintenance-tasks/</code>
-                </div>
+              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
                 <button
-                  onClick={() => { refetchTasks(); refetchAssets(); }}
-                  disabled={refetchingTasks || loadingTasks}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-brand-secondary transition-colors disabled:opacity-60 cursor-pointer shadow-2xs shrink-0"
+                  onClick={() => handleOpenConflictModal()}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-black shadow-xs transition-colors cursor-pointer"
+                  title="Run timetable conflict simulation against active train movements"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 text-brand-primary ${refetchingTasks ? "animate-spin" : ""}`} />
-                  <span>{refetchingTasks ? "Refreshing..." : "Refresh"}</span>
+                  <ShieldAlert className="w-3.5 h-3.5 text-black" />
+                  <span>Check Conflict</span>
+                </button>
+
+                <button
+                  onClick={() => handleOpenFeasibleModal()}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-black shadow-xs transition-colors cursor-pointer"
+                  title="Find feasible maintenance windows for tasks"
+                >
+                  <Timer className="w-3.5 h-3.5 text-black" />
+                  <span>Feasible Windows</span>
+                </button>
+
+                <button
+                  onClick={handleOpenCreateModal}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Schedule Task</span>
                 </button>
               </div>
             </div>
@@ -944,58 +929,58 @@ export default function MaintenancePage() {
             {/* View Switching */}
             {(loadingTasks || loadingAssets || refetchingTasks) ? (
               <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                  <table className="w-full text-center text-xs">
                     <thead className="bg-brand-surface text-brand-muted font-semibold border-b border-brand-border text-xs">
                       <tr>
-                        <th className="py-3 px-4">Task Code</th>
-                        <th className="py-3 px-4">Target Asset</th>
-                        <th className="py-3 px-4">Corridor / Section</th>
-                        <th className="py-3 px-4">Urgency</th>
-                        <th className="py-3 px-4">Risk Rating</th>
-                        <th className="py-3 px-4">Duration</th>
-                        <th className="py-3 px-4">Deadline</th>
-                        <th className="py-3 px-4">Status</th>
-                        <th className="py-3 px-4 text-right">Actions</th>
+                        <th className="py-3 px-4 text-center font-semibold">Task Code</th>
+                        <th className="py-3 px-4 text-center font-semibold">Target Asset</th>
+                        <th className="py-3 px-4 text-center font-semibold">Corridor / Section</th>
+                        <th className="py-3 px-4 text-center font-semibold">Urgency</th>
+                        <th className="py-3 px-4 text-center font-semibold">Risk Rating</th>
+                        <th className="py-3 px-4 text-center font-semibold">Duration</th>
+                        <th className="py-3 px-4 text-center font-semibold">Deadline</th>
+                        <th className="py-3 px-4 text-center font-semibold">Status</th>
+                        <th className="py-3 px-4 text-center font-semibold">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-brand-border/60">
                       {Array.from({ length: 5 }).map((_, idx) => (
                         <tr key={idx} className="hover:bg-brand-tertiary/40 transition-colors">
-                          <td className="py-3.5 px-4 font-mono font-bold">
-                            <Skeleton className="h-4 w-20" />
+                          <td className="py-3.5 px-4 text-center font-mono font-semibold">
+                            <Skeleton className="h-4 w-20 mx-auto" />
                           </td>
-                          <td className="py-3.5 px-4">
-                            <div className="space-y-1.5">
+                          <td className="py-3.5 px-4 text-center">
+                            <div className="space-y-1.5 flex flex-col items-center">
                               <Skeleton className="h-4 w-36" />
                               <Skeleton className="h-2.5 w-24" />
                             </div>
                           </td>
-                          <td className="py-3.5 px-4">
-                            <div className="flex items-center gap-1.5">
+                          <td className="py-3.5 px-4 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
                               <Skeleton className="w-3.5 h-3.5 rounded shrink-0" />
                               <Skeleton className="h-4 w-28" />
                             </div>
                           </td>
-                          <td className="py-3.5 px-4">
-                            <Skeleton className="h-5 w-20 rounded-md" />
+                          <td className="py-3.5 px-4 text-center">
+                            <Skeleton className="h-5 w-20 rounded-md mx-auto" />
                           </td>
-                          <td className="py-3.5 px-4 font-mono">
-                            <Skeleton className="h-4 w-12" />
+                          <td className="py-3.5 px-4 text-center font-mono">
+                            <Skeleton className="h-4 w-12 mx-auto" />
                           </td>
-                          <td className="py-3.5 px-4 font-mono">
-                            <Skeleton className="h-4 w-16" />
+                          <td className="py-3.5 px-4 text-center font-mono">
+                            <Skeleton className="h-4 w-16 mx-auto" />
                           </td>
-                          <td className="py-3.5 px-4 font-mono">
-                            <div className="flex items-center gap-1.5">
+                          <td className="py-3.5 px-4 text-center font-mono">
+                            <div className="flex items-center justify-center gap-1.5">
                               <Skeleton className="w-3.5 h-3.5 rounded-full shrink-0" />
                               <Skeleton className="h-3.5 w-20 rounded" />
                             </div>
                           </td>
-                          <td className="py-3.5 px-4">
-                            <Skeleton className="h-5 w-20 rounded-md" />
+                          <td className="py-3.5 px-4 text-center">
+                            <Skeleton className="h-5 w-20 rounded-md mx-auto" />
                           </td>
-                          <td className="py-3.5 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
+                          <td className="py-3.5 px-4 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
                               <Skeleton className="w-7 h-7 rounded-lg" />
                               <Skeleton className="w-7 h-7 rounded-lg" />
                               <Skeleton className="w-7 h-7 rounded-lg" />
@@ -1028,17 +1013,17 @@ export default function MaintenancePage() {
             ) : (
               /* TABLE VIEW */
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
+                <table className="w-full text-center text-xs">
                   <thead className="bg-brand-surface text-brand-muted font-semibold border-b border-brand-border text-xs">
                     <tr>
-                      <th className="py-3 px-4">Task Code</th>
-                      <th className="py-3 px-4">Target Asset</th>
-                      <th className="py-3 px-4">Corridor / Section</th>
-                      <th className="py-3 px-4">Risk Rating</th>
-                      <th className="py-3 px-4">Duration</th>
-                      <th className="py-3 px-4">Deadline</th>
-                      <th className="py-3 px-4">Status</th>
-                      <th className="py-3 px-4 text-right">Actions</th>
+                      <th className="py-3 px-4 text-center font-semibold">Task Code</th>
+                      <th className="py-3 px-4 text-center font-semibold">Target Asset</th>
+                      <th className="py-3 px-4 text-center font-semibold">Corridor / Section</th>
+                      <th className="py-3 px-4 text-center font-semibold">Risk Rating</th>
+                      <th className="py-3 px-4 text-center font-semibold">Duration</th>
+                      <th className="py-3 px-4 text-center font-semibold">Deadline</th>
+                      <th className="py-3 px-4 text-center font-semibold">Status</th>
+                      <th className="py-3 px-4 text-center font-semibold">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-border/60 text-brand-secondary">
@@ -1055,44 +1040,44 @@ export default function MaintenancePage() {
                           key={task.id}
                           className="hover:bg-brand-tertiary/60 transition-colors group"
                         >
-                          <td className="py-3.5 px-4 font-mono font-extrabold text-brand-primary text-sm">
+                          <td className="py-3.5 px-4 text-center font-mono font-semibold text-brand-primary text-sm">
                             {task.task_code}
                           </td>
-                          <td className="py-3.5 px-4">
-                            <div className="font-extrabold text-brand-secondary">
+                          <td className="py-3.5 px-4 text-center">
+                            <div className="font-semibold text-brand-secondary">
                               {task.asset_name || `Asset #${task.asset}`}
                             </div>
                           </td>
-                          <td className="py-3.5 px-4">
-                            <div className="flex items-center gap-1.5 font-semibold text-brand-secondary text-xs">
+                          <td className="py-3.5 px-4 text-center">
+                            <div className="flex items-center justify-center gap-1.5 font-semibold text-brand-secondary text-xs">
                               <MapPin className="w-3.5 h-3.5 text-brand-primary shrink-0" />
                               <span>{corridorName}</span>
                             </div>
                           </td>
-                          <td className="py-3.5 px-4">
-                            <span className="font-mono font-bold text-brand-secondary text-xs">
+                          <td className="py-3.5 px-4 text-center">
+                            <span className="font-mono font-semibold text-brand-secondary text-xs">
                               {task.risk_rating}/10
                             </span>
                           </td>
-                          <td className="py-3.5 px-4 font-mono text-brand-secondary font-bold">
+                          <td className="py-3.5 px-4 text-center font-mono text-brand-secondary font-semibold">
                             {task.estimated_duration} mins
                           </td>
-                          <td className="py-3.5 px-4 font-mono text-brand-secondary font-medium">
+                          <td className="py-3.5 px-4 text-center font-mono text-brand-secondary font-semibold">
                             {formatDate(task.deadline)}
                           </td>
-                          <td className="py-3.5 px-4">
+                          <td className="py-3.5 px-4 text-center">
                             <span
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${stat.badge}`}
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-semibold border ${stat.badge}`}
                             >
-                              <stat.icon className="w-3 h-3" />
+                              <stat.icon className="w-3 h-3 text-white" />
                               {stat.label}
                             </span>
                           </td>
-                          <td className="py-3.5 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
+                          <td className="py-3.5 px-4 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
                               <button
                                 onClick={() => setInspectingTask(task)}
-                                className="p-1.5 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-brand-primary shadow-xs transition-colors cursor-pointer"
+                                className="p-1.5 rounded-lg bg-brand-secondary/80 text-brand-tertiary shadow-xs transition-colors cursor-pointer"
                                 title="Inspect Task"
                               >
                                 <Eye className="w-3.5 h-3.5" />
@@ -1137,9 +1122,7 @@ export default function MaintenancePage() {
                   <h3 className="text-base font-extrabold text-brand-secondary">
                     {editingTask ? `Edit Task ${editingTask.task_code}` : "Schedule Maintenance Task"}
                   </h3>
-                  <p className="text-xs text-brand-muted">
-                    {editingTask ? "PUT /railways/maintenance-tasks/:id/" : "POST /railways/maintenance-tasks/"}
-                  </p>
+               
                 </div>
               </div>
               <button
@@ -1208,10 +1191,10 @@ export default function MaintenancePage() {
                     onChange={(e) => setFormData({ ...formData, urgency: e.target.value as MaintenancePriority })}
                     className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none cursor-pointer font-bold shadow-2xs"
                   >
-                    <option value={MaintenancePriority.CRITICAL}>{MaintenancePriority.CRITICAL} ({MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.CRITICAL]})</option>
-                    <option value={MaintenancePriority.HIGH}>{MaintenancePriority.HIGH} ({MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.HIGH]})</option>
-                    <option value={MaintenancePriority.MEDIUM}>{MaintenancePriority.MEDIUM} ({MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.MEDIUM]})</option>
-                    <option value={MaintenancePriority.LOW}>{MaintenancePriority.LOW} ({MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.LOW]})</option>
+                    <option value={MaintenancePriority.CRITICAL}>{MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.CRITICAL]}</option>
+                    <option value={MaintenancePriority.HIGH}>{MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.HIGH]}</option>
+                    <option value={MaintenancePriority.MEDIUM}>{MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.MEDIUM]}</option>
+                    <option value={MaintenancePriority.LOW}>{MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.LOW]}</option>
                   </select>
                 </div>
 
@@ -1224,10 +1207,10 @@ export default function MaintenancePage() {
                     onChange={(e) => setFormData({ ...formData, task_status: e.target.value as MaintenanceStatus })}
                     className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none cursor-pointer font-bold shadow-2xs"
                   >
-                    <option value={MaintenanceStatus.PENDING}>{MaintenanceStatus.PENDING} ({MAINTENANCE_STATUS_LABELS[MaintenanceStatus.PENDING]})</option>
-                    <option value={MaintenanceStatus.SCHEDULED}>{MaintenanceStatus.SCHEDULED} ({MAINTENANCE_STATUS_LABELS[MaintenanceStatus.SCHEDULED]})</option>
-                    <option value={MaintenanceStatus.COMPLETED}>{MaintenanceStatus.COMPLETED} ({MAINTENANCE_STATUS_LABELS[MaintenanceStatus.COMPLETED]})</option>
-                    <option value={MaintenanceStatus.CANCELLED}>{MaintenanceStatus.CANCELLED} ({MAINTENANCE_STATUS_LABELS[MaintenanceStatus.CANCELLED]})</option>
+                    <option value={MaintenanceStatus.PENDING}>{MAINTENANCE_STATUS_LABELS[MaintenanceStatus.PENDING]}</option>
+                    <option value={MaintenanceStatus.SCHEDULED}>{MAINTENANCE_STATUS_LABELS[MaintenanceStatus.SCHEDULED]}</option>
+                    <option value={MaintenanceStatus.COMPLETED}>{MAINTENANCE_STATUS_LABELS[MaintenanceStatus.COMPLETED]}</option>
+                    <option value={MaintenanceStatus.CANCELLED}>{MAINTENANCE_STATUS_LABELS[MaintenanceStatus.CANCELLED]}</option>
                   </select>
                 </div>
               </div>
@@ -1250,14 +1233,33 @@ export default function MaintenancePage() {
 
                 <div>
                   <label className="font-extrabold text-brand-secondary block mb-1">
-                    Completion Deadline
+                    Completion Deadline{" "}
+                   
                   </label>
                   <input
                     type="date"
                     value={formData.deadline || ""}
-                    onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
-                    className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2 outline-none cursor-pointer font-bold shadow-2xs"
+                    min={getDateBounds("maintenance").min}
+                    max={getDateBounds("maintenance").max}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const error = validateDate(val, "maintenance");
+                      setDeadlineError(error);
+                      if (!error) {
+                        setFormData({ ...formData, deadline: val });
+                      }
+                    }}
+                    className={`w-full bg-brand-surface border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2 outline-none cursor-pointer font-bold shadow-2xs ${
+                      deadlineError
+                        ? "border-red-400 focus:border-red-500"
+                        : "border-brand-border"
+                    }`}
                   />
+                  {deadlineError && (
+                    <p className="text-[10px] text-red-500 font-semibold mt-0.5">
+                      {deadlineError}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -1411,8 +1413,8 @@ export default function MaintenancePage() {
           <div className="bg-brand-surface border border-brand-border rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-brand-border">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
-                  <ShieldAlert className="w-4 h-4" />
+                <div className="w-8 h-8 rounded-lg bg-brand-secondary/80 flex items-center justify-center">
+                  <ShieldAlert className="w-4 h-4 text-white" />
                 </div>
                 <div>
                   <h3 className="text-base font-extrabold text-brand-secondary">
@@ -1501,7 +1503,7 @@ export default function MaintenancePage() {
                 <button
                   type="submit"
                   disabled={checkConflictMutation.isPending}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-xs font-bold text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-secondary/80 text-xs font-bold text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   {checkConflictMutation.isPending ? (
                     <>
@@ -1599,7 +1601,7 @@ export default function MaintenancePage() {
           <div className="bg-brand-surface border border-brand-border rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-brand-border">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-brand-secondary/80 text-white flex items-center justify-center">
                   <Timer className="w-4 h-4" />
                 </div>
                 <div>
@@ -1743,7 +1745,7 @@ export default function MaintenancePage() {
                 <button
                   type="submit"
                   disabled={feasibleWindowsMutation.isPending}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-secondary/80 text-xs font-bold text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   {feasibleWindowsMutation.isPending ? (
                     <>

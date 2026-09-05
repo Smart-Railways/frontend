@@ -141,18 +141,18 @@ export function HorizontalRouteSelector({
   return (
     <div className="w-full border-none">
       {/* Main Container Card */}
-      <Card className="p-3 sm:p-4 rounded-2xl bg-brand-surface border border-brand-border ring-0 shadow-xs flex flex-col space-y-3">
+      <Card className="p-1.5 rounded-2xl bg-brand-surface border border-brand-border ring-0 shadow-xs flex flex-col space-y-2">
         {/* Origin / Destination Station Selectors */}
-        <div className="flex flex-col md:flex-row items-center gap-2.5 sm:gap-3">
+        <div className="flex flex-col md:flex-row items-center gap-2 sm:gap-2.5">
 
           {/* Origin Station Box */}
-          <div className="flex-1 w-full relative flex items-center bg-brand-surface border border-brand-border hover:border-brand-primary/50 focus-within:border-brand-primary focus-within:ring-1 focus-within:ring-brand-primary/20 rounded-xl px-3.5 py-2.5 transition-all shadow-xs">
-            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-brand-blue-light text-brand-primary mr-3 flex-shrink-0">
-              <div className="w-3 h-3 rounded-full bg-brand-primary" />
+          <div className="flex-1 w-full relative flex items-center bg-brand-surface border border-brand-border/80 hover:border-brand-primary/50 focus-within:border-brand-primary focus-within:ring-1 focus-within:ring-brand-primary/20 rounded-xl px-3.5 py-2.5 transition-all shadow-2xs">
+            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-brand-blue-light/70 text-brand-primary mr-3 shrink-0">
+              <div className="w-2.5 h-2.5 rounded-full bg-brand-primary ring-2 ring-brand-primary/20" />
             </div>
 
             <div className="flex-1 min-w-0">
-              <label className="text-[11px] font-bold text-brand-muted tracking-wide block">
+              <label className="text-[11px] font-medium text-brand-muted tracking-wider block mb-0.5">
                 Origin Station
               </label>
 
@@ -160,7 +160,7 @@ export function HorizontalRouteSelector({
                 value={sourceId || ""}
                 onValueChange={(val) => val && onSourceChange(val)}
               >
-                <SelectTrigger className="w-full h-auto p-0 bg-transparent border-0 text-brand-secondary text-xs sm:text-sm font-bold focus:ring-0 focus-visible:ring-0 focus-visible:border-transparent shadow-none hover:bg-transparent justify-between cursor-pointer">
+                <SelectTrigger className="w-full h-auto p-0 bg-transparent border-0 text-brand-secondary text-xs sm:text-sm font-semibold focus:ring-0 focus-visible:ring-0 focus-visible:border-transparent shadow-none hover:bg-transparent justify-between cursor-pointer">
                   <SelectValue placeholder="Choose origin station...">
                     {selectedSource
                       ? `${selectedSource.name} (${selectedSource.code})`
@@ -174,7 +174,7 @@ export function HorizontalRouteSelector({
                       key={`src-${station.id}`}
                       value={station.id}
                       disabled={station.id === targetId}
-                      className="text-brand-secondary focus:bg-brand-blue-light focus:text-brand-primary text-xs cursor-pointer"
+                      className="text-brand-secondary focus:bg-brand-blue-light focus:text-brand-primary text-xs font-medium cursor-pointer"
                     >
                       {station.name} ({station.code}) — {station.city}
                     </SelectItem>
@@ -194,7 +194,7 @@ export function HorizontalRouteSelector({
             disabled={!sourceId && !targetId}
             title="Reverse corridor direction"
             aria-label="Reverse corridor direction"
-            className="p-2.5 size-auto rounded-xl bg-brand-surface hover:bg-brand-tertiary text-brand-secondary border-brand-border shadow-xs transition-all flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed group active:scale-90 cursor-pointer"
+            className="p-2.5 size-auto rounded-full bg-brand-surface hover:bg-brand-blue-light/50 text-brand-secondary hover:text-brand-primary border-brand-border/80 shadow-2xs transition-all flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed group active:scale-90 cursor-pointer"
           >
             <ArrowRightLeft
               className={cn(
@@ -207,13 +207,13 @@ export function HorizontalRouteSelector({
           </Button>
 
           {/* Destination Station Box */}
-          <div className="flex-1 w-full relative flex items-center bg-brand-surface border border-brand-border hover:border-brand-primary/50 focus-within:border-brand-primary focus-within:ring-1 focus-within:ring-brand-primary/20 rounded-xl px-3.5 py-2.5 transition-all shadow-xs">
-            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-brand-blue-light text-brand-primary mr-3 flex-shrink-0">
+          <div className="flex-1 w-full relative flex items-center bg-brand-surface border border-brand-border/80 hover:border-brand-primary/50 focus-within:border-brand-primary focus-within:ring-1 focus-within:ring-brand-primary/20 rounded-xl px-3.5 py-2.5 transition-all shadow-2xs">
+            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-brand-blue-light/70 text-brand-primary mr-3 shrink-0">
               <MapPin className="w-4 h-4 text-brand-primary" />
             </div>
 
             <div className="flex-1 min-w-0">
-              <label className="text-[11px] font-bold text-brand-muted tracking-wide block">
+              <label className="text-[11px] font-medium text-brand-muted tracking-wider block mb-0.5">
                 Destination Station
               </label>
 
@@ -221,7 +221,7 @@ export function HorizontalRouteSelector({
                 value={targetId || ""}
                 onValueChange={(val) => val && onTargetChange(val)}
               >
-                <SelectTrigger className="w-full h-auto p-0 bg-transparent border-0 text-brand-secondary text-xs sm:text-sm font-bold focus:ring-0 focus-visible:ring-0 focus-visible:border-transparent shadow-none hover:bg-transparent justify-between cursor-pointer">
+                <SelectTrigger className="w-full h-auto p-0 bg-transparent border-0 text-brand-secondary text-xs sm:text-sm font-semibold focus:ring-0 focus-visible:ring-0 focus-visible:border-transparent shadow-none hover:bg-transparent justify-between cursor-pointer">
                   <SelectValue placeholder="Choose destination station...">
                     {selectedTarget
                       ? `${selectedTarget.name} (${selectedTarget.code})`
@@ -235,7 +235,7 @@ export function HorizontalRouteSelector({
                       key={`dst-${station.id}`}
                       value={station.id}
                       disabled={station.id === sourceId}
-                      className="text-brand-secondary focus:bg-brand-blue-light focus:text-brand-primary text-xs cursor-pointer"
+                      className="text-brand-secondary focus:bg-brand-blue-light focus:text-brand-primary text-xs font-medium cursor-pointer"
                     >
                       {station.name} ({station.code}) — {station.city}
                     </SelectItem>
@@ -245,31 +245,6 @@ export function HorizontalRouteSelector({
             </div>
           </div>
 
-          {/* Reset Route Action */}
-          {/* <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onClear}
-            disabled={!hasSelection}
-            title="Reset selected corridor"
-            className={cn(
-              "flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-brand-border transition-all text-xs font-bold flex-shrink-0 group h-auto",
-              hasSelection
-                ? "bg-brand-surface hover:bg-brand-tertiary text-brand-secondary shadow-xs cursor-pointer active:scale-95"
-                : "bg-brand-surface text-brand-muted opacity-60 cursor-not-allowed"
-            )}
-          >
-            <RotateCcw
-              className={cn(
-                "w-3.5 h-3.5 transition-transform duration-300",
-                hasSelection
-                  ? "group-hover:-rotate-90 text-brand-muted group-hover:text-brand-primary"
-                  : "text-brand-muted"
-              )}
-            />
-            <span className="hidden sm:inline">Reset</span>
-          </Button> */}
         </div>
       </Card>
     </div>

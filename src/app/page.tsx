@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 function DashboardPageSkeleton() {
   return (
     <div className="min-h-screen bg-brand-tertiary text-brand-secondary flex flex-col font-sans">
-      <div className="flex-1 flex pl-20 lg:pl-64">
+      <div className="flex-1 flex pl-0 lg:pl-64 pt-14 lg:pt-0">
         <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-7 flex flex-col space-y-4 max-w-[1600px] mx-auto w-full">
 
           {/* Header */}
@@ -145,7 +145,7 @@ export default function Home() {
       />
 
       {/* Main App Container with Left Navbar Offset & Right Notification Panel */}
-      <div className="flex-1 flex pl-20 lg:pl-64">
+      <div className="flex-1 flex pl-0 lg:pl-64 pt-14 lg:pt-0">
         {/* 2. Center Content Area */}
         <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-7 flex flex-col space-y-4 max-w-[1600px] mx-auto w-full">
           
@@ -196,7 +196,7 @@ export default function Home() {
         </main>
 
         {/* 5. Right-side Notification Panel */}
-        <div className="hidden xl:block">
+        <div className="hidden xl:block shrink-0 sticky top-0 h-screen overflow-hidden">
           <NotificationPanel
             onSelectCorridor={handleSelectCorridorFromNotification}
           />

@@ -442,11 +442,7 @@ export function IndiaLeafletMap({
         {/* CartoDB Positron Light Tiles */}
         <TileLayer
           attribution='&copy; <a href="https://carto.com/">CARTO</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url={
-            process.env.NEXT_PUBLIC_CARTO_API_KEY
-              ? `https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}.png?api_key=${process.env.NEXT_PUBLIC_CARTO_API_KEY}`
-              : "https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}.png"
-          }
+          url="https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}.png"
           subdomains="abcd"
           maxZoom={19}
         />
