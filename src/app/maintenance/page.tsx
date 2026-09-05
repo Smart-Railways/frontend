@@ -592,7 +592,7 @@ export default function MaintenancePage() {
                 <Wrench className="w-4 h-4" />
               </div>
               <div>
-                <div className="text-[10px] font-extrabold uppercase tracking-wider text-brand-muted mb-0.5">
+                <div className="text-xs font-bold text-brand-muted mb-0.5">
                   Total Tasks
                 </div>
                 {loadingTasks ? (
@@ -609,7 +609,7 @@ export default function MaintenancePage() {
                 <Hourglass className="w-4 h-4" />
               </div>
               <div>
-                <div className="text-[10px] font-extrabold uppercase tracking-wider text-brand-muted mb-0.5">
+                <div className="text-xs font-bold text-brand-muted mb-0.5">
                   Pending Execution
                 </div>
                 {loadingTasks ? (
@@ -626,7 +626,7 @@ export default function MaintenancePage() {
                 <Clock className="w-4 h-4" />
               </div>
               <div>
-                <div className="text-[10px] font-extrabold uppercase tracking-wider text-brand-muted mb-0.5">
+                <div className="text-xs font-bold text-brand-muted mb-0.5">
                   Scheduled Blocks
                 </div>
                 {loadingTasks ? (
@@ -643,7 +643,7 @@ export default function MaintenancePage() {
                 <ShieldAlert className="w-4 h-4" />
               </div>
               <div>
-                <div className="text-[10px] font-extrabold uppercase tracking-wider text-brand-muted mb-0.5">
+                <div className="text-xs font-bold text-brand-muted mb-0.5">
                   Critical Priority
                 </div>
                 {loadingTasks ? (
@@ -660,7 +660,7 @@ export default function MaintenancePage() {
                 <Zap className="w-4 h-4" />
               </div>
               <div>
-                <div className="text-[10px] font-extrabold uppercase tracking-wider text-brand-muted mb-0.5">
+                <div className="text-xs font-bold text-brand-muted mb-0.5">
                   Total Block Time
                 </div>
                 {loadingTasks ? (
@@ -767,7 +767,7 @@ export default function MaintenancePage() {
 
             {/* Urgency Filter Badges */}
             <div className="flex items-center gap-1.5 flex-wrap pt-3 border-t border-brand-border/60">
-              <span className="text-[11px] font-extrabold text-brand-muted uppercase tracking-wider mr-1">
+              <span className="text-xs font-bold text-brand-muted mr-1">
                 Urgency:
               </span>
               {["ALL", "Critical", "High", "Medium", "Low"].map((urg) => (
@@ -816,7 +816,7 @@ export default function MaintenancePage() {
               viewMode === "table" ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-brand-surface text-brand-muted font-bold uppercase tracking-wider border-b border-brand-border text-[10px]">
+                    <thead className="bg-brand-surface text-brand-muted font-semibold border-b border-brand-border text-xs">
                       <tr>
                         <th className="py-3 px-4">Task Code</th>
                         <th className="py-3 px-4">Target Asset</th>
@@ -934,7 +934,7 @@ export default function MaintenancePage() {
               /* TABLE VIEW */
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-brand-surface text-brand-muted font-bold uppercase tracking-wider border-b border-brand-border text-[10px]">
+                  <thead className="bg-brand-surface text-brand-muted font-semibold border-b border-brand-border text-xs">
                     <tr>
                       <th className="py-3 px-4">Task Code</th>
                       <th className="py-3 px-4">Target Asset</th>
@@ -1360,31 +1360,31 @@ export default function MaintenancePage() {
 
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
-                <span className="text-brand-muted block text-[10px] uppercase font-bold">Target Asset</span>
+                <span className="text-brand-muted block text-xs font-semibold">Target Asset</span>
                 <span className="font-bold text-brand-secondary mt-0.5 block">{inspectingTask.asset_name || `Asset #${inspectingTask.asset}`}</span>
               </div>
               <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
-                <span className="text-brand-muted block text-[10px] uppercase font-bold">Corridor / Section</span>
+                <span className="text-brand-muted block text-xs font-semibold">Corridor / Section</span>
                 <span className="font-bold text-brand-secondary mt-0.5 block flex items-center gap-1.5">
                   <MapPin className="w-3.5 h-3.5 text-brand-primary shrink-0" />
                   {inspectingTask.section_name || assets.find((a) => a.id === inspectingTask.asset)?.section_name || "General Corridor"}
                 </span>
               </div>
               <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
-                <span className="text-brand-muted block text-[10px] uppercase font-bold">Urgency</span>
+                <span className="text-brand-muted block text-xs font-semibold">Urgency</span>
                 <span className="font-bold text-brand-primary mt-0.5 block">{inspectingTask.urgency}</span>
               </div>
               <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
-                <span className="text-brand-muted block text-[10px] uppercase font-bold">Duration</span>
+                <span className="text-brand-muted block text-xs font-semibold">Duration</span>
                 <span className="font-bold text-brand-secondary mt-0.5 block font-mono">{inspectingTask.estimated_duration} mins</span>
               </div>
               <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
-                <span className="text-brand-muted block text-[10px] uppercase font-bold">Deadline</span>
+                <span className="text-brand-muted block text-xs font-semibold">Deadline</span>
                 <span className="font-bold text-brand-secondary mt-0.5 block font-mono">{formatDate(inspectingTask.deadline)}</span>
               </div>
               {inspectingTask.details && (
                 <div className="col-span-2 p-3 rounded-xl bg-brand-tertiary border border-brand-border">
-                  <span className="text-brand-muted block text-[10px] uppercase font-bold">Work Scope Details</span>
+                  <span className="text-brand-muted block text-xs font-semibold">Work Scope Details</span>
                   <span className="font-medium text-brand-secondary mt-0.5 block">{inspectingTask.details}</span>
                 </div>
               )}
@@ -1808,15 +1808,15 @@ export default function MaintenancePage() {
               <div className="space-y-3 pt-2 border-t border-brand-border">
                 <div className="grid grid-cols-3 gap-2 text-xs">
                   <div className="p-2.5 rounded-xl bg-brand-tertiary border border-brand-border">
-                    <span className="text-brand-muted block text-[10px] uppercase font-bold">Section</span>
+                    <span className="text-brand-muted block text-xs font-semibold">Section</span>
                     <span className="font-bold text-brand-secondary mt-0.5 block truncate">{feasibleResult.section}</span>
                   </div>
                   <div className="p-2.5 rounded-xl bg-brand-tertiary border border-brand-border">
-                    <span className="text-brand-muted block text-[10px] uppercase font-bold">Required Time</span>
+                    <span className="text-brand-muted block text-xs font-semibold">Required Time</span>
                     <span className="font-bold text-brand-primary mt-0.5 block font-mono">{feasibleResult.required_duration_minutes} mins</span>
                   </div>
                   <div className="p-2.5 rounded-xl bg-brand-tertiary border border-brand-border">
-                    <span className="text-brand-muted block text-[10px] uppercase font-bold">Corridor Status</span>
+                    <span className="text-brand-muted block text-xs font-semibold">Corridor Status</span>
                     <span className={`font-bold mt-0.5 block ${feasibleResult.feasible ? "text-emerald-600" : "text-red-600"}`}>
                       {feasibleResult.feasible ? "FEASIBLE" : "INFEASIBLE"}
                     </span>

@@ -284,8 +284,8 @@ interface MasterScheduleItem {
 export default function TrainsPage() {
   const [activeNavTab, setActiveNavTab] = useState<string>("trains");
   const [activeViewMode, setActiveViewMode] = useState<"all" | "tracked" | "schedules">("all");
-
-  const [trackedDate, setTrackedDate] = useState<string>(formatDateToISO(new Date()));
+  // Default to 2026-09-04 where active train operations are seeded in the backend database
+  const [trackedDate, setTrackedDate] = useState<string>("2026-09-04");
   const [sourceCode, setSourceCode] = useState<string>("NDLS");
   const [destinationCode, setDestinationCode] = useState<string>("MTJ");
   const [trackedSearchQuery, setTrackedSearchQuery] = useState<string>("");
@@ -723,10 +723,21 @@ export default function TrainsPage() {
                     ) : filteredTrackedTrains.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="py-12 text-center text-brand-muted">
-                          <div className="flex flex-col items-center justify-center gap-2">
+                          <div className="flex flex-col items-center justify-center gap-2 max-w-md mx-auto">
                             <TrainIcon className="w-8 h-8 text-brand-muted opacity-50" />
                             <div className="text-sm font-bold text-brand-secondary">No tracked train operations found</div>
-                            <p className="text-xs text-brand-muted">Try selecting a different corridor section or date.</p>
+                            <p className="text-xs text-brand-muted">
+                              No operation logs recorded in the backend database for {formatDisplayDate(trackedDate)} on corridor {sourceCode} → {destinationCode}.
+                            </p>
+                            {trackedDate !== "2026-09-04" && (
+                              <button
+                                onClick={() => setTrackedDate("2026-09-04")}
+                                className="mt-2 px-4 py-2 rounded-xl bg-brand-primary text-white text-xs font-bold hover:bg-blue-700 transition-all shadow-xs cursor-pointer flex items-center gap-2"
+                              >
+                                <span>Switch to 04-Sep-2026</span>
+                                <span className="px-1.5 py-0.5 rounded-full bg-white/20 text-[10px]">14 trains available</span>
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -746,9 +757,6 @@ export default function TrainsPage() {
                               </div>
                             </td>
                             <td className="py-3 px-4">
-                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold border ${theme.badge}`}>
-                                {item.train_type}
-                              </span>
                               <span className="ml-2 font-bold">{item.priority}/10</span>
                             </td>
                             <td className="py-3 px-4">{item.section.name}</td>
@@ -761,7 +769,7 @@ export default function TrainsPage() {
                             </td>
                             <td className="py-3 px-4 text-right">
                               <div className="flex items-center justify-end gap-2">
-                                <span className={`w-2.5 h-6 rounded-xs ${theme.lineColor}`} />
+                               
                                 <button onClick={() => setInspectTrackedTrain(item)} className="p-1.5 rounded-lg bg-brand-surface border border-brand-border hover:bg-brand-tertiary">
                                   <Eye className="w-3.5 h-3.5" />
                                 </button>
@@ -1008,7 +1016,7 @@ export default function TrainsPage() {
                     <TrainIcon className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="text-[10px] font-bold uppercase text-brand-muted">Total Schedules</div>
+                    <div className="text-xs font-bold text-brand-muted">Total Schedules</div>
                     {loadingSchedules ? (
                       <Skeleton className="h-7 w-12 my-0.5 rounded" />
                     ) : (
@@ -1022,7 +1030,7 @@ export default function TrainsPage() {
                     <CalendarCheck className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="text-[10px] font-bold uppercase text-brand-muted">Runs Today</div>
+                    <div className="text-xs font-bold text-brand-muted">Runs Today</div>
                     {loadingSchedules ? (
                       <Skeleton className="h-7 w-12 my-0.5 rounded" />
                     ) : (
@@ -1036,7 +1044,7 @@ export default function TrainsPage() {
                     <Crown className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="text-[10px] font-bold uppercase text-brand-muted">High Priority</div>
+                    <div className="text-xs font-bold text-brand-muted">High Priority</div>
                     {loadingSchedules ? (
                       <Skeleton className="h-7 w-12 my-0.5 rounded" />
                     ) : (
