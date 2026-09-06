@@ -22,9 +22,14 @@ import {
   getTrainScheduleById,
   getTrainMovements,
   getBlockWindows,
+  createBlockWindow,
+  patchMaintenanceTask,
   getBlockWindowById,
   checkBlockConflict,
   getFeasibleWindows,
+  getBlockRecommendation,
+  updateBlockWindowFull,
+  applyBlockRecommendation,
 } from "@/actions";
 import {
   CreateAssetInput,
@@ -36,7 +41,9 @@ import {
   GetTrainSchedulesParams,
   CreateTrainMovementInput,
   ConflictCheckInput,
-  FeasibleWindowsInput,
+  CreateBlockWindowInput,
+  FeasibleWindowsRequest,
+  BlockWindowPutPayload,
   GetTrainOperationsParams,
 } from "@/types";
 
@@ -368,6 +375,35 @@ export function useBlockWindow(id?: number | string | null) {
   });
 }
 
+export function useCreateBlockWindow() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: CreateBlockWindowInput) => {
+      const res = await createBlockWindow(data);
+      if (!res.success) throw new Error(res.error || "Failed to create block window");
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["blocks"] });
+    },
+  });
+}
+
+export function usePatchMaintenanceTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number | string; data: UpdateMaintenanceTaskInput }) => {
+      const res = await patchMaintenanceTask(id, data);
+      if (!res.success) throw new Error(res.error || `Failed to update task #${id}`);
+      return res.data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["maintenance-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["maintenance-tasks", variables.id] });
+    },
+  });
+}
+
 export function useCheckBlockConflict() {
   return useMutation({
     mutationFn: async (data: ConflictCheckInput) => {
@@ -378,12 +414,86 @@ export function useCheckBlockConflict() {
   });
 }
 
+/** Phase 1: Search for feasible maintenance windows by task + date (new API) */
 export function useFeasibleWindows() {
   return useMutation({
-    mutationFn: async (data: FeasibleWindowsInput) => {
+    mutationFn: async (data: FeasibleWindowsRequest) => {
       const res = await getFeasibleWindows(data);
       if (!res.success) throw new Error(res.error || "Failed to calculate feasible windows");
       return res.data;
+    },
+  });
+}
+
+// ==========================================
+// Phase 3: AI Recommendation & Rescheduling
+// ==========================================
+
+/**
+ * Continuously fetches AI recommendation for an existing block window.
+ * Refetches every 60 seconds to detect new conflicts as timetable changes.
+ */
+export function useBlockRecommendation(
+  blockWindowId: number | string | null | undefined,
+  taskId?: string
+) {
+  return useQuery({
+    queryKey: ["block-recommendation", blockWindowId, taskId],
+    queryFn: async () => {
+      if (!blockWindowId) return null;
+      const res = await getBlockRecommendation(blockWindowId, taskId);
+      if (!res.success) throw new Error(res.error || `Failed to fetch recommendation for block #${blockWindowId}`);
+      return res.data ?? null;
+    },
+    enabled: !!blockWindowId,
+    refetchInterval: 60 * 1000, // Re-check every 60 seconds
+    refetchOnWindowFocus: true,
+    staleTime: 30 * 1000,
+  });
+}
+
+/** Applies the AI-recommended slot via PUT on the block window */
+export function useUpdateBlockWindow() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      data,
+    }: {
+      id: number | string;
+      data: BlockWindowPutPayload;
+    }) => {
+      const res = await updateBlockWindowFull(id, data);
+      if (!res.success) throw new Error(res.error || `Failed to update block window #${id}`);
+      return res.data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["blocks"] });
+      queryClient.invalidateQueries({ queryKey: ["blocks", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["block-recommendation", variables.id] });
+    },
+  });
+}
+
+/** Phase 3C: 1-Click Auto-Apply endpoint mutation */
+export function useApplyBlockRecommendation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      blockWindowId,
+      taskId,
+    }: {
+      blockWindowId: number | string;
+      taskId?: string;
+    }) => {
+      const res = await applyBlockRecommendation(blockWindowId, taskId);
+      if (!res.success) throw new Error(res.error || `Failed to apply recommendation for block #${blockWindowId}`);
+      return res.data?.block_window;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["blocks"] });
+      queryClient.invalidateQueries({ queryKey: ["blocks", variables.blockWindowId] });
+      queryClient.invalidateQueries({ queryKey: ["block-recommendation", variables.blockWindowId] });
     },
   });
 }

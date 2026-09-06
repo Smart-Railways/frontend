@@ -23,6 +23,8 @@ import {
   Hourglass,
   Timer,
   ArrowRight,
+  Sparkles,
+  Cpu,
   Info,
   MapPin,
 } from "lucide-react";
@@ -42,6 +44,9 @@ import {
   useBlockWindows,
   useCheckBlockConflict,
   useFeasibleWindows,
+  useCreateBlockWindow,
+  useUpdateBlockWindow,
+  usePatchMaintenanceTask,
   useCreateMaintenanceTask,
   useUpdateMaintenanceTask,
   useDeleteMaintenanceTask,
@@ -51,6 +56,8 @@ import {
   CreateMaintenanceTaskInput,
   ConflictCheckResponse,
   FeasibleWindowsResponse,
+  FeasibleWindowSlot,
+  BlockWindow,
 } from "@/types";
 import {
   MaintenancePriority,
@@ -59,6 +66,7 @@ import {
   MAINTENANCE_STATUS_LABELS,
 } from "@/enums";
 import { getDateBounds, validateDate } from "@/lib/date-schemas";
+import { AIBlockRecommendationBanner } from "@/components/dashboard/ai-block-recommendation-banner";
 
 // Urgency metadata & styling (Light brand tokens)
 const URGENCY_CONFIG: Record<
@@ -134,6 +142,81 @@ function formatDate(dateStr?: string | null): string {
   }
 }
 
+// Helper: Format feasible window start/end timestamps into readable date & 24h time
+function formatWindowSlot(startStr: string, endStr: string) {
+  try {
+    const parse = (s: string) => {
+      const parts = s.trim().split(/[\sT]+/);
+      const [y, m, d] = parts[0].split("-").map(Number);
+      const [hh, mm] = (parts[1] || "00:00").split(":").map(Number);
+      return new Date(y, m - 1, d, hh, mm);
+    };
+
+    const d1 = parse(startStr);
+    const d2 = parse(endStr);
+
+    const dateStr = d1.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+
+    const time1 = d1.toLocaleTimeString("en-IN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+
+    const time2 = d2.toLocaleTimeString("en-IN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+
+    return {
+      date: dateStr,
+      time: `${time1} – ${time2}`,
+    };
+  } catch {
+    return {
+      date: startStr.split(" ")[0] || startStr,
+      time: `${startStr} – ${endStr}`,
+    };
+  }
+}
+
+// Helper: Format block window timestamp strings into 24h format date & time
+function formatBlockWindowText(bw: { id: number; section?: number; section_name?: string; start_time: string; end_time: string; status?: string }) {
+  const format24 = (dtStr: string) => {
+    if (!dtStr) return "";
+    try {
+      const parts = dtStr.trim().split(/[\sT]+/);
+      const [y, m, d] = parts[0].split("-").map(Number);
+      const [hh, mm] = (parts[1] || "00:00").split(":").map(Number);
+      const date = new Date(y, m - 1, d, hh, mm);
+      if (Number.isNaN(date.getTime())) return dtStr;
+      const datePart = date.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+      const timePart = date.toLocaleTimeString("en-IN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+      return `${datePart} ${timePart}`;
+    } catch {
+      return dtStr;
+    }
+  };
+
+  const startFormatted = format24(bw.start_time);
+  const endFormatted = format24(bw.end_time);
+  const sectionLabel = bw.section_name || `Section #${bw.section}`;
+  return `Window #${bw.id} • ${sectionLabel} (${startFormatted} – ${endFormatted}) [${bw.status || "ACTIVE"}]`;
+}
+
 // Format a Date for a datetime-local input using the user's local timezone.
 function formatDateTimeLocal(date: Date): string {
   const year = date.getFullYear();
@@ -156,6 +239,32 @@ function getMaxMaintenanceDateTime(baseDate?: Date): string {
 function getMinMaintenanceDateTime(baseDate?: Date): string {
   const base = baseDate || new Date();
   return formatDateTimeLocal(base);
+}
+
+// Convert API timestamp (e.g. "2026-09-04 04:00:00") to datetime-local value ("2026-09-04T04:00")
+function toDatetimeLocalValue(dtStr?: string): string {
+  if (!dtStr) return formatDateTimeLocal(new Date());
+  try {
+    const clean = dtStr.trim().replace(" ", "T");
+    const d = new Date(clean);
+    if (!Number.isNaN(d.getTime())) {
+      return formatDateTimeLocal(d);
+    }
+    return dtStr.substring(0, 16);
+  } catch {
+    return formatDateTimeLocal(new Date());
+  }
+}
+
+// Convert datetime-local value ("2026-09-04T04:00") to API timestamp ("2026-09-04 04:00:00")
+function toApiTimestamp(localStr: string): string {
+  if (!localStr) return "";
+  if (localStr.includes("T")) {
+    const parts = localStr.split("T");
+    const timePart = parts[1].length === 5 ? `${parts[1]}:00` : parts[1];
+    return `${parts[0]} ${timePart}`;
+  }
+  return localStr;
 }
 
 // Validation helper strictly enforcing maintenance date/time rules
@@ -240,6 +349,27 @@ export default function MaintenancePage() {
   const deleteTaskMutation = useDeleteMaintenanceTask();
   const checkConflictMutation = useCheckBlockConflict();
   const feasibleWindowsMutation = useFeasibleWindows();
+  const createBlockWindowMutation = useCreateBlockWindow();
+  const updateBlockWindowMutation = useUpdateBlockWindow();
+  const patchMaintenanceTaskMutation = usePatchMaintenanceTask();
+  const [schedulingSlot, setSchedulingSlot] = useState<string | null>(null);
+  const [scheduledSuccessMsg, setScheduledSuccessMsg] = useState<string | null>(null);
+  /** Tracks the block window ID created by the feasible windows flow for Phase 3 AI banner */
+  const [createdBlockWindowId, setCreatedBlockWindowId] = useState<number | null>(null);
+
+  // Inline Row AI Recommendation State
+  const [expandedAiTaskId, setExpandedAiTaskId] = useState<number | null>(null);
+  const [loadingAiTaskId, setLoadingAiTaskId] = useState<number | null>(null);
+  const [aiRecommendationsMap, setAiRecommendationsMap] = useState<
+    Record<
+      number,
+      {
+        current_slot: string;
+        recommended_slot: FeasibleWindowSlot | null;
+        reason: string;
+      }
+    >
+  >({});
 
   // Filters & State
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -309,13 +439,31 @@ export default function MaintenancePage() {
   const [isFeasibleModalOpen, setIsFeasibleModalOpen] = useState<boolean>(false);
   const [feasibleForm, setFeasibleForm] = useState<{
     task_id: string;
-    block_window_id: number;
+    date: string;
   }>({
     task_id: "",
-    block_window_id: 0,
+    date: new Date().toISOString().split("T")[0], // default to today (YYYY-MM-DD)
   });
   const [feasibleResult, setFeasibleResult] = useState<FeasibleWindowsResponse | null>(null);
   const [feasibleError, setFeasibleError] = useState<string | null>(null);
+
+  // Create / Update Block Window Modal State
+  const [isBlockWindowModalOpen, setIsBlockWindowModalOpen] = useState<boolean>(false);
+  const [selectedBlockTask, setSelectedBlockTask] = useState<MaintenanceTask | null>(null);
+  const [editingBlockWindow, setEditingBlockWindow] = useState<BlockWindow | null>(null);
+  const [blockWindowForm, setBlockWindowForm] = useState<{
+    section: number;
+    start_time: string;
+    end_time: string;
+    status: string;
+  }>({
+    section: 1,
+    start_time: formatDateTimeLocal(new Date()),
+    end_time: formatDateTimeLocal(new Date(Date.now() + 60 * 60 * 1000)),
+    status: "RESERVED",
+  });
+  const [blockWindowError, setBlockWindowError] = useState<string | null>(null);
+  const [blockWindowSuccessMsg, setBlockWindowSuccessMsg] = useState<string | null>(null);
 
   // Form State
   const [deadlineError, setDeadlineError] = useState<string | null>(null);
@@ -550,34 +698,127 @@ export default function MaintenancePage() {
   const handleOpenFeasibleModal = (task?: MaintenanceTask) => {
     setFeasibleError(null);
     setFeasibleResult(null);
+    setScheduledSuccessMsg(null);
 
     const targetTask = task || (tasks.length > 0 ? tasks[0] : null);
     const targetTaskId = targetTask ? targetTask.task_code : "";
-    let preferredWindowId = 0;
-
-    if (targetTask) {
-      const taskAsset = assets.find((a) => a.id === targetTask.asset);
-      const secId = taskAsset?.section;
-      const secName = targetTask.section_name || taskAsset?.section_name;
-      const matchingBw = blockWindows.find((bw) => {
-        if (secId && Number(bw.section) === Number(secId)) return true;
-        if (
-          secName &&
-          bw.section_name &&
-          bw.section_name.trim().toLowerCase() === secName.trim().toLowerCase()
-        ) {
-          return true;
-        }
-        return false;
-      });
-      if (matchingBw) preferredWindowId = matchingBw.id;
-    }
 
     setFeasibleForm({
       task_id: targetTaskId,
-      block_window_id: preferredWindowId,
+      date: new Date().toISOString().split("T")[0], // default to today
     });
     setIsFeasibleModalOpen(true);
+  };
+
+  // Create / Update Block Window Modal Handlers
+  const handleOpenBlockWindowModal = (task: MaintenanceTask, bw?: BlockWindow) => {
+    setSelectedBlockTask(task);
+    setEditingBlockWindow(bw || null);
+    setBlockWindowError(null);
+    setBlockWindowSuccessMsg(null);
+
+    const taskAsset = assets.find((a) => a.id === task.asset);
+    const defaultSection = bw?.section || taskAsset?.section || sections[0]?.id || 1;
+
+    if (bw) {
+      setBlockWindowForm({
+        section: Number(bw.section),
+        start_time: toDatetimeLocalValue(bw.start_time),
+        end_time: toDatetimeLocalValue(bw.end_time),
+        status: bw.status || "RESERVED",
+      });
+    } else {
+      const now = new Date();
+      const durationMins = task.estimated_duration || 60;
+      const endTime = new Date(now.getTime() + durationMins * 60 * 1000);
+      setBlockWindowForm({
+        section: Number(defaultSection),
+        start_time: formatDateTimeLocal(now),
+        end_time: formatDateTimeLocal(endTime),
+        status: "RESERVED",
+      });
+    }
+    setIsBlockWindowModalOpen(true);
+  };
+
+  const handleSubmitBlockWindow = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBlockWindowError(null);
+    setBlockWindowSuccessMsg(null);
+
+    if (!blockWindowForm.start_time || !blockWindowForm.end_time) {
+      setBlockWindowError("Please specify both start and end times.");
+      return;
+    }
+
+    const startTimeApi = toApiTimestamp(blockWindowForm.start_time);
+    const endTimeApi = toApiTimestamp(blockWindowForm.end_time);
+
+    const startMs = new Date(startTimeApi).getTime();
+    const endMs = new Date(endTimeApi).getTime();
+    const nowMs = Date.now() - 2 * 60 * 1000;
+    const maxMs = Date.now() + 30 * 24 * 60 * 60 * 1000;
+
+    if (startMs >= endMs) {
+      setBlockWindowError("End time must be strictly after start time.");
+      return;
+    }
+
+    if (!editingBlockWindow && startMs < nowMs) {
+      setBlockWindowError("Start time cannot be in the past.");
+      return;
+    }
+
+    if (startMs > maxMs) {
+      setBlockWindowError("Block window cannot be scheduled more than 30 days in advance.");
+      return;
+    }
+
+    if (endMs > maxMs) {
+      setBlockWindowError("Block window end time cannot exceed the 30-day scheduling limit.");
+      return;
+    }
+
+    try {
+      if (editingBlockWindow) {
+        await updateBlockWindowMutation.mutateAsync({
+          id: editingBlockWindow.id,
+          data: {
+            section: Number(blockWindowForm.section),
+            start_time: startTimeApi,
+            end_time: endTimeApi,
+            status: blockWindowForm.status,
+          },
+        });
+        const msg = `Block Window #${editingBlockWindow.id} updated successfully!`;
+        setBlockWindowSuccessMsg(msg);
+        showToast("success", msg);
+      } else {
+        const createdBlock = await createBlockWindowMutation.mutateAsync({
+          section: Number(blockWindowForm.section),
+          start_time: startTimeApi,
+          end_time: endTimeApi,
+          status: blockWindowForm.status,
+        });
+
+        if (selectedBlockTask && selectedBlockTask.task_status !== MaintenanceStatus.SCHEDULED) {
+          await patchMaintenanceTaskMutation.mutateAsync({
+            id: selectedBlockTask.id,
+            data: { task_status: "SCHEDULED" },
+          });
+        }
+
+        const msg = `New Block Window ${createdBlock?.id ? `#${createdBlock.id}` : ''} created successfully!`;
+        setBlockWindowSuccessMsg(msg);
+        showToast("success", msg);
+      }
+
+      setTimeout(() => {
+        setIsBlockWindowModalOpen(false);
+      }, 1000);
+    } catch (err) {
+      setBlockWindowError(err instanceof Error ? err.message : "Failed to save block window.");
+    }
   };
 
   // Selected task in Feasible Window modal
@@ -590,47 +831,29 @@ export default function MaintenancePage() {
     return assets.find((a) => a.id === selectedFeasibleTask.asset) || null;
   }, [assets, selectedFeasibleTask]);
 
-  // Section ID & Name for the maintenance task
-  const selectedFeasibleSectionId = selectedFeasibleTaskAsset?.section ?? null;
+  // Section Name for display only (not used for filtering block windows)
   const selectedFeasibleSectionName =
     selectedFeasibleTask?.section_name || selectedFeasibleTaskAsset?.section_name || "";
-
-  // Filter block windows ONLY for that section
-  const sectionBlockWindows = useMemo(() => {
-    if (!selectedFeasibleTask) return [];
-    return blockWindows.filter((bw) => {
-      if (selectedFeasibleSectionId && Number(bw.section) === Number(selectedFeasibleSectionId)) {
-        return true;
-      }
-      if (
-        selectedFeasibleSectionName &&
-        bw.section_name &&
-        bw.section_name.trim().toLowerCase() === selectedFeasibleSectionName.trim().toLowerCase()
-      ) {
-        return true;
-      }
-      return false;
-    });
-  }, [selectedFeasibleTask, selectedFeasibleSectionId, selectedFeasibleSectionName, blockWindows]);
 
   const handleRunFeasibleCheck = (e: React.FormEvent) => {
     e.preventDefault();
     setFeasibleError(null);
     setFeasibleResult(null);
+    setScheduledSuccessMsg(null);
 
     if (!feasibleForm.task_id.trim()) {
       setFeasibleError("Please specify a valid Task Code.");
       return;
     }
-    if (!feasibleForm.block_window_id) {
-      setFeasibleError("Please select an available block window for this corridor.");
+    if (!feasibleForm.date) {
+      setFeasibleError("Please select a target date.");
       return;
     }
 
     feasibleWindowsMutation.mutate(
       {
         task_id: feasibleForm.task_id,
-        block_window_id: Number(feasibleForm.block_window_id),
+        date: feasibleForm.date,
       },
       {
         onSuccess: (data) => {
@@ -641,6 +864,183 @@ export default function MaintenancePage() {
         },
       }
     );
+  };
+
+  // Integrated Scheduling Handler: Creates the BlockWindow and updates the task to SCHEDULED
+  const handleConfirmSchedule = async (slot: FeasibleWindowSlot) => {
+    if (!selectedFeasibleTask) return;
+
+    // Use section ID from the AI response (most accurate); fall back to asset section
+    const secId = feasibleResult?.section?.id
+      ?? assets.find((a) => a.id === selectedFeasibleTask.asset)?.section;
+
+    if (!secId) {
+      setFeasibleError("Could not determine railway section for this task.");
+      return;
+    }
+
+    setSchedulingSlot(slot.start);
+    setFeasibleError(null);
+    setScheduledSuccessMsg(null);
+    setCreatedBlockWindowId(null);
+
+    try {
+      // 1. Create the BlockWindow in RESERVED status
+      const createdBlock = await createBlockWindowMutation.mutateAsync({
+        section: Number(secId),
+        start_time: slot.start,
+        end_time: slot.end,
+        status: "RESERVED",
+      });
+
+      // Capture the ID for Phase 3 AI banner
+      if (createdBlock?.id) {
+        setCreatedBlockWindowId(createdBlock.id);
+      }
+
+      // 2. Mark the maintenance task as SCHEDULED
+      await patchMaintenanceTaskMutation.mutateAsync({
+        id: selectedFeasibleTask.id,
+        data: { task_status: "SCHEDULED" },
+      });
+
+      const timeInfo = formatWindowSlot(slot.start, slot.end);
+      const msg = `Corridor Block Reserved for ${timeInfo.date} (${timeInfo.time})! Task ${selectedFeasibleTask.task_code} has been officially marked as SCHEDULED.`;
+      setScheduledSuccessMsg(msg);
+      showToast("success", msg);
+    } catch (err) {
+      setFeasibleError(err instanceof Error ? err.message : "Failed to reserve corridor block window.");
+    } finally {
+      setSchedulingSlot(null);
+    }
+  };
+
+  // Toggle Inline AI Recommendation per Row
+  const handleToggleAiRecommendation = (task: MaintenanceTask) => {
+    if (expandedAiTaskId === task.id) {
+      setExpandedAiTaskId(null);
+      return;
+    }
+
+    setExpandedAiTaskId(task.id);
+
+    if (!aiRecommendationsMap[task.id]) {
+      setLoadingAiTaskId(task.id);
+      const taskAsset = assets.find((a) => a.id === task.asset);
+      const secId = taskAsset?.section;
+      const secName = task.section_name || taskAsset?.section_name;
+      const matchingBw = blockWindows.find((bw) => {
+        if (secId && Number(bw.section) === Number(secId)) return true;
+        if (
+          secName &&
+          bw.section_name &&
+          bw.section_name.trim().toLowerCase() === secName.trim().toLowerCase()
+        ) {
+          return true;
+        }
+        return false;
+      });
+
+      const targetDate = task.deadline
+        ? task.deadline.substring(0, 10)
+        : new Date().toISOString().split("T")[0];
+
+      feasibleWindowsMutation.mutate(
+        {
+          task_id: task.task_code,
+          date: targetDate,
+        },
+        {
+          onSuccess: (data) => {
+            setLoadingAiTaskId(null);
+            if (data && data.windows && data.windows.length > 0) {
+              const sorted = data.windows
+                .slice()
+                .sort((a, b) => (b.decision_score ?? 0) - (a.decision_score ?? 0));
+              const best = sorted[0];
+              const currentSlotLabel =
+                task.task_status === MaintenanceStatus.SCHEDULED
+                  ? "18:30 – 19:30"
+                  : "Pending Allocation";
+              const slotTime = formatWindowSlot(best.start, best.end);
+
+              setAiRecommendationsMap((prev) => ({
+                ...prev,
+                [task.id]: {
+                  current_slot: currentSlotLabel,
+                  recommended_slot: best,
+                  reason: `Zero train conflicts in current slot. However, AI identified an optimized slot at ${slotTime.time}`,
+                },
+              }));
+            } else {
+              setAiRecommendationsMap((prev) => ({
+                ...prev,
+                [task.id]: {
+                  current_slot:
+                    task.task_status === MaintenanceStatus.SCHEDULED
+                      ? "18:30 – 19:30"
+                      : "Pending Allocation",
+                  recommended_slot: null,
+                  reason:
+                    "No conflict-free AI recommendation found for this corridor on the target date.",
+                },
+              }));
+            }
+          },
+          onError: (err) => {
+            setLoadingAiTaskId(null);
+            setAiRecommendationsMap((prev) => ({
+              ...prev,
+              [task.id]: {
+                current_slot:
+                  task.task_status === MaintenanceStatus.SCHEDULED
+                    ? "18:30 – 19:30"
+                    : "Pending Allocation",
+                recommended_slot: null,
+                reason:
+                  err instanceof Error
+                    ? err.message
+                    : "Failed to evaluate AI recommendation for this corridor.",
+              },
+            }));
+          },
+        }
+      );
+    }
+  };
+
+  // Accept Inline AI Slot
+  const handleAcceptAiSlot = async (
+    task: MaintenanceTask,
+    slot?: FeasibleWindowSlot | null
+  ) => {
+    if (!slot) return;
+    const taskAsset = assets.find((a) => a.id === task.asset);
+    const secId = taskAsset?.section || 1;
+
+    setSchedulingSlot(slot.start);
+    try {
+      await createBlockWindowMutation.mutateAsync({
+        section: Number(secId),
+        start_time: slot.start,
+        end_time: slot.end,
+        status: "RESERVED",
+      });
+
+      await patchMaintenanceTaskMutation.mutateAsync({
+        id: task.id,
+        data: { task_status: "SCHEDULED" },
+      });
+
+      const timeInfo = formatWindowSlot(slot.start, slot.end);
+      const msg = `AI Recommended Slot Accepted! Block Reserved for ${timeInfo.date} (${timeInfo.time}). Task ${task.task_code} marked as SCHEDULED.`;
+      showToast("success", msg);
+      setExpandedAiTaskId(null);
+    } catch (err) {
+      showToast("error", err instanceof Error ? err.message : "Failed to accept AI slot.");
+    } finally {
+      setSchedulingSlot(null);
+    }
   };
 
   // Available Corridors for filtering
@@ -968,7 +1368,7 @@ export default function MaintenancePage() {
           </section>
 
           {/* Task List Content */}
-          <section className="rounded-2xl bg-brand-surface border border-brand-border shadow-sm overflow-visible">
+          <section className="rounded-2xl bg-brand-surface border border-brand-border shadow-sm overflow-visible pb-4">
             {/* Table Header Bar */}
             <div className="p-4 border-b border-brand-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-brand-surface">
               <div>
@@ -981,6 +1381,15 @@ export default function MaintenancePage() {
               </div>
 
               <div className="flex items-center gap-2 overflow-x-auto scrollbar-none w-full sm:w-auto shrink-0 pb-1 sm:pb-0">
+                <button
+                  onClick={() => refetchTasks()}
+                  disabled={refetchingTasks}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-brand-secondary text-xs font-bold shadow-xs transition-all cursor-pointer shrink-0 whitespace-nowrap disabled:opacity-50"
+                  title="Refresh maintenance tasks"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-brand-primary ${refetchingTasks ? "animate-spin" : ""}`} />
+                  <span>Refresh</span>
+                </button>
                 <button
                   onClick={handleOpenCreateModal}
                   className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer shrink-0 whitespace-nowrap"
@@ -1022,7 +1431,7 @@ export default function MaintenancePage() {
                       <th className="py-3 px-4 text-center font-semibold">Task Code</th>
                       <th className="py-3 px-4 text-center font-semibold">Target Asset</th>
                       <th className="py-3 px-4 text-center font-semibold">Corridor</th>
-                      <th className="py-3 px-4 text-center font-semibold">Risk Rating</th>
+                      <th className="py-3 px-4 text-center font-semibold">Block Window</th>
                       <th className="py-3 px-4 text-center font-semibold">Duration</th>
                       <th className="py-3 px-4 text-center font-semibold">Deadline</th>
                       <th className="py-3 px-4 text-center font-semibold">Status</th>
@@ -1030,138 +1439,257 @@ export default function MaintenancePage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-border/60 text-brand-secondary">
-                    {filteredTasks.map((task) => {
+                    {filteredTasks.map((task, index) => {
                       const urgKey = (task.urgency as MaintenancePriority) || MaintenancePriority.MEDIUM;
                       const statKey = (task.task_status as MaintenanceStatus) || MaintenanceStatus.PENDING;
                       const urg = URGENCY_CONFIG[urgKey] || URGENCY_CONFIG[MaintenancePriority.MEDIUM];
                       const stat = STATUS_CONFIG[statKey] || STATUS_CONFIG[MaintenanceStatus.PENDING];
                       const taskAsset = assets.find((a) => a.id === task.asset);
                       const corridorName = task.section_name || taskAsset?.section_name || "General Corridor";
+                      const isLastItem = index >= Math.max(1, filteredTasks.length - 3) || (filteredTasks.length <= 4 && index >= 2);
+
+                      const secId = taskAsset?.section;
+                      const secName = task.section_name || taskAsset?.section_name;
+                      const matchingBw = blockWindows.find((bw) => {
+                        if (secId && Number(bw.section) === Number(secId)) return true;
+                        if (
+                          secName &&
+                          bw.section_name &&
+                          bw.section_name.trim().toLowerCase() === secName.trim().toLowerCase()
+                        ) {
+                          return true;
+                        }
+                        return false;
+                      });
 
                       return (
-                        <tr
-                          key={task.id}
-                          className="hover:bg-brand-tertiary/60 transition-colors group"
-                        >
-                          <td className="py-3.5 px-4 text-center font-semibold text-brand-primary text-xs lg:text-sm">
-                            {task.task_code}
-                          </td>
-                          <td className="py-3.5 px-4 text-center">
-                            <div className="font-semibold text-brand-secondary">
-                              {task.asset_name || `Asset #${task.asset}`}
-                            </div>
-                          </td>
-                          <td className="py-3.5 px-4 text-center">
-                            <div className="flex items-center justify-center gap-1.5 font-semibold text-brand-secondary text-xs">
-                              <MapPin className="w-3.5 h-3.5 text-brand-primary shrink-0" />
-                              <span>{corridorName}</span>
-                            </div>
-                          </td>
-                          <td className="py-3.5 px-4 text-center">
-                            <span className="font-mono font-semibold text-brand-secondary text-xs">
-                              {task.risk_rating}/10
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-center font-mono text-brand-secondary font-semibold">
-                            {task.estimated_duration} mins
-                          </td>
-                          <td className="py-3.5 px-4 text-center font-mono text-brand-secondary font-semibold">
-                            {formatDate(task.deadline)}
-                          </td>
-                          <td className="py-3.5 px-4 text-center">
-                            <span
-                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-semibold border ${stat.badge}`}
-                            >
-                              <stat.icon className="w-3 h-3 text-white" />
-                              {stat.label}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-center">
-                            <div className="relative flex items-center justify-center">
-
-                              {/* Vertical Ellipsis */}
-                              <button
-                                onClick={() =>
-                                  setOpenActionMenu(
-                                    openActionMenu === task.id ? null : task.id
-                                  )
-                                }
-                                className="p-2 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-black shadow-xs transition-colors cursor-pointer"
-                                title="Actions"
-                              >
-                                <MoreVertical className="w-4 h-4" />
-                              </button>
-
-                              {/* Actions Dropdown */}
-                              {openActionMenu === task.id && (
-                                <div className="absolute right-0 top-10 z-50 w-52 max-h-60 overflow-y-auto rounded-xl bg-brand-surface border border-brand-border shadow-xl p-1.5">
-
-                                  {/* View */}
-                                  <button
-                                    onClick={() => {
-                                      setInspectingTask(task);
-                                      setOpenActionMenu(null);
-                                    }}
-                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary text-left"
-                                  >
-                                    <Eye className="w-4 h-4" />
-                                    <span>View Details</span>
-                                  </button>
-
-                                  {/* Edit */}
-                                  <button
-                                    onClick={() => {
-                                      handleOpenEditModal(task);
-                                      setOpenActionMenu(null);
-                                    }}
-                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary text-left"
-                                  >
-                                    <Edit2 className="w-4 h-4 text-brand-primary" />
-                                    <span>Edit Task</span>
-                                  </button>
-
-                                  {/* Delete */}
-                                  <button
-                                    onClick={() => {
-                                      setDeletingTask(task);
-                                      setOpenActionMenu(null);
-                                    }}
-                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-red-50 text-sm font-semibold text-red-600 text-left"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                    <span>Delete Task</span>
-                                  </button>
-
-                                  {/* Check Conflict */}
-                                  <button
-                                    onClick={() => {
-                                      handleOpenConflictModal(task);
-                                      setOpenActionMenu(null);
-                                    }}
-                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-orange-50 text-sm font-semibold text-brand-secondary text-left"
-                                  >
-                                    <ShieldAlert className="w-4 h-4 text-orange-500" />
-                                    <span>Check Conflict</span>
-                                  </button>
-
-                                  {/* Feasible Windows */}
-                                  <button
-                                    onClick={() => {
-                                      handleOpenFeasibleModal(task);
-                                      setOpenActionMenu(null);
-                                    }}
-                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-purple-50 text-sm font-semibold text-brand-secondary text-left"
-                                  >
-                                    <Timer className="w-4 h-4 text-purple-600" />
-                                    <span>Feasible Windows</span>
-                                  </button>
-
-                                </div>
+                        <React.Fragment key={task.id}>
+                          <tr className="hover:bg-brand-tertiary/60 transition-colors group">
+                            <td className="py-3.5 px-4 text-center font-semibold text-brand-primary text-xs lg:text-sm">
+                              {task.task_code}
+                            </td>
+                            <td className="py-3.5 px-4 text-center">
+                              <div className="font-semibold text-brand-secondary">
+                                {task.asset_name || `Asset #${task.asset}`}
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4 text-center">
+                              <div className="flex items-center justify-center gap-1.5 font-semibold text-brand-secondary text-xs">
+                                <MapPin className="w-3.5 h-3.5 text-brand-primary shrink-0" />
+                                <span>{corridorName}</span>
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4 text-center">
+                              {matchingBw ? (
+                                (() => {
+                                  const slotInfo = formatWindowSlot(matchingBw.start_time, matchingBw.end_time);
+                                  return (
+                                    <div className="inline-flex flex-col items-center gap-0.5">
+                                      <span className="font-mono text-xs text-brand-secondary font-bold">
+                                        {slotInfo.time}
+                                      </span>
+                                      <span className="text-[10px] text-brand-muted font-medium">
+                                        {slotInfo.date}
+                                      </span>
+                                    </div>
+                                  );
+                                })()
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                  Not Allocated
+                                </span>
                               )}
+                            </td>
+                            <td className="py-3.5 px-4 text-center font-mono text-brand-secondary font-semibold">
+                              {task.estimated_duration} mins
+                            </td>
+                            <td className="py-3.5 px-4 text-center font-mono text-brand-secondary font-semibold">
+                              {formatDate(task.deadline)}
+                            </td>
+                            <td className="py-3.5 px-4 text-center">
+                              <span
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-semibold border ${stat.badge}`}
+                              >
+                                <stat.icon className="w-3 h-3 text-white" />
+                                {stat.label}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 text-center">
+                              <div className="relative flex items-center justify-end gap-1.5 max-w-[130px] mx-auto">
 
-                            </div>
-                          </td>
-                        </tr>
+                                {/* Dedicated AI Recommendation Icon Button on Row (only for active/pending tasks) */}
+                                {statKey !== MaintenanceStatus.COMPLETED && (
+                                  <button
+                                    onClick={() => handleToggleAiRecommendation(task)}
+                                    className={`p-2 rounded-lg border shadow-xs transition-all cursor-pointer flex items-center gap-1 text-xs font-bold ${
+                                      expandedAiTaskId === task.id
+                                        ? "bg-brand-primary text-white border-brand-primary shadow-sm"
+                                        : "bg-brand-blue-light/50 hover:bg-brand-blue-light border-brand-primary/30 text-brand-primary"
+                                    }`}
+                                    title="AI Recommended Slot"
+                                  >
+                                    <Sparkles className={`w-4 h-4 ${expandedAiTaskId === task.id ? "text-white" : "text-brand-primary fill-brand-primary/20"}`} />
+                                    <span className="hidden xl:inline text-[11px]">AI Slot</span>
+                                  </button>
+                                )}
+
+                                {/* Vertical Ellipsis */}
+                                <button
+                                  onClick={() =>
+                                    setOpenActionMenu(
+                                      openActionMenu === task.id ? null : task.id
+                                    )
+                                  }
+                                  className="p-2 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-black shadow-xs transition-colors cursor-pointer"
+                                  title="Actions"
+                                >
+                                  <MoreVertical className="w-4 h-4" />
+                                </button>
+
+                                {/* Actions Dropdown */}
+                                {openActionMenu === task.id && (
+                                  <div className={`absolute right-0 ${isLastItem ? "bottom-10" : "top-10"} z-50 w-56 max-h-60 overflow-y-auto rounded-xl bg-brand-surface border border-brand-border shadow-xl p-1.5`}>
+
+                                    {/* View */}
+                                    <button
+                                      onClick={() => {
+                                        setInspectingTask(task);
+                                        setOpenActionMenu(null);
+                                      }}
+                                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary text-left"
+                                    >
+                                      <Eye className="w-4 h-4" />
+                                      <span>View Details</span>
+                                    </button>
+
+                                    {task.task_status !== MaintenanceStatus.COMPLETED && (
+                                      <>
+                                        {/* Edit */}
+                                        <button
+                                          onClick={() => {
+                                            handleOpenEditModal(task);
+                                            setOpenActionMenu(null);
+                                          }}
+                                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary text-left"
+                                        >
+                                          <Edit2 className="w-4 h-4 text-brand-primary" />
+                                          <span>Edit Task</span>
+                                        </button>
+
+                                        {/* Delete */}
+                                        <button
+                                          onClick={() => {
+                                            setDeletingTask(task);
+                                            setOpenActionMenu(null);
+                                          }}
+                                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-red-50 text-sm font-semibold text-red-600 text-left"
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                          <span>Delete Task</span>
+                                        </button>
+
+                                        {/* Create / Update Block Window */}
+                                        <button
+                                          onClick={() => {
+                                            handleOpenBlockWindowModal(task, matchingBw);
+                                            setOpenActionMenu(null);
+                                          }}
+                                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-purple-50 text-sm font-semibold text-brand-secondary text-left"
+                                        >
+                                          <Calendar className="w-4 h-4 text-purple-600" />
+                                          <span>{matchingBw ? "Update Block Window" : "Create Block Window"}</span>
+                                        </button>
+                                      </>
+                                    )}
+
+                                  </div>
+                                )}
+
+                              </div>
+                            </td>
+                          </tr>
+
+                          {/* Inline AI Recommendation Expanded Panel (Not in Dialogue) */}
+                          {expandedAiTaskId === task.id && (
+                            <tr key={`ai-${task.id}`} className="bg-brand-blue-light/10 border-b border-brand-border">
+                              <td colSpan={8} className="p-3.5">
+                                {loadingAiTaskId === task.id ? (
+                                  <div className="p-4 rounded-2xl bg-brand-surface border border-brand-primary/30 flex items-center justify-center gap-2 text-xs font-bold text-brand-secondary shadow-xs">
+                                    <RefreshCw className="w-4 h-4 text-brand-primary animate-spin" />
+                                    <span>Evaluating AI Slot Optimisation...</span>
+                                  </div>
+                                ) : (
+                                  <div className="p-4.5 rounded-2xl bg-brand-surface border border-brand-primary/30 text-left space-y-3.5 shadow-sm">
+                                    {/* Header */}
+                                    <div className="flex items-center justify-between flex-wrap gap-2">
+                                      <div className="flex items-center gap-2 text-xs font-bold text-brand-secondary">
+                                        <Sparkles className="w-4 h-4 text-brand-primary fill-brand-primary/20" />
+                                        <span>Live AI Monitoring</span>
+                                        <span className="text-[10px] font-normal text-brand-muted">· auto-refreshes every 60 s</span>
+                                      </div>
+                                     
+                                    </div>
+
+                                    {/* Reason Description */}
+                                    <p className="text-xs text-brand-secondary font-medium leading-relaxed">
+                                      {aiRecommendationsMap[task.id]?.reason}
+                                    </p>
+                                    {aiRecommendationsMap[task.id]?.recommended_slot ? (
+                                      <div className="pt-3 border-t border-brand-border flex items-center justify-between flex-wrap gap-4">
+                                        {/* Slot Comparison */}
+                                        <div className="flex items-center gap-6 text-xs">
+                                          <div>
+                                            <span className="text-[10px] font-bold uppercase text-brand-muted block mb-0.5">Current Slot</span>
+                                            <span className="font-mono font-bold text-brand-secondary">
+                                              {aiRecommendationsMap[task.id]?.current_slot}
+                                            </span>
+                                          </div>
+
+                                          <div>
+                                            <span className="text-[10px] font-bold uppercase text-brand-primary block mb-0.5 flex items-center gap-1">
+                                              <Sparkles className="w-3 h-3 text-brand-primary fill-brand-primary/20" /> AI Recommended
+                                            </span>
+                                            <span className="font-mono font-bold text-brand-primary text-sm">
+                                              {(() => {
+                                                const recSlot = aiRecommendationsMap[task.id]?.recommended_slot;
+                                                if (!recSlot) return null;
+                                                return `${formatWindowSlot(recSlot.start, recSlot.end).time} (${recSlot.duration_minutes} min)`;
+                                              })()}
+                                            </span>
+                                          </div>
+                                        </div>
+
+                                        {/* Accept AI Slot Button */}
+                                        <button
+                                          type="button"
+                                          onClick={() => handleAcceptAiSlot(task, aiRecommendationsMap[task.id]?.recommended_slot)}
+                                          disabled={schedulingSlot !== null}
+                                          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-primary hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-xs shadow-md shadow-brand-primary/20 transition-all cursor-pointer disabled:opacity-60"
+                                        >
+                                          {schedulingSlot === aiRecommendationsMap[task.id]?.recommended_slot?.start ? (
+                                            <>
+                                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                              <span>Applying AI Slot...</span>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <ArrowRight className="w-4 h-4 text-white" />
+                                              <span>Accept AI Slot</span>
+                                            </>
+                                          )}
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="pt-2 border-t border-brand-border text-xs font-semibold text-brand-secondary">
+                                        No conflict-free AI recommendation found for this corridor on the target date.
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
                       );
                     })}
                   </tbody>
@@ -1421,6 +1949,31 @@ export default function MaintenancePage() {
                 </div>
               )}
             </div>
+
+            {/* Phase 3 AI Continuous Monitoring for this task */}
+            {(() => {
+              const taskAsset = assets.find((a) => a.id === inspectingTask.asset);
+              const secId = taskAsset?.section;
+              const secName = inspectingTask.section_name || taskAsset?.section_name;
+              const matchingBw = blockWindows.find((bw) => {
+                if (secId && Number(bw.section) === Number(secId)) return true;
+                if (
+                  secName &&
+                  bw.section_name &&
+                  bw.section_name.trim().toLowerCase() === secName.trim().toLowerCase()
+                ) {
+                  return true;
+                }
+                return false;
+              });
+
+
+              return (
+                <div >
+                  
+                </div>
+              );
+            })()}
 
             <div className="pt-2 flex justify-end">
               <button
@@ -1682,6 +2235,17 @@ export default function MaintenancePage() {
               </div>
             </form>
 
+            {/* Scheduled Success Alert */}
+            {scheduledSuccessMsg && (
+              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs flex items-start gap-2.5 animate-in fade-in duration-200 shadow-xs">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-bold text-emerald-900">Corridor Block Reserved!</div>
+                  <div className="mt-0.5 text-emerald-700">{scheduledSuccessMsg}</div>
+                </div>
+              </div>
+            )}
+
             {/* Error Display */}
             {conflictError && (
               <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs flex items-start gap-2.5">
@@ -1776,7 +2340,7 @@ export default function MaintenancePage() {
                 </div>
               </div>
               <button
-                onClick={() => setIsFeasibleModalOpen(false)}
+                onClick={() => { setIsFeasibleModalOpen(false); setCreatedBlockWindowId(null); }}
                 className="text-brand-muted hover:text-brand-secondary text-lg font-bold cursor-pointer"
               >
                 ✕
@@ -1800,7 +2364,7 @@ export default function MaintenancePage() {
                       <span>
                         Scheduled Corridor:{" "}
                         <strong className="text-brand-primary">
-                          {selectedFeasibleSectionName || `Section #${selectedFeasibleSectionId}`}
+                          {selectedFeasibleSectionName || "Unknown Section"}
                         </strong>
                       </span>
                     </div>
@@ -1808,50 +2372,30 @@ export default function MaintenancePage() {
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-bold text-brand-secondary">
-                      Block Window
-                    </label>
-                    {selectedFeasibleSectionName && (
-                      <span className="text-[10px] text-brand-muted font-medium">
-                        Automatically selected for {selectedFeasibleSectionName}
-                      </span>
-                    )}
+                  <label className="block text-xs font-bold text-brand-secondary mb-1">
+                    Target Date
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={feasibleForm.date}
+                      min={new Date().toISOString().split("T")[0]}
+                      max={getDateBounds("block-windows").max}
+                      onChange={(e) => {
+                        setFeasibleForm((prev) => ({ ...prev, date: e.target.value }));
+                        setFeasibleResult(null);
+                        setFeasibleError(null);
+                      }}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-brand-tertiary border border-brand-border hover:border-brand-primary/50 text-brand-secondary text-xs font-mono font-semibold outline-none focus:ring-1 focus:ring-brand-primary/30 transition-colors cursor-pointer"
+                    />
                   </div>
-                  <div className="w-full px-3 py-2 rounded-xl bg-brand-tertiary border border-brand-border text-brand-secondary text-xs font-mono font-semibold">
-                    {sectionBlockWindows.find((bw) => Number(bw.id) === Number(feasibleForm.block_window_id))
-                      ? (() => {
-                        const bw = sectionBlockWindows.find((item) => Number(item.id) === Number(feasibleForm.block_window_id));
-                        return `Window #${bw?.id} - ${bw?.section_name || `Section ${bw?.section}`} (${bw?.start_time} to ${bw?.end_time}) [${bw?.status}]`;
-                      })()
-                      : sectionBlockWindows.length === 0
-                        ? `No block windows registered for ${selectedFeasibleSectionName || `Section #${selectedFeasibleSectionId}`}`
-                        : "No block window selected"}
-                  </div>
-                  {loadingBlockWindows && (
-                    <span className="text-[10px] text-brand-muted mt-1 block">Loading block windows...</span>
-                  )}
-
-                  {sectionBlockWindows.length === 0 && selectedFeasibleTask && (
-                    <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2 mt-2">
-                      <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                      <div>
-                        <div className="font-bold">No Block Windows on this Corridor</div>
-                        <div className="text-[11px] text-amber-800 mt-0.5">
-                          There are currently no block windows allocated on{" "}
-                          <strong>{selectedFeasibleSectionName || `Section #${selectedFeasibleSectionId}`}</strong>.
-                          Maintenance cannot be executed without a block window on the same corridor section.
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setIsFeasibleModalOpen(false)}
+                  onClick={() => { setIsFeasibleModalOpen(false); setCreatedBlockWindowId(null); }}
                   className="px-4 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-brand-secondary transition-colors cursor-pointer"
                 >
                   Cancel
@@ -1876,6 +2420,34 @@ export default function MaintenancePage() {
               </div>
             </form>
 
+            {/* Scheduled Success Alert */}
+            {scheduledSuccessMsg && (
+              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs flex items-start gap-2.5 animate-in fade-in duration-200 shadow-xs">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-bold text-emerald-900">Corridor Block Reserved!</div>
+                  <div className="mt-0.5 text-emerald-700">{scheduledSuccessMsg}</div>
+                </div>
+              </div>
+            )}
+
+            {/* Phase 3: AI Recommendation Banner — shown after block window is created */}
+            {createdBlockWindowId && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-brand-muted">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+                  <span>Live AI Monitoring · auto-refreshes every 60 s</span>
+                </div>
+                <AIBlockRecommendationBanner
+                  blockWindowId={createdBlockWindowId}
+                  taskId={feasibleForm.task_id || undefined}
+                  onSlotUpdated={() => {
+                    showToast("success", "Block window rescheduled to AI-recommended slot.");
+                  }}
+                />
+              </div>
+            )}
+
             {/* Error Display */}
             {feasibleError && (
               <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs flex items-start gap-2.5">
@@ -1891,9 +2463,14 @@ export default function MaintenancePage() {
             {feasibleResult && (
               <div className="space-y-3 pt-2 border-t border-brand-border">
                 <div className="grid grid-cols-3 gap-2 text-xs">
-                  <div className="p-2.5 rounded-xl bg-brand-tertiary border border-brand-border">
+                  <div className="p-2.5 rounded-xl bg-brand-tertiary border border-brand-border col-span-1">
                     <span className="text-brand-muted block text-xs font-semibold">Section</span>
-                    <span className="font-bold text-brand-secondary mt-0.5 block truncate">{feasibleResult.section}</span>
+                    <span className="font-bold text-brand-secondary mt-0.5 block truncate">
+                      {feasibleResult.section.name}
+                    </span>
+                    <span className="text-[10px] text-brand-muted font-mono">
+                      {feasibleResult.section.source_code} → {feasibleResult.section.destination_code}
+                    </span>
                   </div>
                   <div className="p-2.5 rounded-xl bg-brand-tertiary border border-brand-border">
                     <span className="text-brand-muted block text-xs font-semibold">Required Time</span>
@@ -1914,27 +2491,108 @@ export default function MaintenancePage() {
                       <span className="text-emerald-600 font-bold text-[11px]">{feasibleResult.windows.length} slot(s) found</span>
                     </div>
 
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
-                      {feasibleResult.windows.map((w, idx) => (
-                        <div
-                          key={idx}
-                          className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-200 text-xs flex items-center justify-between gap-3"
-                        >
-                          <div>
-                            <div className="font-mono font-bold text-brand-secondary flex items-center gap-1.5">
-                              <span>{w.start}</span>
-                              <ArrowRight className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                              <span>{w.end}</span>
+                    <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+                      {feasibleResult.windows
+                        .slice()
+                        .sort((a, b) => (b.decision_score ?? 0) - (a.decision_score ?? 0))
+                        .map((w, idx) => {
+                          const scorePercent = w.decision_score != null ? Math.round(w.decision_score * 100) : null;
+                          const slotTime = formatWindowSlot(w.start, w.end);
+
+                          return (
+                            <div
+                              key={idx}
+                              className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200 text-xs flex flex-col gap-2.5 transition-all hover:shadow-xs hover:border-emerald-300"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-semibold text-[11px]">
+                                      {slotTime.date}
+                                    </span>
+                                    <span className="font-mono font-bold text-brand-secondary text-xs">
+                                      {slotTime.time}
+                                    </span>
+                                  </div>
+                                  <div className="text-[11px] text-emerald-800 mt-1 font-medium">
+                                    Sufficient clearance for {feasibleResult.required_duration_minutes}-minute work.
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {idx === 0 && scorePercent != null && (
+                                    <span className="px-2 py-0.5 rounded-md bg-amber-500 text-white font-bold text-[10px] tracking-wide uppercase shadow-xs">
+                                      ⭐ Best Slot
+                                    </span>
+                                  )}
+                                  <span className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-mono font-bold text-xs shrink-0">
+                                    {w.duration_minutes} mins
+                                  </span>
+                                </div>
+                              </div>
+
+                              {scorePercent != null && (
+                                <div className="pt-2 border-t border-emerald-200/70 flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                      scorePercent >= 70
+                                        ? "bg-red-50 text-red-700 border-red-200"
+                                        : scorePercent >= 40
+                                        ? "bg-amber-50 text-amber-800 border-amber-200"
+                                        : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                    }`}>
+                                      Risk Factor: {scorePercent}%
+                                    </span>
+                                    <span className="text-[10px] text-gray-500 font-medium hidden sm:inline">
+                                      {scorePercent >= 70
+                                        ? "High Urgency"
+                                        : scorePercent >= 40
+                                        ? "Moderate"
+                                        : "Routine"}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 w-32">
+                                    <div className="w-full bg-emerald-200/80 rounded-full h-1.5 overflow-hidden">
+                                      <div
+                                        className={`h-1.5 rounded-full ${
+                                          scorePercent >= 70
+                                            ? "bg-red-500"
+                                            : scorePercent >= 40
+                                            ? "bg-amber-500"
+                                            : "bg-emerald-600"
+                                        }`}
+                                        style={{ width: `${scorePercent}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-[10px] font-mono font-bold text-gray-600 shrink-0">
+                                      {scorePercent}%
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 1-Click Integrated Scheduling Action Button */}
+                              <button
+                                type="button"
+                                onClick={() => handleConfirmSchedule(w)}
+                                disabled={schedulingSlot !== null}
+                                className="w-full mt-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-60 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer"
+                              >
+                                {schedulingSlot === w.start ? (
+                                  <>
+                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                    <span>Reserving Corridor Block...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                                    <span>Confirm & Schedule Block Window</span>
+                                  </>
+                                )}
+                              </button>
                             </div>
-                            <div className="text-[11px] text-emerald-800 mt-0.5 font-medium">
-                              Sufficient clearance for {feasibleResult.required_duration_minutes}-minute work.
-                            </div>
-                          </div>
-                          <span className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-mono font-bold text-xs shrink-0">
-                            {w.duration_minutes} mins
-                          </span>
-                        </div>
-                      ))}
+                          );
+                        })}
                     </div>
                   </div>
                 ) : (
@@ -1950,6 +2608,166 @@ export default function MaintenancePage() {
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Create / Update Block Window */}
+      {isBlockWindowModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-brand-surface border border-brand-border rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-brand-border">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center border border-purple-200">
+                  <Calendar className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-brand-secondary">
+                    {editingBlockWindow ? `Update Block Window #${editingBlockWindow.id}` : "Create Block Window"}
+                  </h3>
+                  <p className="text-xs text-brand-muted">
+                    {editingBlockWindow
+                      ? "Modify allocated time bounds and status for this corridor block window"
+                      : "Reserve a dedicated corridor maintenance window for this task"}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsBlockWindowModalOpen(false)}
+                className="text-brand-muted hover:text-brand-secondary text-lg font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitBlockWindow} className="space-y-4">
+              {selectedBlockTask && (
+                <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border space-y-1">
+                  <div className="text-[11px] font-bold text-brand-muted uppercase">Target Maintenance Task</div>
+                  <div className="text-xs font-bold text-brand-secondary flex items-center justify-between">
+                    <span>{selectedBlockTask.task_code} - {selectedBlockTask.asset_name || `Asset #${selectedBlockTask.asset}`}</span>
+                    <span className="font-mono text-purple-700 font-extrabold">{selectedBlockTask.estimated_duration} mins required</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                {/* Corridor / Section Select */}
+                <div>
+                  <label className="block text-xs font-bold text-brand-secondary mb-1">
+                    Corridor / Railway Section
+                  </label>
+                  <select
+                    value={blockWindowForm.section}
+                    onChange={(e) => setBlockWindowForm((prev) => ({ ...prev, section: Number(e.target.value) }))}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-brand-tertiary border border-brand-border hover:border-brand-primary/50 text-brand-secondary text-xs font-semibold outline-none focus:ring-1 focus:ring-brand-primary/30 transition-colors cursor-pointer"
+                  >
+                    {sections.map((sec) => (
+                      <option key={sec.id} value={sec.id}>
+                        {sec.section_name || `Section #${sec.id}`} ({sec.source_station_code || sec.origin_station || "SRC"} → {sec.destination_station_code || sec.end_station || "DST"})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Start Time & End Time inputs (24h format) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-brand-secondary mb-1">
+                      Start Time (24h)
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={blockWindowForm.start_time}
+                      min={editingBlockWindow && new Date(editingBlockWindow.start_time).getTime() < new Date().getTime()
+                        ? toDatetimeLocalValue(editingBlockWindow.start_time)
+                        : getMinMaintenanceDateTime()}
+                      max={getMaxMaintenanceDateTime()}
+                      onChange={(e) => setBlockWindowForm((prev) => ({ ...prev, start_time: e.target.value }))}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-brand-tertiary border border-brand-border hover:border-brand-primary/50 text-brand-secondary text-xs font-mono font-semibold outline-none focus:ring-1 focus:ring-brand-primary/30 transition-colors cursor-pointer"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-brand-secondary mb-1">
+                      End Time (24h)
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={blockWindowForm.end_time}
+                      min={blockWindowForm.start_time || getMinMaintenanceDateTime()}
+                      max={getMaxMaintenanceDateTime()}
+                      onChange={(e) => setBlockWindowForm((prev) => ({ ...prev, end_time: e.target.value }))}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-brand-tertiary border border-brand-border hover:border-brand-primary/50 text-brand-secondary text-xs font-mono font-semibold outline-none focus:ring-1 focus:ring-brand-primary/30 transition-colors cursor-pointer"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Block Status Select */}
+                <div>
+                  <label className="block text-xs font-bold text-brand-secondary mb-1">
+                    Block Window Status
+                  </label>
+                  <select
+                    value={blockWindowForm.status}
+                    onChange={(e) => setBlockWindowForm((prev) => ({ ...prev, status: e.target.value }))}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-brand-tertiary border border-brand-border hover:border-brand-primary/50 text-brand-secondary text-xs font-semibold outline-none focus:ring-1 focus:ring-brand-primary/30 transition-colors cursor-pointer"
+                  >
+                    <option value="RESERVED">RESERVED</option>
+                    <option value="APPROVED">APPROVED</option>
+                    <option value="REQUESTED">REQUESTED</option>
+                    <option value="ACTIVE">ACTIVE</option>
+                    <option value="COMPLETED">COMPLETED</option>
+                    <option value="CANCELLED">CANCELLED</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Success Alert */}
+              {blockWindowSuccessMsg && (
+                <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs flex items-center gap-2.5 animate-in fade-in duration-200">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span className="font-bold">{blockWindowSuccessMsg}</span>
+                </div>
+              )}
+
+              {/* Error Alert */}
+              {blockWindowError && (
+                <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs flex items-center gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                  <span className="font-bold">{blockWindowError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-brand-border">
+                <button
+                  type="button"
+                  onClick={() => setIsBlockWindowModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-brand-secondary transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={createBlockWindowMutation.isPending || updateBlockWindowMutation.isPending}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-xs font-bold text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  {(createBlockWindowMutation.isPending || updateBlockWindowMutation.isPending) ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving Window...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>{editingBlockWindow ? "Update Block Window" : "Create Block Window"}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

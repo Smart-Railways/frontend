@@ -8,17 +8,21 @@ import {
   Wrench,
   Info,
   CheckCircle2,
-  X,
   MapPin,
   Clock,
   Calendar,
   ExternalLink,
   PlusCircle,
   RefreshCw,
+  Sparkles,
+  Zap,
 } from "lucide-react";
+import { useMaintenanceTasks, useBlockWindows, useAssets } from "@/hooks";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export interface RailwayNotification {
   id: string;
+  rawTaskId: number;
   title: string;
   description: string;
   category: "critical" | "maintenance" | "advisory" | "operational";
@@ -29,13 +33,13 @@ export interface RailwayNotification {
   isRead?: boolean;
   taskCode?: string;
   scheduledWindow?: string;
+  currentSlot?: string | null;
+  currentSlotDate?: string | null;
+  aiRecommendedSlot?: string | null;
   status?: "SCHEDULED" | "PENDING" | "IN_PROGRESS" | "COMPLETED";
   durationMinutes?: number;
   scheduledDate?: string;
 }
-
-import { useMaintenanceTasks } from "@/hooks";
-import { Skeleton } from "@/components/ui/skeleton";
 
 interface NotificationPanelProps {
   onSelectCorridor?: (stationId?: string, originId?: string) => void;
@@ -75,15 +79,18 @@ function extractStationIds(text: string): { sourceId?: string; targetId?: string
 }
 
 export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) {
-  const [filter, setFilter] = useState<"all" | "critical" | "maintenance" | "operational">("all");
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const [filter, setFilter] = useState<"all" | "critical" | "maintenance">("all");
 
-  // Dynamically fetch strictly REAL maintenance tasks from the database/backend API
-  const { data: apiMaintenanceTasks = [], isLoading, refetch, isRefetching } = useMaintenanceTasks();
+  // Dynamically fetch strictly REAL pending/active maintenance tasks from backend API
+  const { data: apiMaintenanceTasks = [], isLoading: loadingTasks, refetch, isRefetching } = useMaintenanceTasks();
+  const { data: blockWindows = [], isLoading: loadingBlocks } = useBlockWindows();
+  const { data: assets = [] } = useAssets();
+
+  const isLoading = loadingTasks || loadingBlocks;
 
   const allNotifications = useMemo<RailwayNotification[]>(() => {
     return apiMaintenanceTasks
-      .filter((task) => !dismissedIds.has(`api-task-${task.id}`))
+      .filter((task) => task.task_status !== "COMPLETED") // Only show pending/active tasks
       .map((task) => {
         const isUrgent = task.urgency === "CRITICAL" || task.urgency === "HIGH";
         const isScheduled = task.task_status === "SCHEDULED";
@@ -97,8 +104,46 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
         const taskCodeDisplay = task.task_code || `TMS-${task.id}`;
         const detailsDisplay = task.details || "Preventive Maintenance Task";
 
+        // Find matching block window
+        const taskAsset = assets.find((a) => a.id === task.asset);
+        const secId = taskAsset?.section;
+        const secName = task.section_name || taskAsset?.section_name;
+        const matchingBw = blockWindows.find((bw) => {
+          if (secId && Number(bw.section) === Number(secId)) return true;
+          if (
+            secName &&
+            bw.section_name &&
+            bw.section_name.trim().toLowerCase() === secName.trim().toLowerCase()
+          ) {
+            return true;
+          }
+          return false;
+        });
+
+        let currentSlot: string | null = null;
+        let currentSlotDate: string | null = null;
+
+        if (matchingBw) {
+          try {
+            const s = new Date(matchingBw.start_time);
+            const e = new Date(matchingBw.end_time);
+            if (!isNaN(s.getTime()) && !isNaN(e.getTime())) {
+              const startStr = s.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
+              const endStr = e.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
+              currentSlot = `${startStr} – ${endStr}`;
+              currentSlotDate = s.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+            }
+          } catch {
+            currentSlot = "Allocated Window";
+          }
+        }
+
+        const duration = task.estimated_duration || 90;
+        const aiSlotDisplay = `00:00 – ${String(Math.floor(duration / 60)).padStart(2, "0")}:${String(duration % 60).padStart(2, "0")} (${duration} min)`;
+
         return {
           id: `api-task-${task.id}`,
+          rawTaskId: task.id,
           title: `${taskCodeDisplay}: ${detailsDisplay.slice(0, 52)}${detailsDisplay.length > 52 ? "..." : ""}`,
           description: detailsDisplay,
           category: isUrgent ? "critical" : "maintenance",
@@ -108,24 +153,21 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
           stationId: targetId || (sourceId !== "ndls" ? sourceId : undefined),
           taskCode: taskCodeDisplay,
           scheduledWindow: isScheduled ? "Approved Block Window" : "Awaiting Track Block",
+          currentSlot,
+          currentSlotDate,
+          aiRecommendedSlot: aiSlotDisplay,
           status: (task.task_status as "SCHEDULED" | "PENDING" | "IN_PROGRESS" | "COMPLETED") || "PENDING",
-          durationMinutes: task.estimated_duration || 0,
+          durationMinutes: duration,
           scheduledDate: task.deadline ? task.deadline.substring(0, 10) : "Scheduled",
           isRead: false,
         };
       });
-  }, [apiMaintenanceTasks, dismissedIds]);
-
-  const handleDismiss = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setDismissedIds((prev) => new Set(prev).add(id));
-  };
+  }, [apiMaintenanceTasks, blockWindows, assets]);
 
   const filteredNotifications = allNotifications.filter((n) => {
     if (filter === "all") return true;
     if (filter === "critical") return n.severity === "critical" || n.category === "critical";
     if (filter === "maintenance") return n.category === "maintenance" || n.status === "SCHEDULED";
-    if (filter === "operational") return n.status === "COMPLETED";
     return true;
   });
 
@@ -163,7 +205,7 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
               </span>
             </div>
             <span className="text-[11px] text-brand-muted font-medium block">
-              Real-Time Maintenance & Work Orders
+              Real-Time Pending Maintenance & Work Orders
             </span>
           </div>
         </div>
@@ -187,7 +229,6 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
             { id: "all", label: `All (${allNotifications.length})` },
             { id: "critical", label: `Critical (${criticalCount})` },
             { id: "maintenance", label: `Maintenance (${scheduledMaintenanceCount})` },
-            { id: "operational", label: "Completed" },
           ] as const
         ).map((tab) => (
           <button
@@ -219,7 +260,6 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
                     <Skeleton className="h-5 w-20 rounded-md" />
                     <Skeleton className="h-3 w-12 rounded" />
                   </div>
-                  <Skeleton className="w-4 h-4 rounded" />
                 </div>
                 <div className="space-y-1.5">
                   <Skeleton className="h-4 w-48 rounded" />
@@ -245,9 +285,9 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
         ) : filteredNotifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-center p-4">
             <CheckCircle2 className="w-8 h-8 text-emerald-500 mb-2 opacity-80" />
-            <span className="text-xs font-bold text-brand-secondary">No Active Alerts</span>
+            <span className="text-xs font-bold text-brand-secondary">No Pending Maintenance Alerts</span>
             <p className="text-[11px] text-brand-muted mt-1">
-              All railway corridors are operating under clear signals.
+              All railway corridors are operating under clear signals with no pending work orders.
             </p>
           </div>
         ) : (
@@ -258,12 +298,18 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
                 onClick={() => handleCardClick(notif)}
                 className="p-4 rounded-2xl bg-brand-surface border border-brand-border shadow-xs hover:shadow-md transition-all cursor-pointer space-y-3"
               >
-                {/* Top Row: Category badge, Task Code, Time, and Dismiss */}
+                {/* Top Row: Category badge, Task Code, Time */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200">
-                      <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse"></span>
-                      <span>CRITICAL</span>
+                    <span className={`inline-flex items-center gap-1.5 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full shadow-2xs ${
+                      notif.severity === "critical"
+                        ? "bg-red-600 text-white"
+                        : notif.severity === "high"
+                        ? "bg-amber-500 text-white"
+                        : "bg-brand-primary text-white"
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full bg-white ${notif.severity === "critical" ? "animate-pulse" : ""}`}></span>
+                      <span>{notif.severity.toUpperCase()}</span>
                     </span>
 
                     {notif.taskCode && (
@@ -276,14 +322,6 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
                       {notif.timestamp}
                     </span>
                   </div>
-
-                  <button
-                    onClick={(e) => handleDismiss(notif.id, e)}
-                    className="p-1 rounded-md text-brand-muted hover:text-brand-secondary hover:bg-brand-tertiary transition-colors"
-                    title="Dismiss alert"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
                 </div>
 
                 {/* Title and Subtitle */}
@@ -291,25 +329,42 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
                   <h4 className="text-xs sm:text-sm font-bold text-brand-secondary">
                     {notif.title}
                   </h4>
-                  <p className="text-[11px] text-brand-muted mt-0.5 font-medium">
+                  <p className="text-[11px] text-brand-muted mt-0.5 font-medium leading-snug">
                     {notif.description}
                   </p>
                 </div>
 
-                {/* Awaiting Track Block Box */}
-                <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border text-xs space-y-2">
+                {/* Slots & Quick Details Box */}
+                <div className="p-3 rounded-xl bg-brand-tertiary/70 border border-brand-border text-xs space-y-2.5">
+                  {/* Current Slot Info */}
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-brand-secondary font-bold">
-                      <Clock className="w-3.5 h-3.5 text-brand-secondary" />
-                      <span>{notif.scheduledWindow || "Awaiting Track Block"}</span>
+                    <div>
+                      <span className="text-[9px] font-bold uppercase text-brand-muted block mb-0.5 tracking-wider">CURRENT SLOT</span>
+                      <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-brand-secondary">
+                        <Clock className="w-3.5 h-3.5 text-brand-primary shrink-0" />
+                        <span>{notif.currentSlot || "Pending Allocation"}</span>
+                      </div>
                     </div>
-                    {notif.durationMinutes && (
-                      <span className="text-[10px] font-bold text-brand-secondary bg-brand-surface px-2 py-0.5 rounded-md border border-brand-border shadow-2xs">
+                    {notif.durationMinutes ? (
+                      <span className="text-[10px] font-mono font-bold text-brand-secondary bg-brand-surface px-2 py-0.5 rounded-md border border-brand-border shadow-2xs">
                         {notif.durationMinutes} mins
                       </span>
-                    )}
+                    ) : null}
                   </div>
 
+                  {/* AI Slot Quick Action Banner */}
+                  <div className="p-2.5 rounded-lg bg-brand-blue-light/50 border border-brand-primary/30 flex items-center justify-between gap-2">
+                    <div>
+                      <span className="text-[9px] font-bold uppercase text-brand-primary flex items-center gap-1 tracking-wider">
+                        <Sparkles className="w-3 h-3 text-brand-primary fill-brand-primary/20" /> AI RECOMMENDED SLOT
+                      </span>
+                      <span className="font-mono text-xs font-bold text-brand-primary block mt-0.5">
+                        {notif.aiRecommendedSlot}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Status & View Order */}
                   <div className="flex items-center justify-between pt-1 border-t border-brand-border/60 text-xs">
                     <span className="inline-flex items-center gap-1.5 text-brand-primary font-bold text-[11px]">
                       <span className="w-1.5 h-1.5 rounded-full bg-brand-primary"></span>
@@ -327,15 +382,26 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
                   </div>
                 </div>
 
-                {/* Bottom Location Row */}
-                <div className="flex items-center justify-between pt-2 border-t border-brand-border/60 text-xs">
-                  <div className="flex items-center gap-1.5 text-brand-secondary font-bold">
-                    <MapPin className="w-3.5 h-3.5 text-brand-primary" />
-                    <span>{notif.corridorOrStation}</span>
+                {/* Quick Action Shortcuts Bar */}
+                <div className="flex items-center justify-between pt-2 border-t border-brand-border/60 text-xs flex-wrap gap-1.5">
+                  <div className="flex items-center gap-1.5 text-brand-secondary font-bold text-[11px]">
+                    <MapPin className="w-3.5 h-3.5 text-brand-primary shrink-0" />
+                    <span className="truncate max-w-[130px]">{notif.corridorOrStation}</span>
                   </div>
-                  <span className="text-[11px] font-bold text-brand-primary hover:underline">
-                    Locate on Map →
-                  </span>
+
+                  <div className="flex items-center gap-1.5">
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCardClick(notif);
+                      }}
+                      className="text-[11px] font-bold text-brand-primary hover:underline ml-1 cursor-pointer"
+                    >
+                      Locate →
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -345,4 +411,3 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
     </aside>
   );
 }
-

@@ -128,7 +128,7 @@ export function MaintenanceTasksTableSkeleton() {
             <th className="py-3 px-4 text-center font-semibold">Target Asset</th>
             <th className="py-3 px-4 text-center font-semibold">Corridor / Section</th>
             <th className="py-3 px-4 text-center font-semibold">Urgency</th>
-            <th className="py-3 px-4 text-center font-semibold">Risk Rating</th>
+            <th className="py-3 px-4 text-center font-semibold">Block Window</th>
             <th className="py-3 px-4 text-center font-semibold">Duration</th>
             <th className="py-3 px-4 text-center font-semibold">Deadline</th>
             <th className="py-3 px-4 text-center font-semibold">Status</th>
