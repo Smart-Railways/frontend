@@ -30,3 +30,30 @@
     font-family: 'Valley Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 }
+
+/* =========================================================
+   Mobile navigation overlay — must always paint above
+   backdrop-blur stacking contexts (route selector, map, etc.)
+   Tailwind z-[9998/9999] is insufficient when sibling elements
+   with backdrop-filter create independent compositing layers.
+   We defeat that here by forcing a will-change / isolation
+   context on the body and painting the nav elements on top.
+========================================================= */
+.mobile-nav-open [data-mobile-overlay] {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  isolation: isolate;
+}
+
+.mobile-nav-open [data-mobile-sidebar] {
+  z-index: 9999 !important;
+  isolation: isolate;
+}
+
+/* Neutralise backdrop-filter stacking contexts in page content
+   when the mobile nav is open so they cannot paint above the overlay */
+.mobile-nav-open > *:not([data-mobile-overlay]):not([data-mobile-sidebar]) {
+  isolation: auto;
+  filter: none;
+}

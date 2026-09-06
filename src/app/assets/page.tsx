@@ -22,6 +22,13 @@ import {
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   useAssets,
   useRailwaySections,
   useCreateAsset,
@@ -284,11 +291,11 @@ export default function AssetsPage() {
                 <div className="flex items-center justify-center w-8 h-8 rounded-full bg-brand-secondary/80 text-brand-tertiary">
                   <Building2 className="w-4 h-4" />
                 </div>
-                <h1 className="text-xl sm:text-2xl font-extrabold text-brand-secondary tracking-tight">Railway Asset Inventory & Management</h1>
+                <h1 className="text-xl sm:text-2xl font-bold text-brand-secondary tracking-tight">Railway Asset Inventory & Management</h1>
               </div>
               <p className="text-xs text-brand-muted mt-2 font-medium">Operations for railway assets, risk assessments, division assignments, and corridor mapping.</p>
             </div>
-            <div className="flex items-center gap-3 flex-wrap">
+            <div className="hidden lg:flex items-center gap-3 flex-wrap">
               <LiveClock />
             
             </div>
@@ -362,49 +369,80 @@ export default function AssetsPage() {
                 <input type="text" placeholder="Search asset title, ID, section..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-xs text-brand-secondary placeholder:text-brand-muted rounded-xl pl-9 pr-3 py-2.5 outline-none transition-colors font-medium shadow-2xs" />
               </div>
               <div className="md:col-span-4">
-                <select value={selectedSectionFilter} onChange={(e) => setSelectedSectionFilter(e.target.value)} className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none cursor-pointer font-bold shadow-2xs">
-                  <option value="ALL">All Railway Sections</option>
-                  {sections.map((sec) => <option key={sec.id} value={String(sec.id)}>{sec.section_name}</option>)}
-                </select>
+                <Select value={selectedSectionFilter} onValueChange={(val) => val && setSelectedSectionFilter(val)}>
+                  <SelectTrigger className="w-full bg-brand-surface border border-brand-border hover:border-brand-primary/50 text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none font-bold shadow-2xs cursor-pointer">
+                    <SelectValue placeholder="All Railway Sections" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-brand-surface border-brand-border text-brand-secondary max-h-60 overflow-y-auto shadow-xl rounded-xl p-1.5">
+                    <SelectItem value="ALL" className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">
+                      All Railway Sections
+                    </SelectItem>
+                    {sections.map((sec) => (
+                      <SelectItem key={sec.id} value={String(sec.id)} className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">
+                        {sec.section_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="md:col-span-4">
-                <select value={selectedCategoryFilter} onChange={(e) => setSelectedCategoryFilter(e.target.value)} className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none cursor-pointer font-bold shadow-2xs">
-                  <option value="ALL">All Asset Categories</option>
-                  {ASSET_CATEGORIES.map((cat) => <option key={cat.value} value={cat.value}>{cat.label}</option>)}
-                </select>
+                <Select value={selectedCategoryFilter} onValueChange={(val) => val && setSelectedCategoryFilter(val)}>
+                  <SelectTrigger className="w-full bg-brand-surface border border-brand-border hover:border-brand-primary/50 text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none font-bold shadow-2xs cursor-pointer">
+                    <SelectValue placeholder="All Asset Categories" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-brand-surface border-brand-border text-brand-secondary max-h-60 overflow-y-auto shadow-xl rounded-xl p-1.5">
+                    <SelectItem value="ALL" className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">
+                      All Asset Categories
+                    </SelectItem>
+                    {ASSET_CATEGORIES.map((cat) => (
+                      <SelectItem key={cat.value} value={cat.value} className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">
+                        {cat.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-3 border-t border-brand-border/60">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-xs font-bold text-brand-muted mr-1">Division:</span>
-                {[
-                  { key: "ALL", label: "All Divisions" },
-                  { key: AssetDepartment.SNT, label: "S&T" },
-                  { key: AssetDepartment.ENGINEERING, label: "Civil Track" },
-                  { key: AssetDepartment.TRACTION, label: "Electrical / OHE" },
-                ].map((item) => (
-                  <button
-                    key={item.key}
-                    onClick={() => setSelectedDivisionFilter(item.key)}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      selectedDivisionFilter === item.key
-                        ? "bg-brand-primary text-white shadow-xs"
-                        : "text-brand-muted hover:text-brand-secondary hover:bg-brand-tertiary"
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-brand-border/60">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none min-w-0">
+                <span className="text-xs font-bold text-brand-muted mr-1 shrink-0">Division:</span>
+                <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0 py-0.5">
+                  {[
+                    { key: "ALL", label: "All Divisions" },
+                    { key: AssetDepartment.SNT, label: "S&T" },
+                    { key: AssetDepartment.ENGINEERING, label: "Civil Track" },
+                    { key: AssetDepartment.TRACTION, label: "Electrical / OHE" },
+                  ].map((item) => (
+                    <button
+                      key={item.key}
+                      onClick={() => setSelectedDivisionFilter(item.key)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+                        selectedDivisionFilter === item.key
+                          ? "bg-brand-primary text-white shadow-xs"
+                          : "text-brand-muted hover:text-brand-secondary hover:bg-brand-tertiary"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="flex items-center gap-2 text-xs text-brand-secondary font-bold">
-                <Filter className="w-3.5 h-3.5 text-brand-muted" />
-                <span className="text-brand-muted">Min Risk:</span>
-                <select value={minRiskFilter} onChange={(e) => setMinRiskFilter(Number(e.target.value))} className="bg-brand-surface border border-brand-border text-brand-secondary text-xs rounded-xl px-2.5 py-1 outline-none cursor-pointer font-bold shadow-2xs">
-                  <option value={0}>All Levels (0+)</option>
-                  <option value={4}>Medium+ (4+)</option>
-                  <option value={6}>High+ (6+)</option>
-                  <option value={8}>Critical Only (8+)</option>
-                </select>
+              <div className="flex items-center justify-between sm:justify-end gap-2 text-xs text-brand-secondary font-bold shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-brand-border/40">
+                <div className="flex items-center gap-1.5">
+                  <Filter className="w-3.5 h-3.5 text-brand-muted shrink-0" />
+                  <span className="text-brand-muted whitespace-nowrap">Min Risk:</span>
+                </div>
+                <Select value={String(minRiskFilter)} onValueChange={(val) => setMinRiskFilter(Number(val))}>
+                  <SelectTrigger className="bg-brand-surface border border-brand-border hover:border-brand-primary/50 text-brand-secondary text-xs rounded-xl px-3 py-1.5 outline-none cursor-pointer font-bold shadow-2xs min-w-[130px]">
+                    <SelectValue placeholder="All Levels (0+)" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-brand-surface border-brand-border text-brand-secondary max-h-60 overflow-y-auto shadow-xl rounded-xl p-1.5">
+                    <SelectItem value="0" className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">All Levels (0+)</SelectItem>
+                    <SelectItem value="4" className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">Medium+ (4+)</SelectItem>
+                    <SelectItem value="6" className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">High+ (6+)</SelectItem>
+                    <SelectItem value="8" className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">Critical Only (8+)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </section>
@@ -417,14 +455,14 @@ export default function AssetsPage() {
                 </h2>
                 <p className="text-xs text-brand-muted mt-0.5 font-medium">Railway network equipment, health scores, and division ownership</p>
               </div>
-              <div className="flex items-center justify-center gap-2.5 shrink-0 sm:self-center">
+              <div className="flex items-center gap-2.5 w-full sm:w-auto shrink-0 pt-1 sm:pt-0">
                 <button
                   onClick={() => {
                     refetchAssets();
                     refetchSections();
                   }}
                   disabled={refetchingAssets || loadingAssets}
-                  className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-brand-secondary text-xs font-bold shadow-2xs transition-all cursor-pointer disabled:opacity-60"
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-brand-secondary text-xs font-bold shadow-2xs transition-all cursor-pointer disabled:opacity-60 whitespace-nowrap"
                   title="Refresh Assets"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${refetchingAssets ? "animate-spin" : ""}`} />
@@ -432,7 +470,7 @@ export default function AssetsPage() {
                 </button>
                 <button
                   onClick={handleOpenCreateModal}
-                  className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer whitespace-nowrap"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Add Railway Asset</span>
@@ -442,7 +480,7 @@ export default function AssetsPage() {
             {(loadingAssets || loadingSections || refetchingAssets) ? (
               <div className="overflow-x-auto">
                 <table className="w-full text-center text-xs">
-                  <thead className="bg-brand-surface text-brand-muted font-semibold border-b border-brand-border text-xs">
+                  <thead className="bg-brand-surface text-brand-muted font-semibold border-b border-brand-border text-[10px] lg:text-[12px]">
                     <tr>
                       <th className="py-3 px-4 text-center">ID</th>
                       <th className="py-3 px-4 text-center">Asset Title</th>

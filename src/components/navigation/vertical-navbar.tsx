@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
+import { LiveClock } from "@/components/ui/live-clock";
 
 interface VerticalNavbarProps {
   activeTab?: string;
@@ -45,6 +46,21 @@ export function VerticalNavbar({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  // Toggle body class to prevent stacking context bleed when mobile nav is open
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.classList.add("mobile-nav-open");
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.classList.remove("mobile-nav-open");
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.classList.remove("mobile-nav-open");
+      document.body.style.overflow = "";
+    };
+  }, [mobileOpen]);
 
   // Determine active navigation item from current route
   const currentActiveTab =
@@ -97,13 +113,16 @@ export function VerticalNavbar({
           <button
             onClick={() => setMobileOpen(true)}
             aria-label="Open Navigation Menu"
-            className="p-2 rounded-xl bg-brand-tertiary/80 border border-brand-border/80 text-brand-secondary hover:text-brand-primary active:scale-95 transition-all cursor-pointer flex items-center justify-center"
+            className="p-2 rounded-xl bg-brand-tertiary/80 border border-brand-border/80 text-brand-secondary hover:text-brand-primary active:scale-95 transition-all cursor-pointer flex items-center justify-center shrink-0"
           >
             <Menu className="w-5 h-5" />
           </button>
-
         </div>
 
+        {/* Date and Time on Upper Corridor for Mobile & Tablet */}
+        <div className="flex items-center">
+          <LiveClock className="scale-85 sm:scale-100 origin-right shadow-2xs" />
+        </div>
       </header>
 
       {/* =========================================================
@@ -111,7 +130,8 @@ export function VerticalNavbar({
       ========================================================== */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 lg:hidden transition-opacity duration-300 animate-in fade-in"
+          data-mobile-overlay
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-[9998] lg:hidden transition-opacity duration-300 animate-in fade-in"
           onClick={() => setMobileOpen(false)}
           aria-hidden="true"
         />
@@ -123,6 +143,7 @@ export function VerticalNavbar({
           Mobile (< lg): Off-canvas drawer (-translate-x-full to translate-x-0)
       ========================================================== */}
       <aside
+        data-mobile-sidebar
         className={`fixed top-0 left-0 bottom-0
           bg-brand-secondary
           border-r border-[#262b34]
@@ -130,7 +151,7 @@ export function VerticalNavbar({
           transition-all duration-300 ease-in-out
           select-none
           ${/* Mobile Drawer positioning */ ""}
-          ${mobileOpen ? "translate-x-0 w-64 z-50 shadow-2xl" : "-translate-x-full lg:translate-x-0"}
+          ${mobileOpen ? "translate-x-0 w-64 z-[9999] shadow-2xl" : "-translate-x-full lg:translate-x-0 lg:z-30"}
           ${/* Desktop width */ ""}
           ${collapsed ? "lg:w-20" : "lg:w-64"}
         `}
@@ -166,24 +187,11 @@ export function VerticalNavbar({
                     Sanket
                   </span>
                 </div>
-                <span className="text-[10px] font-semibold text-slate-400 tracking-wider uppercase block">
-                  INDIAN RAILWAYS
+                <span className="text-[10px] font-semibold text-slate-400 tracking-wider block">
+                  Indian Railways
                 </span>
               </div>
             </Link>
-
-            {/* Desktop Collapse / Expand Button */}
-            <button
-              onClick={() => setCollapsed(!collapsed)}
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              className="hidden lg:flex p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
-            >
-              {collapsed ? (
-                <ChevronRight className="w-4 h-4" />
-              ) : (
-                <ChevronLeft className="w-4 h-4" />
-              )}
-            </button>
 
             {/* Mobile Close (X) Button */}
             <button

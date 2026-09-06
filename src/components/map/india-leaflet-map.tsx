@@ -415,8 +415,7 @@ export function IndiaLeafletMap({
 
       {/* Bottom Left Map Legend */}
       <div
-        style={{ zIndex: 400 }}
-        className="absolute bottom-4 left-4 flex items-center gap-3 px-3 py-1.5 rounded-xl bg-brand-surface/95 backdrop-blur-md border border-brand-border shadow-sm text-[11px] font-bold text-brand-secondary pointer-events-auto"
+        className="absolute bottom-4 left-4 z-10 flex items-center gap-3 px-3 py-1.5 rounded-xl bg-brand-surface/95 backdrop-blur-md border border-brand-border shadow-sm text-[11px] font-bold text-brand-secondary pointer-events-auto"
       >
         <div className="flex items-center gap-1.5">
           <span className="w-4 h-1 rounded bg-[#2563EB]"></span>
@@ -442,7 +441,7 @@ export function IndiaLeafletMap({
         {/* CartoDB Positron Light Tiles */}
         <TileLayer
           attribution='&copy; <a href="https://carto.com/">CARTO</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}.png"
+          url={`https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}.png?key=${process.env.NEXT_PUBLIC_CARTO_API_KEY || "cb1_2tev_1_a1638606f4f174ff288df664"}`}
           subdomains="abcd"
           maxZoom={19}
         />

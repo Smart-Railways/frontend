@@ -153,7 +153,7 @@ export default function Home() {
           <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-brand-border/80">
             <div>
               <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-brand-secondary text-white shadow-xs flex-shrink-0">
+                <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-brand-secondary/80 text-white shadow-xs flex-shrink-0">
                   <Route className="w-5 h-5 text-white" />
                 </div>
                 <div>
@@ -167,8 +167,8 @@ export default function Home() {
               </p>
             </div>
 
-            {/* Live Clock & Date Badge */}
-            <div className="flex items-center gap-3">
+            {/* Live Clock & Date Badge (Desktop only; on mobile/tablet it is in upper corridor) */}
+            <div className="hidden lg:flex items-center gap-3">
               <LiveClock />
             </div>
           </header>

@@ -16,7 +16,24 @@ import {
   PlusCircle,
   RefreshCw,
 } from "lucide-react";
-import { RailwayNotification } from "@/data/railway-notifications";
+
+export interface RailwayNotification {
+  id: string;
+  title: string;
+  description: string;
+  category: "critical" | "maintenance" | "advisory" | "operational";
+  severity: "critical" | "high" | "medium" | "low";
+  timestamp: string;
+  corridorOrStation: string;
+  stationId?: string;
+  isRead?: boolean;
+  taskCode?: string;
+  scheduledWindow?: string;
+  status?: "SCHEDULED" | "PENDING" | "IN_PROGRESS" | "COMPLETED";
+  durationMinutes?: number;
+  scheduledDate?: string;
+}
+
 import { useMaintenanceTasks } from "@/hooks";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -64,60 +81,39 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
   // Dynamically fetch strictly REAL maintenance tasks from the database/backend API
   const { data: apiMaintenanceTasks = [], isLoading, refetch, isRefetching } = useMaintenanceTasks();
 
-  // If no backend tasks exist, provide the standard demo task matching the design
   const allNotifications = useMemo<RailwayNotification[]>(() => {
-    if (apiMaintenanceTasks.length > 0) {
-      return apiMaintenanceTasks
-        .filter((task) => !dismissedIds.has(`api-task-${task.id}`))
-        .map((task) => {
-          const isUrgent = task.urgency === "CRITICAL" || task.urgency === "HIGH";
-          const isScheduled = task.task_status === "SCHEDULED";
-          const textForCorridor = `${task.section_name || ""} ${task.asset_name || ""} ${task.details || ""}`;
-          const { sourceId, targetId } = extractStationIds(textForCorridor);
+    return apiMaintenanceTasks
+      .filter((task) => !dismissedIds.has(`api-task-${task.id}`))
+      .map((task) => {
+        const isUrgent = task.urgency === "CRITICAL" || task.urgency === "HIGH";
+        const isScheduled = task.task_status === "SCHEDULED";
+        const textForCorridor = `${task.section_name || ""} ${task.asset_name || ""} ${task.details || ""}`;
+        const { sourceId, targetId } = extractStationIds(textForCorridor);
 
-          const corridorDisplay =
-            task.section_name ||
-            (task.asset_name ? `Asset: ${task.asset_name}` : "New Delhi - Mathura");
+        const corridorDisplay =
+          task.section_name ||
+          (task.asset_name ? `Asset: ${task.asset_name}` : "Corridor Section");
 
-          return {
-            id: `api-task-${task.id}`,
-            title: `${task.task_code || "TMS-001"}: ${task.details ? task.details.slice(0, 52) + (task.details.length > 52 ? "..." : "") : "Rail crack inspection and repair"}`,
-            description: task.details || "Rail crack inspection and repair",
-            category: isUrgent ? "critical" : "maintenance",
-            severity: isUrgent ? (task.urgency === "CRITICAL" ? "critical" : "high") : "medium",
-            timestamp: task.logged_at ? new Date(task.logged_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "04:50 pm",
-            corridorOrStation: corridorDisplay,
-            stationId: targetId || (sourceId !== "ndls" ? sourceId : undefined),
-            taskCode: task.task_code || "TMS-001",
-            scheduledWindow: isScheduled ? "Approved Block Window" : "Awaiting Track Block",
-            status: (task.task_status as "SCHEDULED" | "PENDING" | "IN_PROGRESS" | "COMPLETED") || "PENDING",
-            durationMinutes: task.estimated_duration || 10,
-            scheduledDate: task.deadline ? task.deadline.substring(0, 10) : "Scheduled",
-            isRead: false,
-          };
-        });
-    }
+        const taskCodeDisplay = task.task_code || `TMS-${task.id}`;
+        const detailsDisplay = task.details || "Preventive Maintenance Task";
 
-    // Default sample matching mockup if list is empty
-    if (dismissedIds.has("demo-tms-001")) return [];
-    return [
-      {
-        id: "demo-tms-001",
-        title: "TMS-001: Rail crack inspection and repair",
-        description: "Rail crack inspection and repair",
-        category: "critical",
-        severity: "critical",
-        timestamp: "04:50 pm",
-        corridorOrStation: "New Delhi - Mathura",
-        stationId: "mtj",
-        taskCode: "TMS-001",
-        scheduledWindow: "Awaiting Track Block",
-        status: "PENDING",
-        durationMinutes: 10,
-        scheduledDate: "Today",
-        isRead: false,
-      },
-    ];
+        return {
+          id: `api-task-${task.id}`,
+          title: `${taskCodeDisplay}: ${detailsDisplay.slice(0, 52)}${detailsDisplay.length > 52 ? "..." : ""}`,
+          description: detailsDisplay,
+          category: isUrgent ? "critical" : "maintenance",
+          severity: isUrgent ? (task.urgency === "CRITICAL" ? "critical" : "high") : "medium",
+          timestamp: task.logged_at ? new Date(task.logged_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "",
+          corridorOrStation: corridorDisplay,
+          stationId: targetId || (sourceId !== "ndls" ? sourceId : undefined),
+          taskCode: taskCodeDisplay,
+          scheduledWindow: isScheduled ? "Approved Block Window" : "Awaiting Track Block",
+          status: (task.task_status as "SCHEDULED" | "PENDING" | "IN_PROGRESS" | "COMPLETED") || "PENDING",
+          durationMinutes: task.estimated_duration || 0,
+          scheduledDate: task.deadline ? task.deadline.substring(0, 10) : "Scheduled",
+          isRead: false,
+        };
+      });
   }, [apiMaintenanceTasks, dismissedIds]);
 
   const handleDismiss = (id: string, e: React.MouseEvent) => {

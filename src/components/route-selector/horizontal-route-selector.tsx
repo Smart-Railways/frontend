@@ -36,6 +36,17 @@ interface HorizontalRouteSelectorProps {
   onClear: () => void;
 }
 
+function formatStationLabel(station: { name: string; code: string; city?: string }) {
+  const rawName = station.city || station.name;
+  const titleCaseName = rawName
+    .toLowerCase()
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+
+  return `${titleCaseName} (${station.code})`;
+}
+
 export function HorizontalRouteSelector({
   sourceId,
   targetId,
@@ -138,115 +149,254 @@ export function HorizontalRouteSelector({
   const selectedTarget = getStationById(targetId);
   const hasSelection = Boolean(sourceId || targetId);
 
-  return (
-    <div className="w-full border-none">
-      {/* Main Container Card */}
-      <Card className="p-1.5 rounded-2xl bg-brand-surface border border-brand-border ring-0 shadow-xs flex flex-col space-y-2">
-        {/* Origin / Destination Station Selectors */}
-        <div className="flex flex-col md:flex-row items-center gap-2 sm:gap-2.5">
-
-          {/* Origin Station Box */}
-          <div className="flex-1 w-full relative flex items-center bg-brand-surface border border-brand-border/80 hover:border-brand-primary/50 focus-within:border-brand-primary focus-within:ring-1 focus-within:ring-brand-primary/20 rounded-xl px-3.5 py-2.5 transition-all shadow-2xs">
-            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-brand-blue-light/70 text-brand-primary mr-3 shrink-0">
-              <div className="w-2.5 h-2.5 rounded-full bg-brand-primary ring-2 ring-brand-primary/20" />
-            </div>
-
-            <div className="flex-1 min-w-0">
-              <label className="text-[11px] font-medium text-brand-muted tracking-wider block mb-0.5">
-                Origin Station
-              </label>
-
-              <Select
-                value={sourceId || ""}
-                onValueChange={(val) => val && onSourceChange(val)}
-              >
-                <SelectTrigger className="w-full h-auto p-0 bg-transparent border-0 text-brand-secondary text-xs sm:text-sm font-semibold focus:ring-0 focus-visible:ring-0 focus-visible:border-transparent shadow-none hover:bg-transparent justify-between cursor-pointer">
-                  <SelectValue placeholder="Choose origin station...">
-                    {selectedSource
-                      ? `${selectedSource.name} (${selectedSource.code})`
-                      : undefined}
-                  </SelectValue>
-                </SelectTrigger>
-
-                <SelectContent className="bg-brand-surface border-brand-border text-brand-secondary max-h-60 overflow-y-auto shadow-lg">
-                  {corridorStations.map((station) => (
-                    <SelectItem
-                      key={`src-${station.id}`}
-                      value={station.id}
-                      disabled={station.id === targetId}
-                      className="text-brand-secondary focus:bg-brand-blue-light focus:text-brand-primary text-xs font-medium cursor-pointer"
-                    >
-                      {station.name} ({station.code}) — {station.city}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-          </div>
-
-          {/* Interactive Swap Direction Button */}
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={handleSwapClick}
-            disabled={!sourceId && !targetId}
-            title="Reverse corridor direction"
-            aria-label="Reverse corridor direction"
-            className="p-2.5 size-auto rounded-full bg-brand-surface hover:bg-brand-blue-light/50 text-brand-secondary hover:text-brand-primary border-brand-border/80 shadow-2xs transition-all flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed group active:scale-90 cursor-pointer"
+return (
+  <div className="w-full">
+    <div
+      className={cn(
+        "relative flex flex-col md:flex-row items-stretch md:items-center",
+        "rounded-2xl border border-brand-border/70",
+        "bg-brand-surface/80 backdrop-blur-sm",
+        "p-2",
+        "shadow-[0_2px_12px_rgba(0,0,0,0.035)]"
+      )}
+    >
+      {/* ORIGIN */}
+      <div
+        className={cn(
+          "group flex-1 min-w-0",
+          "rounded-xl",
+          "px-4 py-3",
+          "transition-all duration-200",
+          "hover:bg-brand-blue-light/20",
+          "focus-within:bg-brand-blue-light/20"
+        )}
+      >
+        <div className="flex items-center gap-3">
+          {/* Origin icon */}
+          <div
+            className={cn(
+              "flex size-9 shrink-0 items-center justify-center",
+              "rounded-lg",
+              "bg-brand-blue-light/70"
+            )}
           >
-            <ArrowRightLeft
-              className={cn(
-                "w-4 h-4 transition-transform duration-300",
-                isSwapping
-                  ? "rotate-180 text-brand-primary"
-                  : "group-hover:text-brand-primary"
-              )}
-            />
-          </Button>
-
-          {/* Destination Station Box */}
-          <div className="flex-1 w-full relative flex items-center bg-brand-surface border border-brand-border/80 hover:border-brand-primary/50 focus-within:border-brand-primary focus-within:ring-1 focus-within:ring-brand-primary/20 rounded-xl px-3.5 py-2.5 transition-all shadow-2xs">
-            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-brand-blue-light/70 text-brand-primary mr-3 shrink-0">
-              <MapPin className="w-4 h-4 text-brand-primary" />
-            </div>
-
-            <div className="flex-1 min-w-0">
-              <label className="text-[11px] font-medium text-brand-muted tracking-wider block mb-0.5">
-                Destination Station
-              </label>
-
-              <Select
-                value={targetId || ""}
-                onValueChange={(val) => val && onTargetChange(val)}
-              >
-                <SelectTrigger className="w-full h-auto p-0 bg-transparent border-0 text-brand-secondary text-xs sm:text-sm font-semibold focus:ring-0 focus-visible:ring-0 focus-visible:border-transparent shadow-none hover:bg-transparent justify-between cursor-pointer">
-                  <SelectValue placeholder="Choose destination station...">
-                    {selectedTarget
-                      ? `${selectedTarget.name} (${selectedTarget.code})`
-                      : undefined}
-                  </SelectValue>
-                </SelectTrigger>
-
-                <SelectContent className="bg-brand-surface border-brand-border text-brand-secondary max-h-60 overflow-y-auto shadow-lg">
-                  {corridorStations.map((station) => (
-                    <SelectItem
-                      key={`dst-${station.id}`}
-                      value={station.id}
-                      disabled={station.id === sourceId}
-                      className="text-brand-secondary focus:bg-brand-blue-light focus:text-brand-primary text-xs font-medium cursor-pointer"
-                    >
-                      {station.name} ({station.code}) — {station.city}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <div className="size-2.5 rounded-full bg-brand-primary ring-[3px] ring-brand-primary/15" />
           </div>
 
+          <div className="min-w-0 flex-1">
+            <div className="mb-0.5 flex items-center gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-brand-muted">
+                From
+              </span>
+            </div>
+
+            <Select
+              value={sourceId || ""}
+              onValueChange={(val) => val && onSourceChange(val)}
+            >
+              <SelectTrigger
+                className={cn(
+                  "h-auto w-full border-0 bg-transparent p-0",
+                  "shadow-none outline-none",
+                  "hover:bg-transparent",
+                  "focus:ring-0 focus:ring-offset-0",
+                  "focus-visible:ring-0 focus-visible:ring-offset-0",
+                  "justify-start gap-2",
+                  "text-left"
+                )}
+              >
+                <SelectValue placeholder="Choose origin station...">
+                  {selectedSource ? (
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="truncate text-[15px] font-semibold tracking-[-0.01em] text-brand-secondary">
+                        {selectedSource.city || selectedSource.name}
+                      </span>
+
+                      <span className="shrink-0 rounded-md bg-brand-blue-light/70 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-brand-primary">
+                        {selectedSource.code}
+                      </span>
+                    </div>
+                  ) : undefined}
+                </SelectValue>
+              </SelectTrigger>
+
+              <SelectContent
+                className={cn(
+                  "max-h-72 min-w-[280px]",
+                  "rounded-xl",
+                  "border-brand-border",
+                  "bg-brand-surface",
+                  "p-1.5",
+                  "shadow-xl"
+                )}
+              >
+                {corridorStations.map((station) => (
+                  <SelectItem
+                    key={`src-${station.id}`}
+                    value={station.id}
+                    disabled={station.id === targetId}
+                    className={cn(
+                      "rounded-lg px-3 py-2.5",
+                      "text-brand-secondary",
+                      "cursor-pointer",
+                      "focus:bg-brand-blue-light/50",
+                      "focus:text-brand-primary"
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="font-medium">
+                        {formatStationLabel(station).split(" (")[0]}
+                      </span>
+
+                      <span className="text-[10px] font-bold text-brand-muted">
+                        {station.code}
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
-      </Card>
+      </div>
+
+      {/* CENTER CONNECTION */}
+      <div className="relative flex items-center justify-center px-1 md:px-0">
+        {/* Desktop connector */}
+        <div className="absolute left-0 right-0 top-1/2 hidden h-px bg-brand-border/60 md:block" />
+
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={handleSwapClick}
+          disabled={!sourceId && !targetId}
+          title="Reverse corridor direction"
+          aria-label="Reverse corridor direction"
+          className={cn(
+            "relative z-10 size-9 shrink-0 rounded-full",
+            "border border-brand-border",
+            "bg-brand-surface",
+            "text-brand-secondary",
+            "shadow-[0_1px_4px_rgba(0,0,0,0.06)]",
+            "transition-all duration-200",
+            "hover:border-brand-primary/30",
+            "hover:bg-brand-blue-light/60",
+            "hover:text-brand-primary",
+            "active:scale-90",
+            "disabled:cursor-not-allowed disabled:opacity-40",
+            "cursor-pointer"
+          )}
+        >
+          <ArrowRightLeft
+            className={cn(
+              "size-3.5 transition-transform duration-300",
+              isSwapping && "rotate-180 text-brand-primary"
+            )}
+          />
+        </Button>
+      </div>
+
+      {/* DESTINATION */}
+      <div
+        className={cn(
+          "group flex-1 min-w-0",
+          "rounded-xl",
+          "px-4 py-3",
+          "transition-all duration-200",
+          "hover:bg-brand-blue-light/20",
+          "focus-within:bg-brand-blue-light/20"
+        )}
+      >
+        <div className="flex items-center gap-3">
+          {/* Destination icon */}
+          <div
+            className={cn(
+              "flex size-9 shrink-0 items-center justify-center",
+              "rounded-lg",
+              "bg-brand-blue-light/70"
+            )}
+          >
+            <MapPin className="size-4 text-brand-primary" strokeWidth={2.2} />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="mb-0.5 flex items-center gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-brand-muted">
+                To
+              </span>
+            </div>
+
+            <Select
+              value={targetId || ""}
+              onValueChange={(val) => val && onTargetChange(val)}
+            >
+              <SelectTrigger
+                className={cn(
+                  "h-auto w-full border-0 bg-transparent p-0",
+                  "shadow-none outline-none",
+                  "hover:bg-transparent",
+                  "focus:ring-0 focus:ring-offset-0",
+                  "focus-visible:ring-0 focus-visible:ring-offset-0",
+                  "justify-start gap-2",
+                  "text-left"
+                )}
+              >
+                <SelectValue placeholder="Choose destination station...">
+                  {selectedTarget ? (
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="truncate text-[15px] font-semibold tracking-[-0.01em] text-brand-secondary">
+                        {selectedTarget.city || selectedTarget.name}
+                      </span>
+
+                      <span className="shrink-0 rounded-md bg-brand-blue-light/70 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-brand-primary">
+                        {selectedTarget.code}
+                      </span>
+                    </div>
+                  ) : undefined}
+                </SelectValue>
+              </SelectTrigger>
+
+              <SelectContent
+                className={cn(
+                  "max-h-72 min-w-[280px]",
+                  "rounded-xl",
+                  "border-brand-border",
+                  "bg-brand-surface",
+                  "p-1.5",
+                  "shadow-xl"
+                )}
+              >
+                {corridorStations.map((station) => (
+                  <SelectItem
+                    key={`dst-${station.id}`}
+                    value={station.id}
+                    disabled={station.id === sourceId}
+                    className={cn(
+                      "rounded-lg px-3 py-2.5",
+                      "text-brand-secondary",
+                      "cursor-pointer",
+                      "focus:bg-brand-blue-light/50",
+                      "focus:text-brand-primary"
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="font-medium">
+                        {formatStationLabel(station).split(" (")[0]}
+                      </span>
+
+                      <span className="text-[10px] font-bold text-brand-muted">
+                        {station.code}
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
     </div>
-  );
+  </div>
+);
 }

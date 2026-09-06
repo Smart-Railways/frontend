@@ -27,6 +27,14 @@ import {
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { MaintenancePageSkeleton, MaintenanceTasksTableSkeleton } from "./skeletons";
+import {
   useMaintenanceTasks,
   useAssets,
   useRailwaySections,
@@ -125,123 +133,7 @@ function formatDate(dateStr?: string | null): string {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Full-page skeleton shown on initial load until ALL data sources resolve
-// ---------------------------------------------------------------------------
-function MaintenancePageSkeleton() {
-  return (
-    <div className="min-h-screen bg-brand-tertiary text-brand-secondary flex flex-col font-sans">
-      <div className="flex-1 flex pl-0 lg:pl-64 pt-14 lg:pt-0">
-        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-7 flex flex-col space-y-5 max-w-[1600px] mx-auto w-full">
 
-          {/* Header */}
-          <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-brand-border/80">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2.5">
-                <Skeleton className="w-8 h-8 rounded-full" />
-                <Skeleton className="h-7 w-80" />
-              </div>
-              <Skeleton className="h-3 w-96" />
-            </div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <Skeleton className="h-8 w-32 rounded-xl" />
-              <Skeleton className="h-8 w-32 rounded-xl" />
-              <Skeleton className="h-8 w-32 rounded-xl" />
-              <Skeleton className="h-8 w-24 rounded-xl" />
-              <Skeleton className="h-8 w-36 rounded-xl" />
-            </div>
-          </header>
-
-          {/* KPI Cards */}
-          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            {["Total Tasks","Pending Execution","Scheduled Blocks","Critical Priority","Total Block Time"].map((label) => (
-              <div key={label} className="p-4 rounded-2xl bg-brand-surface border border-brand-border shadow-sm flex items-start gap-3.5">
-                <Skeleton className="w-9 h-9 rounded-full shrink-0" />
-                <div className="space-y-1.5">
-                  <Skeleton className="h-3 w-24" />
-                  <Skeleton className="h-8 w-14" />
-                  <Skeleton className="h-2.5 w-28" />
-                </div>
-              </div>
-            ))}
-          </section>
-
-          {/* Filter Bar */}
-          <section className="p-4 sm:p-5 rounded-2xl bg-brand-surface border border-brand-border shadow-sm space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-center">
-              <div className="lg:col-span-4"><Skeleton className="h-9 w-full rounded-xl" /></div>
-              <div className="lg:col-span-3"><Skeleton className="h-9 w-full rounded-xl" /></div>
-              <div className="lg:col-span-2"><Skeleton className="h-9 w-full rounded-xl" /></div>
-              <div className="lg:col-span-2"><Skeleton className="h-9 w-full rounded-xl" /></div>
-              <div className="lg:col-span-1 flex justify-end gap-1.5">
-                <Skeleton className="w-9 h-9 rounded-xl" />
-                <Skeleton className="w-9 h-9 rounded-xl" />
-              </div>
-            </div>
-            <div className="flex items-center gap-2 pt-3 border-t border-brand-border/60">
-              <Skeleton className="h-3 w-16" />
-              {[1,2,3,4,5].map((i) => <Skeleton key={i} className="h-6 w-20 rounded-lg" />)}
-            </div>
-          </section>
-
-          {/* Table */}
-          <section className="rounded-2xl bg-brand-surface border border-brand-border shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-brand-border flex items-center justify-between">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <Skeleton className="h-5 w-48" />
-                  <Skeleton className="h-5 w-16 rounded-full" />
-                </div>
-                <Skeleton className="h-3 w-64" />
-              </div>
-              <Skeleton className="h-5 w-36 rounded" />
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-brand-surface border-b border-brand-border">
-                  <tr>
-                    {["ID","Task Code","Asset","Corridor","Urgency","Status","Risk","Deadline","Duration","Actions"].map((h) => (
-                      <th key={h} className="py-3 px-3"><Skeleton className="h-3 w-14" /></th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-brand-border/60">
-                  {Array.from({ length: 7 }).map((_, idx) => (
-                    <tr key={idx}>
-                      <td className="py-3 px-3"><Skeleton className="h-4 w-6" /></td>
-                      <td className="py-3 px-3"><Skeleton className="h-5 w-20 rounded-md" /></td>
-                      <td className="py-3 px-3">
-                        <div className="space-y-1">
-                          <Skeleton className="h-4 w-32" />
-                          <Skeleton className="h-2.5 w-16" />
-                        </div>
-                      </td>
-                      <td className="py-3 px-3"><Skeleton className="h-4 w-28" /></td>
-                      <td className="py-3 px-3"><Skeleton className="h-5 w-20 rounded-full" /></td>
-                      <td className="py-3 px-3"><Skeleton className="h-5 w-24 rounded-full" /></td>
-                      <td className="py-3 px-3"><Skeleton className="h-4 w-10" /></td>
-                      <td className="py-3 px-3"><Skeleton className="h-4 w-20" /></td>
-                      <td className="py-3 px-3"><Skeleton className="h-4 w-12" /></td>
-                      <td className="py-3 px-3 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Skeleton className="w-7 h-7 rounded-lg" />
-                          <Skeleton className="w-7 h-7 rounded-lg" />
-                          <Skeleton className="w-7 h-7 rounded-lg" />
-                          <Skeleton className="w-7 h-7 rounded-lg" />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-        </main>
-      </div>
-    </div>
-  );
-}
 
 export default function MaintenancePage() {
   const [activeNavTab, setActiveNavTab] = useState<string>("maintenance");
@@ -668,10 +560,10 @@ export default function MaintenancePage() {
           <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-brand-border/80">
             <div>
               <div className="flex items-center gap-2.5">
-                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-brand-blue-light text-brand-primary">
+                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-brand-secondary/80 text-brand-tertiary">
                   <Wrench className="w-4 h-4" />
                 </div>
-                <h1 className="text-xl sm:text-2xl font-extrabold text-brand-secondary tracking-tight">
+                <h1 className="text-xl sm:text-2xl font-bold text-brand-secondary tracking-tight">
                   Maintenance Tasks & Corridor Scheduling
                 </h1>
               </div>
@@ -681,7 +573,7 @@ export default function MaintenancePage() {
             </div>
 
             {/* Quick Actions */}
-            <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="hidden lg:flex items-center gap-2.5 flex-wrap">
               <LiveClock />
             </div>
           </header>
@@ -781,7 +673,7 @@ export default function MaintenancePage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-center">
               
               {/* Search Bar */}
-              <div className="lg:col-span-4 relative">
+              <div className="lg:col-span-3 relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
                 <input
                   type="text"
@@ -794,93 +686,85 @@ export default function MaintenancePage() {
 
               {/* Corridor / Section Filter Dropdown */}
               <div className="lg:col-span-3">
-                <select
-                  value={selectedCorridorFilter}
-                  onChange={(e) => setSelectedCorridorFilter(e.target.value)}
-                  className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none cursor-pointer font-bold shadow-2xs"
-                >
-                  <option value="ALL">All Corridors ({availableCorridors.length})</option>
-                  {availableCorridors.map((c) => (
-                    <option key={c.key} value={c.key}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
+                <Select value={selectedCorridorFilter} onValueChange={(val) => val && setSelectedCorridorFilter(val)}>
+                  <SelectTrigger className="w-full bg-brand-surface border border-brand-border hover:border-brand-primary/50 text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none font-bold shadow-2xs cursor-pointer">
+                    <SelectValue placeholder="All Corridors" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-brand-surface border-brand-border text-brand-secondary max-h-60 overflow-y-auto shadow-xl rounded-xl p-1.5">
+                    <SelectItem value="ALL" className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">
+                      All Corridors ({availableCorridors.length})
+                    </SelectItem>
+                    {availableCorridors.map((c) => (
+                      <SelectItem key={c.key} value={c.key} className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">
+                        {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Status Filter Dropdown */}
-              <div className="lg:col-span-2">
-                <select
-                  value={selectedStatusFilter}
-                  onChange={(e) => setSelectedStatusFilter(e.target.value)}
-                  className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none cursor-pointer font-bold shadow-2xs"
-                >
-                  <option value="ALL">All Statuses</option>
-                  <option value={MaintenanceStatus.PENDING}>
-                    {MAINTENANCE_STATUS_LABELS[MaintenanceStatus.PENDING]}
-                  </option>
-                  <option value={MaintenanceStatus.SCHEDULED}>
-                    {MAINTENANCE_STATUS_LABELS[MaintenanceStatus.SCHEDULED]}
-                  </option>
-                  <option value={MaintenanceStatus.COMPLETED}>
-                    {MAINTENANCE_STATUS_LABELS[MaintenanceStatus.COMPLETED]}
-                  </option>
-                  <option value={MaintenanceStatus.CANCELLED}>
-                    {MAINTENANCE_STATUS_LABELS[MaintenanceStatus.CANCELLED]}
-                  </option>
-                </select>
+              <div className="lg:col-span-3">
+                <Select value={selectedStatusFilter} onValueChange={(val) => val && setSelectedStatusFilter(val)}>
+                  <SelectTrigger className="w-full bg-brand-surface border border-brand-border hover:border-brand-primary/50 text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none font-bold shadow-2xs cursor-pointer">
+                    <SelectValue placeholder="All Statuses" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-brand-surface border-brand-border text-brand-secondary max-h-60 overflow-y-auto shadow-xl rounded-xl p-1.5">
+                    <SelectItem value="ALL" className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">All Statuses</SelectItem>
+                    <SelectItem value={MaintenanceStatus.PENDING} className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">
+                      {MAINTENANCE_STATUS_LABELS[MaintenanceStatus.PENDING]}
+                    </SelectItem>
+                    <SelectItem value={MaintenanceStatus.SCHEDULED} className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">
+                      {MAINTENANCE_STATUS_LABELS[MaintenanceStatus.SCHEDULED]}
+                    </SelectItem>
+                    <SelectItem value={MaintenanceStatus.COMPLETED} className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">
+                      {MAINTENANCE_STATUS_LABELS[MaintenanceStatus.COMPLETED]}
+                    </SelectItem>
+                    <SelectItem value={MaintenanceStatus.CANCELLED} className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">
+                      {MAINTENANCE_STATUS_LABELS[MaintenanceStatus.CANCELLED]}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Target Asset Filter Dropdown */}
-              <div className="lg:col-span-2">
-                <select
-                  value={selectedAssetFilter}
-                  onChange={(e) => setSelectedAssetFilter(e.target.value)}
-                  className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none cursor-pointer font-bold shadow-2xs"
-                >
-                  <option value="ALL">All Assets</option>
-                  {assets.map((a) => (
-                    <option key={a.id} value={String(a.id)}>
-                      {a.asset_title} (#{a.id})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* View Mode Toggle */}
-              <div className="lg:col-span-1 flex items-center justify-end gap-1.5">
-                <button
-                  onClick={() => setViewMode("table")}
-                  className={`p-2 rounded-xl border transition-colors cursor-pointer shadow-2xs ${
-                    viewMode === "table"
-                      ? "bg-brand-primary text-white border-brand-primary"
-                      : "bg-brand-surface text-brand-muted border-brand-border hover:bg-brand-tertiary"
-                  }`}
-                  title="Table View"
-                >
-                  <TableIcon className="w-4 h-4" />
-                </button>
+              <div className="lg:col-span-3">
+                <Select value={selectedAssetFilter} onValueChange={(val) => val && setSelectedAssetFilter(val)}>
+                  <SelectTrigger className="w-full bg-brand-surface border border-brand-border hover:border-brand-primary/50 text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none font-bold shadow-2xs cursor-pointer">
+                    <SelectValue placeholder="All Assets" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-brand-surface border-brand-border text-brand-secondary max-h-60 overflow-y-auto shadow-xl rounded-xl p-1.5">
+                    <SelectItem value="ALL" className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">All Assets</SelectItem>
+                    {assets.map((a) => (
+                      <SelectItem key={a.id} value={String(a.id)} className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">
+                        {a.asset_title} (#{a.id})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
             {/* Urgency Filter Badges */}
-            <div className="flex items-center gap-1.5 flex-wrap pt-3 border-t border-brand-border/60">
-              <span className="text-xs font-bold text-brand-muted mr-1">
+            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 min-w-0 pt-3 border-t border-brand-border/60">
+              <span className="text-xs font-bold text-brand-muted mr-1 shrink-0">
                 Urgency:
               </span>
-              {["ALL", "Critical", "High", "Medium", "Low"].map((urg) => (
-                <button
-                  key={urg}
-                  onClick={() => setSelectedUrgencyFilter(urg)}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    selectedUrgencyFilter === urg
-                      ? "bg-brand-primary text-white shadow-xs"
-                      : "text-brand-muted hover:text-brand-secondary hover:bg-brand-tertiary"
-                  }`}
-                >
-                  {urg === "ALL" ? "All Urgencies" : urg}
-                </button>
-              ))}
+              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
+                {["ALL", "Critical", "High", "Medium", "Low"].map((urg) => (
+                  <button
+                    key={urg}
+                    onClick={() => setSelectedUrgencyFilter(urg)}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+                      selectedUrgencyFilter === urg
+                        ? "bg-brand-primary text-white shadow-xs"
+                        : "text-brand-muted hover:text-brand-secondary hover:bg-brand-tertiary"
+                    }`}
+                  >
+                    {urg === "ALL" ? "All Urgencies" : urg}
+                  </button>
+                ))}
+              </div>
             </div>
           </section>
 
@@ -897,10 +781,10 @@ export default function MaintenancePage() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
+              <div className="flex items-center gap-2 overflow-x-auto scrollbar-none w-full sm:w-auto shrink-0 pb-1 sm:pb-0">
                 <button
                   onClick={() => handleOpenConflictModal()}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-black shadow-xs transition-colors cursor-pointer"
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-black shadow-xs transition-colors cursor-pointer shrink-0 whitespace-nowrap"
                   title="Run timetable conflict simulation against active train movements"
                 >
                   <ShieldAlert className="w-3.5 h-3.5 text-black" />
@@ -909,7 +793,7 @@ export default function MaintenancePage() {
 
                 <button
                   onClick={() => handleOpenFeasibleModal()}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-black shadow-xs transition-colors cursor-pointer"
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-black shadow-xs transition-colors cursor-pointer shrink-0 whitespace-nowrap"
                   title="Find feasible maintenance windows for tasks"
                 >
                   <Timer className="w-3.5 h-3.5 text-black" />
@@ -918,7 +802,7 @@ export default function MaintenancePage() {
 
                 <button
                   onClick={handleOpenCreateModal}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+                  className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer shrink-0 whitespace-nowrap"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Schedule Task</span>
@@ -928,69 +812,7 @@ export default function MaintenancePage() {
 
             {/* View Switching */}
             {(loadingTasks || loadingAssets || refetchingTasks) ? (
-              <div className="overflow-x-auto">
-                  <table className="w-full text-center text-xs">
-                    <thead className="bg-brand-surface text-brand-muted font-semibold border-b border-brand-border text-xs">
-                      <tr>
-                        <th className="py-3 px-4 text-center font-semibold">Task Code</th>
-                        <th className="py-3 px-4 text-center font-semibold">Target Asset</th>
-                        <th className="py-3 px-4 text-center font-semibold">Corridor / Section</th>
-                        <th className="py-3 px-4 text-center font-semibold">Urgency</th>
-                        <th className="py-3 px-4 text-center font-semibold">Risk Rating</th>
-                        <th className="py-3 px-4 text-center font-semibold">Duration</th>
-                        <th className="py-3 px-4 text-center font-semibold">Deadline</th>
-                        <th className="py-3 px-4 text-center font-semibold">Status</th>
-                        <th className="py-3 px-4 text-center font-semibold">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-brand-border/60">
-                      {Array.from({ length: 5 }).map((_, idx) => (
-                        <tr key={idx} className="hover:bg-brand-tertiary/40 transition-colors">
-                          <td className="py-3.5 px-4 text-center font-mono font-semibold">
-                            <Skeleton className="h-4 w-20 mx-auto" />
-                          </td>
-                          <td className="py-3.5 px-4 text-center">
-                            <div className="space-y-1.5 flex flex-col items-center">
-                              <Skeleton className="h-4 w-36" />
-                              <Skeleton className="h-2.5 w-24" />
-                            </div>
-                          </td>
-                          <td className="py-3.5 px-4 text-center">
-                            <div className="flex items-center justify-center gap-1.5">
-                              <Skeleton className="w-3.5 h-3.5 rounded shrink-0" />
-                              <Skeleton className="h-4 w-28" />
-                            </div>
-                          </td>
-                          <td className="py-3.5 px-4 text-center">
-                            <Skeleton className="h-5 w-20 rounded-md mx-auto" />
-                          </td>
-                          <td className="py-3.5 px-4 text-center font-mono">
-                            <Skeleton className="h-4 w-12 mx-auto" />
-                          </td>
-                          <td className="py-3.5 px-4 text-center font-mono">
-                            <Skeleton className="h-4 w-16 mx-auto" />
-                          </td>
-                          <td className="py-3.5 px-4 text-center font-mono">
-                            <div className="flex items-center justify-center gap-1.5">
-                              <Skeleton className="w-3.5 h-3.5 rounded-full shrink-0" />
-                              <Skeleton className="h-3.5 w-20 rounded" />
-                            </div>
-                          </td>
-                          <td className="py-3.5 px-4 text-center">
-                            <Skeleton className="h-5 w-20 rounded-md mx-auto" />
-                          </td>
-                          <td className="py-3.5 px-4 text-center">
-                            <div className="flex items-center justify-center gap-1.5">
-                              <Skeleton className="w-7 h-7 rounded-lg" />
-                              <Skeleton className="w-7 h-7 rounded-lg" />
-                              <Skeleton className="w-7 h-7 rounded-lg" />
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+              <MaintenanceTasksTableSkeleton />
             ) : filteredTasks.length === 0 ? (
               <div className="py-16 text-center text-brand-muted">
                 <div className="flex flex-col items-center justify-center gap-3">
@@ -1014,11 +836,11 @@ export default function MaintenancePage() {
               /* TABLE VIEW */
               <div className="overflow-x-auto">
                 <table className="w-full text-center text-xs">
-                  <thead className="bg-brand-surface text-brand-muted font-semibold border-b border-brand-border text-xs">
+                  <thead className="bg-brand-surface text-brand-muted font-semibold border-b border-brand-border text-[10px] lg:text-[12px]">
                     <tr>
                       <th className="py-3 px-4 text-center font-semibold">Task Code</th>
                       <th className="py-3 px-4 text-center font-semibold">Target Asset</th>
-                      <th className="py-3 px-4 text-center font-semibold">Corridor / Section</th>
+                      <th className="py-3 px-4 text-center font-semibold">Corridor</th>
                       <th className="py-3 px-4 text-center font-semibold">Risk Rating</th>
                       <th className="py-3 px-4 text-center font-semibold">Duration</th>
                       <th className="py-3 px-4 text-center font-semibold">Deadline</th>
@@ -1040,7 +862,7 @@ export default function MaintenancePage() {
                           key={task.id}
                           className="hover:bg-brand-tertiary/60 transition-colors group"
                         >
-                          <td className="py-3.5 px-4 text-center font-mono font-semibold text-brand-primary text-sm">
+                          <td className="py-3.5 px-4 text-center font-semibold text-brand-primary text-xs lg:text-sm">
                             {task.task_code}
                           </td>
                           <td className="py-3.5 px-4 text-center">

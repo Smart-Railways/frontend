@@ -23,6 +23,13 @@ import {
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   useRailwaySections,
   useTrains,
   useTrainSchedules,
@@ -34,9 +41,9 @@ import {
   TrackedTrainOperation,
   TrainSchedule,
   CreateTrainMovementInput,
+  RailwaySection,
 } from "@/types";
 import { TrainType } from "@/enums";
-import { DEFAULT_RAILWAY_SECTIONS } from "@/constants/railway-defaults";
 import {
   formatTrainTimeIST,
   formatTimeString,
@@ -123,21 +130,21 @@ export default function TrainsPage() {
   const { data: trains = [], isLoading: loadingTrains, refetch: refetchTrains } = useTrains();
   const { data: movements = [], isLoading: loadingMovements, refetch: refetchMovements } = useTrainMovements();
 
-  const availableSections = useMemo(() => {
-    return sections && sections.length > 0 ? sections : DEFAULT_RAILWAY_SECTIONS;
+  const availableSections = useMemo<RailwaySection[]>(() => {
+    return sections || [];
   }, [sections]);
 
-  const currentTrackedSection = useMemo(() => {
+  const currentTrackedSection = useMemo<RailwaySection | null>(() => {
+    if (availableSections.length === 0) return null;
     return (
-      availableSections.find((s) => s.id === trackedSectionId) ||
-      availableSections[0] ||
-      DEFAULT_RAILWAY_SECTIONS[0]
+      availableSections.find((s: RailwaySection) => s.id === trackedSectionId) ||
+      availableSections[0]
     );
   }, [availableSections, trackedSectionId]);
 
   const handleSelectTrackedSection = (secId: number) => {
     setTrackedSectionId(secId);
-    const sec = availableSections.find((s) => s.id === secId);
+    const sec = availableSections.find((s: RailwaySection) => s.id === secId);
     if (sec) {
       const src = sec.source_station_code || sec.origin_station || "NDLS";
       const dst = sec.destination_station_code || sec.end_station || "MTJ";
@@ -146,9 +153,9 @@ export default function TrainsPage() {
     }
   };
 
-  const selectedScheduleSection = useMemo(() => {
+  const selectedScheduleSection = useMemo<RailwaySection | null>(() => {
     if (!selectedSectionId) return null;
-    return availableSections.find((s) => s.id === selectedSectionId) || null;
+    return availableSections.find((s: RailwaySection) => s.id === selectedSectionId) || null;
   }, [availableSections, selectedSectionId]);
 
   const scheduleQueryParams = useMemo(() => {
@@ -233,6 +240,8 @@ export default function TrainsPage() {
       let statusDot = "bg-emerald-500";
       if (!isActive) { statusText = "Suspended"; statusBadge = "bg-red-50 border-red-300 text-red-700"; statusDot = "bg-red-500"; }
       else if (!runsToday) { statusText = "Off-Schedule"; statusBadge = "bg-slate-100 border-slate-300 text-slate-600"; statusDot = "bg-slate-400"; }
+      const secObj = availableSections.find((s) => s.id === sch.section);
+      const resolvedSectionName = secObj?.section_name || (sch.section_name && !/^\d+$/.test(sch.section_name) ? sch.section_name : sch.section ? `Corridor ${sch.section}` : "Corridor");
       return {
         id: `sch-${sch.id}`,
         scheduleId: sch.id,
@@ -249,13 +258,13 @@ export default function TrainsPage() {
         runsToday,
         isActive,
         sectionId: sch.section,
-        sectionName: sch.section_name || "Corridor",
+        sectionName: resolvedSectionName,
         statusText,
         statusBadge,
         statusDot,
       };
     }).sort((a, b) => a.scheduledEntryTime.localeCompare(b.scheduledEntryTime));
-  }, [schedules, trains, selectedScheduleDayIndex]);
+  }, [schedules, trains, selectedScheduleDayIndex, availableSections]);
 
   const filteredSchedules = useMemo(() => {
     return masterTimetableItems.filter((item) => {
@@ -327,10 +336,10 @@ export default function TrainsPage() {
                 <div className="w-8 h-8 rounded-xl bg-brand-secondary/80 text-white flex items-center justify-center shadow-xs">
                   <TrainIcon className="w-4 h-4" />
                 </div>
-                <h1 className="text-xl sm:text-2xl font-extrabold text-brand-secondary tracking-tight">Train Operations & Schedules</h1>
+                <h1 className="text-xl sm:text-2xl font-bold text-brand-secondary tracking-tight">Train Operations & Schedules</h1>
               </div>
             </div>
-            <div className="flex items-center gap-2.5">
+            <div className="hidden lg:flex items-center gap-2.5">
               <LiveClock />
             </div>
           </header>
@@ -350,7 +359,7 @@ export default function TrainsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
                   {/* Operation Date — Live Tracking: Today − 7 days → Today */}
                   <div className="md:col-span-4 space-y-1">
-                    <label className="text-[12px] font-extrabold text-brand-muted tracking-wider flex items-center justify-between">
+                    <label className="text-[10px] font-extrabold text-brand-muted tracking-wider flex items-center justify-between">
                       <span>Operation Date</span>
                     </label>
                     <input
@@ -366,7 +375,7 @@ export default function TrainsPage() {
                           setTrackedDate(val);
                         }
                       }}
-                      className={`w-full bg-brand-surface border text-brand-secondary text-xs rounded-xl px-3 py-2 outline-none font-bold cursor-pointer ${
+                      className={`h-10 w-full bg-brand-surface border text-brand-secondary text-xs rounded-xl px-3 outline-none font-bold cursor-pointer ${
                         trackedDateError
                           ? "border-red-400 focus:border-red-500"
                           : "border-brand-border"
@@ -381,26 +390,30 @@ export default function TrainsPage() {
 
                   {/* Single Section Name Dropdown (Replaces the 2 separate station dropdowns & swap button) */}
                   <div className="md:col-span-6 space-y-1">
-                    <label className="text-[12px] font-extrabold text-brand-muted tracking-wider flex items-center justify-between">
+                    <label className="text-[10px] font-extrabold text-brand-muted tracking-wider flex items-center justify-between">
                       <span>Railway Corridor Section</span>
-                      <span className="text-[10px] text-brand-muted font-medium">
-                        ({availableSections.length} sections available)
-                      </span>
                     </label>
-                    <div className="relative">
-                      <select
-                        value={currentTrackedSection.id}
-                        onChange={(e) => handleSelectTrackedSection(Number(e.target.value))}
-                        className="w-full bg-brand-surface border border-brand-border text-xs text-brand-secondary font-bold rounded-xl px-3.5 py-2 outline-none cursor-pointer appearance-none pr-8 shadow-2xs"
-                      >
-                        {availableSections.map((sec) => (
-                          <option key={sec.id} value={sec.id}>
+                    <Select
+                      value={String(currentTrackedSection?.id ?? "")}
+                      onValueChange={(val) => val && handleSelectTrackedSection(Number(val))}
+                    >
+                      <SelectTrigger className="h-10 w-full bg-brand-surface border border-brand-border hover:border-brand-primary/50 text-xs text-brand-secondary font-bold rounded-xl px-3.5 outline-none cursor-pointer shadow-2xs">
+                        <SelectValue placeholder="Select section...">
+                          {currentTrackedSection ? currentTrackedSection.section_name : undefined}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent className="bg-brand-surface border-brand-border text-brand-secondary max-h-60 overflow-y-auto shadow-xl rounded-xl p-1.5">
+                        {availableSections.map((sec: RailwaySection) => (
+                          <SelectItem
+                            key={sec.id}
+                            value={String(sec.id)}
+                            className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary"
+                          >
                             {sec.section_name} ({sec.source_station_code || sec.origin_station} → {sec.destination_station_code || sec.end_station})
-                          </option>
+                          </SelectItem>
                         ))}
-                      </select>
-                      <ChevronDown className="w-3.5 h-3.5 text-brand-muted absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    </div>
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* Refresh Button */}
@@ -408,7 +421,7 @@ export default function TrainsPage() {
                     <button
                       onClick={() => refetchTracked()}
                       disabled={refetchingTracked || loadingTracked}
-                      className="w-full px-4 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition-all disabled:opacity-60"
+                      className="h-10 w-full px-4 rounded-xl bg-brand-primary hover:bg-blue-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition-all disabled:opacity-60"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${refetchingTracked ? "animate-spin" : ""}`} />
                       <span>{refetchingTracked ? "Refreshing..." : "Refresh"}</span>
@@ -421,10 +434,10 @@ export default function TrainsPage() {
 
               <div className="overflow-x-auto border border-brand-border/80 rounded-xl">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-brand-surface text-brand-muted font-bold tracking-wider border-b border-brand-border text-[12px]">
+                  <thead className="bg-brand-surface text-brand-muted font-bold tracking-wider border-b border-brand-border text-[10px] lg:text-[12px]">
                     <tr>
                       <th className="py-3 px-4">Train No. & Name</th>
-                      <th className="py-3 px-4">Type & Priority</th>
+                      <th className="py-3 px-4">Priority</th>
                       <th className="py-3 px-4">Section</th>
                       <th className="py-3 px-4 font-semibold">Window</th>
                       <th className="py-3 px-4">Actuals</th>
@@ -444,21 +457,7 @@ export default function TrainsPage() {
                             <p className="text-xs text-brand-muted">
                               No operation logs recorded in the backend database for {formatDisplayDate(trackedDate)} on corridor {sourceCode} → {destinationCode}.
                             </p>
-                            {(() => {
-                              const fallbackDate = clampDate("2026-09-04", "live-tracking");
-                              return trackedDate !== fallbackDate ? (
-                                <button
-                                  onClick={() => {
-                                    setTrackedDateError(null);
-                                    setTrackedDate(fallbackDate);
-                                  }}
-                                  className="mt-2 px-4 py-2 rounded-xl bg-brand-primary text-white text-xs font-bold hover:bg-blue-700 transition-all shadow-xs cursor-pointer flex items-center gap-2"
-                                >
-                                  <span>Switch to {formatDisplayDate(fallbackDate)}</span>
-                                  <span className="px-1.5 py-0.5 rounded-full bg-white/20 text-[10px]">14 trains available</span>
-                                </button>
-                              ) : null;
-                            })()}
+                         
                           </div>
                         </td>
                       </tr>
@@ -472,19 +471,32 @@ export default function TrainsPage() {
                               <div className="flex items-center gap-2.5">
                                 <div className={`w-1.5 h-8 rounded-full ${theme.lineColor}`} />
                                 <div>
-                                  <div className="font-extrabold text-sm">{item.train_number}</div>
-                                  <div className="text-brand-muted font-bold text-xs">{item.train_name}</div>
+                                  <div className="font-bold text-sm">{item.train_number}</div>
+                                  <div className="text-brand-muted font-medium text-xs">{item.train_name}</div>
                                 </div>
                               </div>
                             </td>
                             <td className="py-3 px-4">
                               <span className="ml-2 font-bold">{item.priority}/10</span>
                             </td>
-                            <td className="py-3 px-4 font-semibold">{item.section.name}</td>
+                             <td className="py-3 px-4 font-semibold">
+                               {(() => {
+                                 const secObj = availableSections.find(
+                                   (s) =>
+                                     String(s.id) === String(item.section.name) ||
+                                     (s.source_station_code === item.section.source_code && s.destination_station_code === item.section.destination_code)
+                                 );
+                                 return (
+                                   secObj?.section_name ||
+                                   currentTrackedSection?.section_name ||
+                                   (item.section.name && !/^\d+$/.test(item.section.name) ? item.section.name : "Corridor")
+                                 );
+                               })()}
+                             </td>
                             <td className="py-3 px-4 font-mono font-semibold">{formatTimeString(item.schedule.entry_time)} → {formatTimeString(item.schedule.exit_time)}</td>
                             <td className="py-3 px-4 font-mono font-semibold">{formatTimeString(item.movement?.actual_entry_time)} → {formatTimeString(item.movement?.actual_exit_time)}</td>
                             <td className="py-3 px-4 text-center">
-                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold border ${delayObj.badgeClass}`}>
+                              <span className={`inline-flex items-center justify-center whitespace-nowrap px-2.5 py-1 rounded-full text-[10px] font-extrabold border ${delayObj.badgeClass}`}>
                                 {delayObj.text}
                               </span>
                             </td>
@@ -615,14 +627,14 @@ export default function TrainsPage() {
                   </div>
                   <p className="text-xs text-brand-muted font-medium">
                     Scheduled timetable specifications and operating pattern for{" "}
-                    <span className="font-bold text-brand-secondary">{DAYS_FULL[selectedScheduleDayIndex]} ({formatDisplayDate(selectedScheduleDate)})</span>.
+                    <span className="font-bold text-brand-secondary">({formatDisplayDate(selectedScheduleDate)})</span>.
                   </p>
                 </div>
 
                 <button
                   onClick={() => refetchSchedules()}
                   disabled={isSchedulesLoading}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-primary text-xs font-bold text-white transition-colors disabled:opacity-60 cursor-pointer shadow-2xs shrink-0"
+                  className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-primary text-xs font-bold text-white transition-colors disabled:opacity-60 cursor-pointer shadow-2xs shrink-0"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isSchedulesLoading ? "animate-spin" : ""}`} />
                   <span>{isSchedulesLoading ? "Refreshing..." : "Refresh Schedules"}</span>
@@ -634,26 +646,41 @@ export default function TrainsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
                   {/* Section Corridor Dropdown */}
                   <div className="md:col-span-6 space-y-1">
-                    <label className="text-[10px] font-extrabold text-brand-muted uppercase tracking-wider">
-                      Filter Railway Corridor / Section
+                    <label className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">
+                      Filter Railway Corridor
                     </label>
-                    <select
-                      value={selectedSectionId ?? ""}
-                      onChange={(e) => setSelectedSectionId(e.target.value ? Number(e.target.value) : null)}
-                      className="w-full bg-brand-surface border border-brand-border hover:border-brand-primary/50 focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3 py-2 outline-none font-bold cursor-pointer shadow-2xs"
+                    <Select
+                      value={selectedSectionId ? String(selectedSectionId) : "ALL"}
+                      onValueChange={(val) => setSelectedSectionId(val === "ALL" ? null : Number(val))}
                     >
-                      <option value="">All Corridors & Sections</option>
-                      {availableSections.map((sec) => (
-                        <option key={sec.id} value={sec.id}>
-                          {sec.section_name} ({sec.distance || 141} km) • {sec.origin_station} → {sec.end_station}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger className="h-10 w-full bg-brand-surface border border-brand-border hover:border-brand-primary/50 text-xs text-brand-secondary font-bold rounded-xl px-3.5 outline-none cursor-pointer shadow-2xs">
+                        <SelectValue placeholder="All Corridors & Sections">
+                          {selectedScheduleSection ? selectedScheduleSection.section_name : "All Corridors & Sections"}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent className="bg-brand-surface border-brand-border text-brand-secondary max-h-60 overflow-y-auto shadow-xl rounded-xl p-1.5">
+                        <SelectItem
+                          value="ALL"
+                          className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary"
+                        >
+                          All Corridors & Sections
+                        </SelectItem>
+                        {availableSections.map((sec: RailwaySection) => (
+                          <SelectItem
+                            key={sec.id}
+                            value={String(sec.id)}
+                            className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary"
+                          >
+                            {sec.section_name} ({sec.distance || 141} km) • {sec.origin_station} → {sec.end_station}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* Day Date Navigator — Master Timetable: Today − 7 days → Today + 30 days */}
                   <div className="md:col-span-6 space-y-1">
-                    <label className="text-[10px] font-extrabold text-brand-muted uppercase tracking-wider flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-brand-muted uppercase tracking-wider flex items-center justify-between">
                       <span>Schedule Date & Active Day</span>
                       <span className="text-brand-secondary font-bold">Day: {DAYS_FULL[selectedScheduleDayIndex]}</span>
                     </label>
@@ -671,7 +698,7 @@ export default function TrainsPage() {
                             setSelectedScheduleDate(val);
                           }
                         }}
-                        className={`flex-1 bg-brand-surface border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3 py-2 outline-none font-bold cursor-pointer shadow-2xs ${
+                        className={`h-10 flex-1 bg-brand-surface border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3 outline-none font-bold cursor-pointer shadow-2xs ${
                           scheduleDateError
                             ? "border-red-400 focus:border-red-500"
                             : "border-brand-border"
@@ -682,7 +709,7 @@ export default function TrainsPage() {
                           setScheduleDateError(null);
                           setSelectedScheduleDate(formatDateToISO(new Date()));
                         }}
-                        className="px-2.5 py-2 rounded-xl bg-brand-surface border border-brand-border hover:bg-brand-surface/80 text-[11px] font-bold text-brand-primary transition-colors cursor-pointer shadow-2xs"
+                        className="h-10 px-3 rounded-xl bg-brand-surface border border-brand-border hover:bg-brand-surface/80 text-[11px] font-bold text-brand-primary transition-colors cursor-pointer shadow-2xs shrink-0"
                       >
                         Today
                       </button>
@@ -768,11 +795,11 @@ export default function TrainsPage() {
                   </div>
                 )}
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-brand-surface text-brand-muted font-bold tracking-wider border-b border-brand-border text-[12px]">
+                  <thead className="bg-brand-surface text-brand-muted font-bold tracking-wider border-b border-brand-border text-[10px] lg:text-[12px]">
                     <tr>
                       <th className="py-3 px-4">Train No. & Name</th>
-                      <th className="py-3 px-4">Priority & Type</th>
-                      <th className="py-3 px-4">Section / Corridor</th>
+                      <th className="py-3 px-4">Priority</th>
+                      <th className="py-3 px-4"> Corridor</th>
                       <th className="py-3 px-4 text-center">Scheduled Entry (IST)</th>
                       <th className="py-3 px-4 text-center">Scheduled Exit (IST)</th>
                       <th className="py-3 px-4 text-center">Transit Duration</th>
@@ -810,10 +837,10 @@ export default function TrainsPage() {
                               <div className="flex items-center gap-2.5">
                                 <div className={`w-1.5 h-8 rounded-full ${theme.lineColor} flex-shrink-0`} />
                                 <div>
-                                  <div className="font-extrabold text-brand-secondary text-sm flex items-center gap-1.5">
+                                  <div className="font-bold text-brand-secondary text-sm flex items-center gap-1.5">
                                     <span>{item.trainNumber}</span>
                                   </div>
-                                  <div className="text-brand-muted font-bold text-xs mt-0.5">
+                                  <div className="text-brand-muted font-medium text-xs mt-0.5">
                                     {item.trainName}
                                   </div>
                                 </div>
@@ -1011,7 +1038,16 @@ export default function TrainsPage() {
               </div>
               <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
                 <span className="text-brand-muted block text-[10px] uppercase font-bold">Corridor Section</span>
-                <span className="font-bold text-brand-secondary mt-0.5 block">{inspectTrackedTrain.section.name}</span>
+                <span className="font-bold text-brand-secondary mt-0.5 block">
+                  {(() => {
+                    const secObj = availableSections.find(
+                      (s) =>
+                        String(s.id) === String(inspectTrackedTrain.section.name) ||
+                        (s.source_station_code === inspectTrackedTrain.section.source_code && s.destination_station_code === inspectTrackedTrain.section.destination_code)
+                    );
+                    return secObj?.section_name || (inspectTrackedTrain.section.name && !/^\d+$/.test(inspectTrackedTrain.section.name) ? inspectTrackedTrain.section.name : "Corridor");
+                  })()}
+                </span>
               </div>
               <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
                 <span className="text-brand-muted block text-[10px] uppercase font-bold">Scheduled Entry</span>
