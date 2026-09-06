@@ -503,7 +503,7 @@ export default function TrainsPage() {
                             <td className="py-3 px-4 text-right">
                               <div className="flex items-center justify-end gap-2">
                                
-                                <button onClick={() => setInspectTrackedTrain(item)} className="p-1.5 rounded-lg bg-brand-surface border border-brand-border hover:bg-brand-tertiary">
+                                <button onClick={() => setInspectTrackedTrain(item)} className="p-1.5 rounded-lg bg-brand-surface border border-brand-border hover:bg-brand-tertiary text-black shadow-xs transition-colors cursor-pointer">
                                   <Eye className="w-3.5 h-3.5" />
                                 </button>
                               </div>

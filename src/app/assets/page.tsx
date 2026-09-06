@@ -605,7 +605,7 @@ export default function AssetsPage() {
                             <div className="flex items-center justify-center gap-1.5">
                               <button
                                 onClick={() => setInspectingAsset(asset)}
-                                className="p-1.5 rounded-lg bg-brand-secondary/80 text-brand-tertiary shadow-xs transition-colors cursor-pointer"
+                                className="p-1.5 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-black shadow-xs transition-colors cursor-pointer"
                                 title="Inspect"
                               >
                                 <Eye className="w-3.5 h-3.5" />

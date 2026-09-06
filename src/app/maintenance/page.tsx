@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { VerticalNavbar } from "@/components/navigation/vertical-navbar";
 import { LiveClock } from "@/components/ui/live-clock";
 import {
@@ -16,6 +16,7 @@ import {
   Edit2,
   Trash2,
   Eye,
+  MoreVertical,
   Table as TableIcon,
   ShieldAlert,
   Zap,
@@ -133,6 +134,92 @@ function formatDate(dateStr?: string | null): string {
   }
 }
 
+// Format a Date for a datetime-local input using the user's local timezone.
+function formatDateTimeLocal(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+// Rolling 30-day maximum for maintenance date/time selection (inclusive of the 30th day up to 23:59).
+function getMaxMaintenanceDateTime(baseDate?: Date): string {
+  const base = baseDate || new Date();
+  const maxDate = new Date(base.getFullYear(), base.getMonth(), base.getDate() + 30, 23, 59);
+  return formatDateTimeLocal(maxDate);
+}
+
+// Rolling minimum for maintenance start (current local time).
+function getMinMaintenanceDateTime(baseDate?: Date): string {
+  const base = baseDate || new Date();
+  return formatDateTimeLocal(base);
+}
+
+// Validation helper strictly enforcing maintenance date/time rules
+function validateMaintenanceTimes(
+  startVal: string,
+  endVal: string,
+  now: Date
+): {
+  startError: string | null;
+  endError: string | null;
+  generalError: string | null;
+} {
+  const maxDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 30, 23, 59, 59);
+  let startError: string | null = null;
+  let endError: string | null = null;
+
+  if (!startVal || !startVal.trim()) {
+    startError = "Maintenance start time is required.";
+  } else {
+    const sDate = new Date(startVal.replace(" ", "T"));
+    if (Number.isNaN(sDate.getTime())) {
+      startError = "Invalid start date and time format.";
+    } else if (sDate.getTime() < now.getTime() - 45000) {
+      // 45-second grace buffer to account for elapsed seconds while interacting with the picker
+      startError = "Start Maintenance cannot be in the past. Current or future time only.";
+    } else if (sDate.getTime() > maxDate.getTime()) {
+      startError = "Start Maintenance cannot exceed the 30-day rolling window from today.";
+    }
+  }
+
+  if (!endVal || !endVal.trim()) {
+    endError = "Maintenance end time is required.";
+  } else {
+    const eDate = new Date(endVal.replace(" ", "T"));
+    if (Number.isNaN(eDate.getTime())) {
+      endError = "Invalid end date and time format.";
+    } else if (eDate.getTime() < now.getTime()) {
+      endError = "End Maintenance cannot be in the past.";
+    } else if (eDate.getTime() > maxDate.getTime()) {
+      endError = "End Maintenance cannot exceed the 30-day rolling window from today.";
+    } else if (startVal) {
+      const sDate = new Date(startVal.replace(" ", "T"));
+      if (!Number.isNaN(sDate.getTime()) && eDate.getTime() <= sDate.getTime()) {
+        endError = "End Maintenance must always be after Start Maintenance.";
+      }
+    }
+  }
+
+  const generalError = startError || endError || null;
+  return { startError, endError, generalError };
+}
+
+// Convert an API date/time string into the format required by datetime-local.
+function toDateTimeLocal(value: string): string {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value.replace(" ", "T").substring(0, 16);
+  }
+
+  return formatDateTimeLocal(date);
+}
+
 
 
 export default function MaintenancePage() {
@@ -173,6 +260,9 @@ export default function MaintenancePage() {
   const [editingTask, setEditingTask] = useState<MaintenanceTask | null>(null);
   const [deletingTask, setDeletingTask] = useState<MaintenanceTask | null>(null);
   const [inspectingTask, setInspectingTask] = useState<MaintenanceTask | null>(null);
+  const [openActionMenu, setOpenActionMenu] = useState<number | null>(null);
+  const startDateTimeRef = useRef<HTMLInputElement>(null);
+  const endDateTimeRef = useRef<HTMLInputElement>(null);
 
   // Conflict Modal State
   const [isConflictModalOpen, setIsConflictModalOpen] = useState<boolean>(false);
@@ -182,11 +272,38 @@ export default function MaintenancePage() {
     maintenance_end: string;
   }>({
     section: 1,
-    maintenance_start: "2026-09-04 02:00:00",
-    maintenance_end: "2026-09-04 05:00:00",
+    maintenance_start: "",
+    maintenance_end: "",
   });
   const [conflictResult, setConflictResult] = useState<ConflictCheckResponse | null>(null);
   const [conflictError, setConflictError] = useState<string | null>(null);
+  const [conflictStartError, setConflictStartError] = useState<string | null>(null);
+  const [conflictEndError, setConflictEndError] = useState<string | null>(null);
+  const [currentNow, setCurrentNow] = useState<Date>(() => new Date());
+
+  // Dynamic ticking interval: refresh current time every 30 seconds so rolling window & past-time bounds shift automatically
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentNow(new Date());
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Rolling 30-day window dynamically calculated
+  const minStartDateTime = useMemo(() => getMinMaintenanceDateTime(currentNow), [currentNow]);
+  const maxMaintenanceDateTime = useMemo(() => getMaxMaintenanceDateTime(currentNow), [currentNow]);
+
+  // End Maintenance minimum bound: must strictly be after Start Maintenance (and not in past)
+  const minEndDateTime = useMemo(() => {
+    if (conflictForm.maintenance_start) {
+      const parsedStart = new Date(conflictForm.maintenance_start.replace(" ", "T"));
+      if (!Number.isNaN(parsedStart.getTime())) {
+        const afterStart = new Date(parsedStart.getTime() + 60 * 1000);
+        return formatDateTimeLocal(afterStart > currentNow ? afterStart : currentNow);
+      }
+    }
+    return formatDateTimeLocal(new Date(currentNow.getTime() + 60 * 1000));
+  }, [conflictForm.maintenance_start, currentNow]);
 
   // Feasible Windows Modal State
   const [isFeasibleModalOpen, setIsFeasibleModalOpen] = useState<boolean>(false);
@@ -304,17 +421,84 @@ export default function MaintenancePage() {
   };
 
   // Conflict Modal Handlers
-  const handleOpenConflictModal = (sectionId?: number) => {
+  const handleOpenConflictModal = (task?: MaintenanceTask) => {
     setConflictError(null);
+    setConflictStartError(null);
+    setConflictEndError(null);
     setConflictResult(null);
 
-    const defaultSection = sectionId || (sections[0]?.id ? Number(sections[0].id) : 1);
+    const now = new Date();
+    setCurrentNow(now);
+
+    const targetTask = task || (tasks.length > 0 ? tasks[0] : null);
+    const taskAsset = targetTask
+      ? assets.find((a) => a.id === targetTask.asset)
+      : null;
+    const sectionId = taskAsset?.section || sections[0]?.id || 1;
+    const sectionName =
+      targetTask?.section_name || taskAsset?.section_name || "";
+
+    const maxDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 30, 23, 59, 59);
+
+    // Select the nearest block window whose START is strictly now or in future and within 30 days
+    const matchingWindow = targetTask
+      ? blockWindows
+          .filter((bw) => {
+            if (
+              taskAsset?.section &&
+              Number(bw.section) === Number(taskAsset.section)
+            ) {
+              return true;
+            }
+
+            return Boolean(
+              sectionName &&
+              bw.section_name &&
+              bw.section_name.trim().toLowerCase() ===
+                sectionName.trim().toLowerCase()
+            );
+          })
+          .filter((bw) => {
+            const startTime = new Date(bw.start_time);
+            const endTime = new Date(bw.end_time);
+
+            // Only use a window that starts in the future, ends after start, and fits within 30-day window
+            return (
+              startTime >= now &&
+              startTime <= maxDate &&
+              endTime > startTime &&
+              endTime <= maxDate
+            );
+          })
+          .sort((a, b) => {
+            return (
+              new Date(a.start_time).getTime() -
+              new Date(b.start_time).getTime()
+            );
+          })[0]
+      : null;
+
+    // If there is no future block window, create a safe future fallback.
+    const fallbackStart = new Date(now);
+    fallbackStart.setMinutes(fallbackStart.getMinutes() + 30);
+
+    const fallbackEnd = new Date(fallbackStart);
+    fallbackEnd.setHours(fallbackEnd.getHours() + 3);
+
+    const initialStart = matchingWindow?.start_time
+      ? toDateTimeLocal(matchingWindow.start_time)
+      : formatDateTimeLocal(fallbackStart);
+
+    const initialEnd = matchingWindow?.end_time
+      ? toDateTimeLocal(matchingWindow.end_time)
+      : formatDateTimeLocal(fallbackEnd);
 
     setConflictForm({
-      section: defaultSection,
-      maintenance_start: "2026-09-04 02:00:00",
-      maintenance_end: "2026-09-04 05:00:00",
+      section: Number(sectionId),
+      maintenance_start: initialStart,
+      maintenance_end: initialEnd,
     });
+
     setIsConflictModalOpen(true);
   };
 
@@ -322,6 +506,23 @@ export default function MaintenancePage() {
     e.preventDefault();
     setConflictError(null);
     setConflictResult(null);
+
+    const now = new Date();
+    setCurrentNow(now);
+
+    const validation = validateMaintenanceTimes(
+      conflictForm.maintenance_start,
+      conflictForm.maintenance_end,
+      now
+    );
+
+    setConflictStartError(validation.startError);
+    setConflictEndError(validation.endError);
+
+    if (validation.generalError) {
+      setConflictError(validation.generalError);
+      return;
+    }
 
     let start = conflictForm.maintenance_start.replace("T", " ");
     if (start.length === 16) start += ":00";
@@ -531,15 +732,14 @@ export default function MaintenancePage() {
 
       <div className="flex-1 flex pl-0 lg:pl-64 pt-14 lg:pt-0">
         <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-7 flex flex-col space-y-5 max-w-[1600px] mx-auto w-full">
-          
+
           {/* Toast Notification Banner */}
           {toastMessage && (
             <div
-              className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl border transition-all animate-in fade-in slide-in-from-top-3 ${
-                toastMessage.type === "success"
-                  ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                  : "bg-red-50 border-red-200 text-red-800"
-              }`}
+              className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl border transition-all animate-in fade-in slide-in-from-top-3 ${toastMessage.type === "success"
+                ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                : "bg-red-50 border-red-200 text-red-800"
+                }`}
             >
               {toastMessage.type === "success" ? (
                 <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
@@ -671,7 +871,7 @@ export default function MaintenancePage() {
           {/* Filtering and Controls Bar */}
           <section className="p-4 sm:p-5 rounded-2xl bg-brand-surface border border-brand-border shadow-sm space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-center">
-              
+
               {/* Search Bar */}
               <div className="lg:col-span-3 relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
@@ -755,11 +955,10 @@ export default function MaintenancePage() {
                   <button
                     key={urg}
                     onClick={() => setSelectedUrgencyFilter(urg)}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
-                      selectedUrgencyFilter === urg
-                        ? "bg-brand-primary text-white shadow-xs"
-                        : "text-brand-muted hover:text-brand-secondary hover:bg-brand-tertiary"
-                    }`}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${selectedUrgencyFilter === urg
+                      ? "bg-brand-primary text-white shadow-xs"
+                      : "text-brand-muted hover:text-brand-secondary hover:bg-brand-tertiary"
+                      }`}
                   >
                     {urg === "ALL" ? "All Urgencies" : urg}
                   </button>
@@ -769,7 +968,7 @@ export default function MaintenancePage() {
           </section>
 
           {/* Task List Content */}
-          <section className="rounded-2xl bg-brand-surface border border-brand-border shadow-sm overflow-hidden">
+          <section className="rounded-2xl bg-brand-surface border border-brand-border shadow-sm overflow-visible">
             {/* Table Header Bar */}
             <div className="p-4 border-b border-brand-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-brand-surface">
               <div>
@@ -782,24 +981,6 @@ export default function MaintenancePage() {
               </div>
 
               <div className="flex items-center gap-2 overflow-x-auto scrollbar-none w-full sm:w-auto shrink-0 pb-1 sm:pb-0">
-                <button
-                  onClick={() => handleOpenConflictModal()}
-                  className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-black shadow-xs transition-colors cursor-pointer shrink-0 whitespace-nowrap"
-                  title="Run timetable conflict simulation against active train movements"
-                >
-                  <ShieldAlert className="w-3.5 h-3.5 text-black" />
-                  <span>Check Conflict</span>
-                </button>
-
-                <button
-                  onClick={() => handleOpenFeasibleModal()}
-                  className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-black shadow-xs transition-colors cursor-pointer shrink-0 whitespace-nowrap"
-                  title="Find feasible maintenance windows for tasks"
-                >
-                  <Timer className="w-3.5 h-3.5 text-black" />
-                  <span>Feasible Windows</span>
-                </button>
-
                 <button
                   onClick={handleOpenCreateModal}
                   className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer shrink-0 whitespace-nowrap"
@@ -896,28 +1077,88 @@ export default function MaintenancePage() {
                             </span>
                           </td>
                           <td className="py-3.5 px-4 text-center">
-                            <div className="flex items-center justify-center gap-1.5">
+                            <div className="relative flex items-center justify-center">
+
+                              {/* Vertical Ellipsis */}
                               <button
-                                onClick={() => setInspectingTask(task)}
-                                className="p-1.5 rounded-lg bg-brand-secondary/80 text-brand-tertiary shadow-xs transition-colors cursor-pointer"
-                                title="Inspect Task"
+                                onClick={() =>
+                                  setOpenActionMenu(
+                                    openActionMenu === task.id ? null : task.id
+                                  )
+                                }
+                                className="p-2 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-black shadow-xs transition-colors cursor-pointer"
+                                title="Actions"
                               >
-                                <Eye className="w-3.5 h-3.5" />
+                                <MoreVertical className="w-4 h-4" />
                               </button>
-                              <button
-                                onClick={() => handleOpenEditModal(task)}
-                                className="p-1.5 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-brand-primary shadow-xs transition-colors cursor-pointer"
-                                title="Edit Task"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => setDeletingTask(task)}
-                                className="p-1.5 rounded-lg bg-brand-surface hover:bg-red-50 border border-brand-border hover:border-red-200 text-red-600 shadow-xs transition-colors cursor-pointer"
-                                title="Delete Task"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+
+                              {/* Actions Dropdown */}
+                              {openActionMenu === task.id && (
+                                <div className="absolute right-0 top-10 z-50 w-52 max-h-60 overflow-y-auto rounded-xl bg-brand-surface border border-brand-border shadow-xl p-1.5">
+
+                                  {/* View */}
+                                  <button
+                                    onClick={() => {
+                                      setInspectingTask(task);
+                                      setOpenActionMenu(null);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary text-left"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                    <span>View Details</span>
+                                  </button>
+
+                                  {/* Edit */}
+                                  <button
+                                    onClick={() => {
+                                      handleOpenEditModal(task);
+                                      setOpenActionMenu(null);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary text-left"
+                                  >
+                                    <Edit2 className="w-4 h-4 text-brand-primary" />
+                                    <span>Edit Task</span>
+                                  </button>
+
+                                  {/* Delete */}
+                                  <button
+                                    onClick={() => {
+                                      setDeletingTask(task);
+                                      setOpenActionMenu(null);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-red-50 text-sm font-semibold text-red-600 text-left"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                    <span>Delete Task</span>
+                                  </button>
+
+                                  {/* Check Conflict */}
+                                  <button
+                                    onClick={() => {
+                                      handleOpenConflictModal(task);
+                                      setOpenActionMenu(null);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-orange-50 text-sm font-semibold text-brand-secondary text-left"
+                                  >
+                                    <ShieldAlert className="w-4 h-4 text-orange-500" />
+                                    <span>Check Conflict</span>
+                                  </button>
+
+                                  {/* Feasible Windows */}
+                                  <button
+                                    onClick={() => {
+                                      handleOpenFeasibleModal(task);
+                                      setOpenActionMenu(null);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-purple-50 text-sm font-semibold text-brand-secondary text-left"
+                                  >
+                                    <Timer className="w-4 h-4 text-purple-600" />
+                                    <span>Feasible Windows</span>
+                                  </button>
+
+                                </div>
+                              )}
+
                             </div>
                           </td>
                         </tr>
@@ -944,7 +1185,7 @@ export default function MaintenancePage() {
                   <h3 className="text-base font-extrabold text-brand-secondary">
                     {editingTask ? `Edit Task ${editingTask.task_code}` : "Schedule Maintenance Task"}
                   </h3>
-               
+
                 </div>
               </div>
               <button
@@ -1056,7 +1297,7 @@ export default function MaintenancePage() {
                 <div>
                   <label className="font-extrabold text-brand-secondary block mb-1">
                     Completion Deadline{" "}
-                   
+
                   </label>
                   <input
                     type="date"
@@ -1071,11 +1312,10 @@ export default function MaintenancePage() {
                         setFormData({ ...formData, deadline: val });
                       }
                     }}
-                    className={`w-full bg-brand-surface border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2 outline-none cursor-pointer font-bold shadow-2xs ${
-                      deadlineError
-                        ? "border-red-400 focus:border-red-500"
-                        : "border-brand-border"
-                    }`}
+                    className={`w-full bg-brand-surface border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2 outline-none cursor-pointer font-bold shadow-2xs ${deadlineError
+                      ? "border-red-400 focus:border-red-500"
+                      : "border-brand-border"
+                      }`}
                   />
                   {deadlineError && (
                     <p className="text-[10px] text-red-500 font-semibold mt-0.5">
@@ -1132,7 +1372,7 @@ export default function MaintenancePage() {
           <div className="bg-brand-surface border border-brand-border rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-brand-border">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-brand-blue-light text-brand-primary flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-brand-secondary/10 text-black flex items-center justify-center">
                   <Eye className="w-4 h-4" />
                 </div>
                 <div>
@@ -1259,57 +1499,157 @@ export default function MaintenancePage() {
               <div className="space-y-3">
                 <div>
                   <label className="block text-xs font-bold text-brand-secondary mb-1">
-                    Railway Section <span className="text-red-500">*</span>
+                    Railway Section
                   </label>
-                  <select
-                    value={conflictForm.section}
-                    onChange={(e) =>
-                      setConflictForm({ ...conflictForm, section: Number(e.target.value) })
-                    }
-                    className="w-full px-3 py-2 rounded-xl bg-brand-surface border border-brand-border text-brand-secondary text-xs focus:outline-hidden focus:border-brand-primary cursor-pointer"
-                    required
-                  >
-                    {sections.map((sec) => (
-                      <option key={sec.id} value={sec.id}>
-                        {sec.section_name} ({sec.origin_station} to {sec.end_station})
-                      </option>
-                    ))}
-                  </select>
+                  <div className="w-full px-3 py-2 rounded-xl bg-brand-tertiary border border-brand-border text-brand-secondary text-xs font-semibold">
+                    {sections.find((sec) => Number(sec.id) === Number(conflictForm.section))?.section_name || `Section #${conflictForm.section}`}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-brand-secondary mb-1">
-                      Maintenance Start Time <span className="text-red-500">*</span>
+                      Maintenance Start Time
                     </label>
-                    <input
-                      type="text"
-                      placeholder="YYYY-MM-DD HH:MM:SS"
-                      value={conflictForm.maintenance_start}
-                      onChange={(e) =>
-                        setConflictForm({ ...conflictForm, maintenance_start: e.target.value })
-                      }
-                      className="w-full px-3 py-2 rounded-xl bg-brand-surface border border-brand-border text-brand-secondary text-xs font-mono focus:outline-hidden focus:border-brand-primary"
-                      required
-                    />
-                    <span className="text-[10px] text-brand-muted mt-1 block">e.g. 2026-09-04 02:00:00</span>
+                    <div className="relative">
+                      <input
+                        ref={startDateTimeRef}
+                        type="datetime-local"
+                        value={conflictForm.maintenance_start.replace(" ", "T").substring(0, 16)}
+                        min={minStartDateTime}
+                        max={maxMaintenanceDateTime}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          const formattedVal = value.replace("T", " ");
+                          let nextEnd = conflictForm.maintenance_end;
+
+                          // If start is valid and current end is <= new start, advance end time cleanly
+                          if (value) {
+                            const sDate = new Date(value);
+                            const eDate = new Date(conflictForm.maintenance_end.replace(" ", "T"));
+                            if (!Number.isNaN(sDate.getTime()) && (!conflictForm.maintenance_end || eDate <= sDate)) {
+                              const autoEnd = new Date(sDate.getTime() + 2 * 60 * 60 * 1000);
+                              const maxLimit = new Date(currentNow.getFullYear(), currentNow.getMonth(), currentNow.getDate() + 30, 23, 59);
+                              const safeEnd = autoEnd > maxLimit ? maxLimit : autoEnd;
+                              nextEnd = formatDateTimeLocal(safeEnd).replace("T", " ");
+                            }
+                          }
+
+                          setConflictForm((prev) => ({
+                            ...prev,
+                            maintenance_start: formattedVal,
+                            maintenance_end: nextEnd,
+                          }));
+
+                          const valRes = validateMaintenanceTimes(value, nextEnd, currentNow);
+                          setConflictStartError(valRes.startError);
+                          setConflictEndError(valRes.endError);
+                          if (conflictError) setConflictError(null);
+                        }}
+                        className={`w-full px-3 py-2 pr-20 rounded-xl bg-brand-tertiary border text-brand-secondary text-xs font-mono font-semibold focus:outline-hidden cursor-pointer transition-colors ${
+                          conflictStartError
+                            ? "border-red-400 bg-red-50/40 focus:border-red-500"
+                            : "border-brand-border focus:border-brand-primary"
+                        }`}
+                      />
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 bg-brand-tertiary">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const input = startDateTimeRef.current as (HTMLInputElement & { showPicker?: () => void }) | null;
+                            input?.showPicker?.();
+                          }}
+                          className="p-1.5 rounded-md hover:bg-brand-border transition-colors cursor-pointer"
+                          title="Select date"
+                        >
+                          <Calendar className="w-4 h-4 text-brand-secondary" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const input = startDateTimeRef.current as (HTMLInputElement & { showPicker?: () => void }) | null;
+                            input?.showPicker?.();
+                          }}
+                          className="p-1.5 rounded-md hover:bg-brand-border transition-colors cursor-pointer"
+                          title="Select time"
+                        >
+                          <Clock className="w-4 h-4 text-brand-secondary" />
+                        </button>
+                      </div>
+                    </div>
+                    {conflictStartError ? (
+                      <span className="text-[11px] font-bold text-red-600 mt-1 flex items-center gap-1 animate-in fade-in">
+                        <AlertTriangle className="w-3 h-3 text-red-600 shrink-0" />
+                        <span>{conflictStartError}</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-brand-muted mt-1 block">Present/future time only • Automatically selected from the task corridor block window</span>
+                    )}
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-brand-secondary mb-1">
-                      Maintenance End Time <span className="text-red-500">*</span>
+                      Maintenance End Time
                     </label>
-                    <input
-                      type="text"
-                      placeholder="YYYY-MM-DD HH:MM:SS"
-                      value={conflictForm.maintenance_end}
-                      onChange={(e) =>
-                        setConflictForm({ ...conflictForm, maintenance_end: e.target.value })
-                      }
-                      className="w-full px-3 py-2 rounded-xl bg-brand-surface border border-brand-border text-brand-secondary text-xs font-mono focus:outline-hidden focus:border-brand-primary"
-                      required
-                    />
-                    <span className="text-[10px] text-brand-muted mt-1 block">e.g. 2026-09-04 05:00:00</span>
+                    <div className="relative">
+                      <input
+                        ref={endDateTimeRef}
+                        type="datetime-local"
+                        value={conflictForm.maintenance_end.replace(" ", "T").substring(0, 16)}
+                        min={minEndDateTime}
+                        max={maxMaintenanceDateTime}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          const formattedVal = value.replace("T", " ");
+                          setConflictForm((prev) => ({
+                            ...prev,
+                            maintenance_end: formattedVal,
+                          }));
+
+                          const valRes = validateMaintenanceTimes(conflictForm.maintenance_start, value, currentNow);
+                          setConflictStartError(valRes.startError);
+                          setConflictEndError(valRes.endError);
+                          if (conflictError) setConflictError(null);
+                        }}
+                        className={`w-full px-3 py-2 pr-20 rounded-xl bg-brand-tertiary border text-brand-secondary text-xs font-mono font-semibold focus:outline-hidden cursor-pointer transition-colors ${
+                          conflictEndError
+                            ? "border-red-400 bg-red-50/40 focus:border-red-500"
+                            : "border-brand-border focus:border-brand-primary"
+                        }`}
+                      />
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 bg-brand-tertiary">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const input = endDateTimeRef.current as (HTMLInputElement & { showPicker?: () => void }) | null;
+                            input?.showPicker?.();
+                          }}
+                          className="p-1.5 rounded-md hover:bg-brand-border transition-colors cursor-pointer"
+                          title="Select date"
+                        >
+                          <Calendar className="w-4 h-4 text-brand-secondary" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const input = endDateTimeRef.current as (HTMLInputElement & { showPicker?: () => void }) | null;
+                            input?.showPicker?.();
+                          }}
+                          className="p-1.5 rounded-md hover:bg-brand-border transition-colors cursor-pointer"
+                          title="Select time"
+                        >
+                          <Clock className="w-4 h-4 text-brand-secondary" />
+                        </button>
+                      </div>
+                    </div>
+                    {conflictEndError ? (
+                      <span className="text-[11px] font-bold text-red-600 mt-1 flex items-center gap-1 animate-in fade-in">
+                        <AlertTriangle className="w-3 h-3 text-red-600 shrink-0" />
+                        <span>{conflictEndError}</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-brand-muted mt-1 block">Must be after start time • Automatically selected from the task corridor block window</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1324,8 +1664,8 @@ export default function MaintenancePage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={checkConflictMutation.isPending}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-secondary/80 text-xs font-bold text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                  disabled={checkConflictMutation.isPending || Boolean(conflictStartError || conflictEndError)}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 text-xs font-bold text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   {checkConflictMutation.isPending ? (
                     <>
@@ -1423,7 +1763,7 @@ export default function MaintenancePage() {
           <div className="bg-brand-surface border border-brand-border rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-brand-border">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-brand-secondary/80 text-white flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-purple/50 text-purple-600 flex items-center justify-center">
                   <Timer className="w-4 h-4" />
                 </div>
                 <div>
@@ -1447,48 +1787,13 @@ export default function MaintenancePage() {
               <div className="space-y-3">
                 <div>
                   <label className="block text-xs font-bold text-brand-secondary mb-1">
-                    Select Maintenance Task <span className="text-red-500">*</span>
+                    Maintenance Task
                   </label>
-                  <select
-                    value={feasibleForm.task_id}
-                    onChange={(e) => {
-                      const selectedCode = e.target.value;
-                      const task = tasks.find((t) => t.task_code === selectedCode);
-                      let matchingWindowId = 0;
-                      if (task) {
-                        const taskAsset = assets.find((a) => a.id === task.asset);
-                        const secId = taskAsset?.section;
-                        const secName = task.section_name || taskAsset?.section_name;
-                        const matchingBws = blockWindows.filter((bw) => {
-                          if (secId && Number(bw.section) === Number(secId)) return true;
-                          if (
-                            secName &&
-                            bw.section_name &&
-                            bw.section_name.trim().toLowerCase() === secName.trim().toLowerCase()
-                          ) {
-                            return true;
-                          }
-                          return false;
-                        });
-                        if (matchingBws.length > 0) {
-                          matchingWindowId = matchingBws[0].id;
-                        }
-                      }
-                      setFeasibleForm({
-                        task_id: selectedCode,
-                        block_window_id: matchingWindowId,
-                      });
-                    }}
-                    className="w-full px-3 py-2 rounded-xl bg-brand-surface border border-brand-border text-brand-secondary text-xs focus:outline-hidden focus:border-brand-primary cursor-pointer"
-                    required
-                  >
-                    <option value="">Select a maintenance task...</option>
-                    {tasks.map((t) => (
-                      <option key={t.id} value={t.task_code}>
-                        {t.task_code} - {t.asset_name || `Asset #${t.asset}`} ({t.estimated_duration} mins)
-                      </option>
-                    ))}
-                  </select>
+                  <div className="w-full px-3 py-2 rounded-xl bg-brand-tertiary border border-brand-border text-brand-secondary text-xs font-semibold">
+                    {selectedFeasibleTask
+                      ? `${selectedFeasibleTask.task_code} - ${selectedFeasibleTask.asset_name || `Asset #${selectedFeasibleTask.asset}`} (${selectedFeasibleTask.estimated_duration} mins)`
+                      : "No task selected"}
+                  </div>
                   {selectedFeasibleTask && (
                     <div className="flex items-center gap-1.5 mt-1.5 px-2.5 py-1 rounded-lg bg-brand-tertiary border border-brand-border text-[11px] text-brand-secondary">
                       <MapPin className="w-3.5 h-3.5 text-brand-primary shrink-0" />
@@ -1505,37 +1810,24 @@ export default function MaintenancePage() {
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="block text-xs font-bold text-brand-secondary">
-                      Select Block Window <span className="text-red-500">*</span>
+                      Block Window
                     </label>
                     {selectedFeasibleSectionName && (
                       <span className="text-[10px] text-brand-muted font-medium">
-                        Only showing blocks for {selectedFeasibleSectionName}
+                        Automatically selected for {selectedFeasibleSectionName}
                       </span>
                     )}
                   </div>
-                  <select
-                    value={feasibleForm.block_window_id}
-                    onChange={(e) =>
-                      setFeasibleForm({ ...feasibleForm, block_window_id: Number(e.target.value) })
-                    }
-                    className="w-full px-3 py-2 rounded-xl bg-brand-surface border border-brand-border text-brand-secondary text-xs focus:outline-hidden focus:border-brand-primary cursor-pointer"
-                    required
-                  >
-                    {sectionBlockWindows.length === 0 ? (
-                      <option value={0}>
-                        No block windows registered for {selectedFeasibleSectionName || `Section #${selectedFeasibleSectionId}`}
-                      </option>
-                    ) : (
-                      <>
-                        <option value={0}>Select a block window...</option>
-                        {sectionBlockWindows.map((bw) => (
-                          <option key={bw.id} value={bw.id}>
-                            Window #{bw.id} - {bw.section_name || `Section ${bw.section}`} ({bw.start_time} to {bw.end_time}) [{bw.status}]
-                          </option>
-                        ))}
-                      </>
-                    )}
-                  </select>
+                  <div className="w-full px-3 py-2 rounded-xl bg-brand-tertiary border border-brand-border text-brand-secondary text-xs font-mono font-semibold">
+                    {sectionBlockWindows.find((bw) => Number(bw.id) === Number(feasibleForm.block_window_id))
+                      ? (() => {
+                        const bw = sectionBlockWindows.find((item) => Number(item.id) === Number(feasibleForm.block_window_id));
+                        return `Window #${bw?.id} - ${bw?.section_name || `Section ${bw?.section}`} (${bw?.start_time} to ${bw?.end_time}) [${bw?.status}]`;
+                      })()
+                      : sectionBlockWindows.length === 0
+                        ? `No block windows registered for ${selectedFeasibleSectionName || `Section #${selectedFeasibleSectionId}`}`
+                        : "No block window selected"}
+                  </div>
                   {loadingBlockWindows && (
                     <span className="text-[10px] text-brand-muted mt-1 block">Loading block windows...</span>
                   )}
@@ -1567,7 +1859,7 @@ export default function MaintenancePage() {
                 <button
                   type="submit"
                   disabled={feasibleWindowsMutation.isPending}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-secondary/80 text-xs font-bold text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-500 text-xs font-bold text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   {feasibleWindowsMutation.isPending ? (
                     <>
