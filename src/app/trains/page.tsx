@@ -84,7 +84,7 @@ export default function TrainsPage() {
   const [activeViewMode, setActiveViewMode] = useState<"all" | "tracked" | "schedules">("all");
   // Default to 2026-09-04 where active train operations are seeded in the backend database
   // Clamped to valid live-tracking range (today - 7 days → today)
-  const [trackedDate, setTrackedDate] = useState<string>(() => clampDate("2026-09-04", "live-tracking"));
+  const [trackedDate, setTrackedDate] = useState<string>(() => formatDateToISO(new Date()));
   const [trackedDateError, setTrackedDateError] = useState<string | null>(null);
   const [scheduleDateError, setScheduleDateError] = useState<string | null>(null);
   const [trackedSectionId, setTrackedSectionId] = useState<number>(1);
@@ -467,7 +467,7 @@ export default function TrainsPage() {
                         const theme = getTrainTypeTheme(item.train_type, item.train_name);
                         const delayObj = formatDelayMetric(item.delay_minutes);
                         return (
-                          <tr key={`${item.train_number}-${idx}`} className={`hover:bg-brand-tertiary/60 ${theme.borderColor}`}>
+                          <tr key={`${item.train_number}-${idx}`} className="hover:bg-brand-tertiary/60">
                             <td className="py-3 px-4">
                               <div className="flex items-center gap-2.5">
                                 <div className={`w-1.5 h-8 rounded-full ${theme.lineColor}`} />
@@ -480,9 +480,9 @@ export default function TrainsPage() {
                             <td className="py-3 px-4">
                               <span className="ml-2 font-bold">{item.priority}/10</span>
                             </td>
-                            <td className="py-3 px-4">{item.section.name}</td>
-                            <td className="py-3 px-4 font-mono">{formatTimeString(item.schedule.entry_time)} → {formatTimeString(item.schedule.exit_time)}</td>
-                            <td className="py-3 px-4 font-mono">{formatTimeString(item.movement?.actual_entry_time)} → {formatTimeString(item.movement?.actual_exit_time)}</td>
+                            <td className="py-3 px-4 font-semibold">{item.section.name}</td>
+                            <td className="py-3 px-4 font-mono font-semibold">{formatTimeString(item.schedule.entry_time)} → {formatTimeString(item.schedule.exit_time)}</td>
+                            <td className="py-3 px-4 font-mono font-semibold">{formatTimeString(item.movement?.actual_entry_time)} → {formatTimeString(item.movement?.actual_exit_time)}</td>
                             <td className="py-3 px-4 text-center">
                               <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold border ${delayObj.badgeClass}`}>
                                 {delayObj.text}
@@ -839,7 +839,6 @@ export default function TrainsPage() {
                               <div className="text-brand-primary font-semibold text-xs font-mono">
                                 {formatTrainTimeIST(item.scheduledEntryTime)}
                               </div>
-                              <span className="text-[10px] text-brand-muted">IST Entry</span>
                             </td>
 
                             {/* Scheduled Exit */}
@@ -847,7 +846,6 @@ export default function TrainsPage() {
                               <div className="text-brand-primary font-semibold text-xs font-mono">
                                 {formatTrainTimeIST(item.scheduledExitTime)}
                               </div>
-                              <span className="text-[10px] text-brand-muted">IST Exit</span>
                             </td>
 
                             {/* Transit Duration */}
