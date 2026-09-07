@@ -29,7 +29,7 @@ export function MaintenancePageSkeleton() {
 
           {/* KPI Cards */}
           <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            {["Total Tasks", "Pending Execution", "Scheduled Blocks", "Critical Priority", "Total Block Time"].map((label) => (
+            {["Total Tasks", "Completed Maintenance", "Scheduled Blocks", "Critical Priority", "Total Block Time"].map((label) => (
               <div key={label} className="p-4 rounded-2xl bg-brand-surface border border-brand-border shadow-sm flex items-start gap-3.5">
                 <Skeleton className="w-9 h-9 rounded-full shrink-0" />
                 <div className="space-y-1.5">

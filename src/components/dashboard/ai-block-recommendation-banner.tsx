@@ -17,6 +17,15 @@ interface Props {
   onSlotUpdated?: () => void;
 }
 
+// Format timestamp string safely to HH:MM (handles null/undefined/various formats)
+function formatTimeHHMM(dtStr?: string | null): string {
+  if (!dtStr) return "--:--";
+  if (dtStr.length >= 16) return dtStr.slice(11, 16);
+  if (dtStr.includes(" ")) return dtStr.split(" ")[1]?.slice(0, 5) || dtStr;
+  if (dtStr.includes("T")) return dtStr.split("T")[1]?.slice(0, 5) || dtStr;
+  return dtStr;
+}
+
 /**
  * Decision-score badge colour follows guide §6:
  *   0.75–1.00 → Crimson (critical priority)
@@ -125,7 +134,7 @@ export function AIBlockRecommendationBanner({
               <span className="font-bold">🚄 {c.train_number}</span>
               <span className="text-red-600 truncate">{c.train_name}</span>
               <span className="ml-auto font-mono text-red-500 shrink-0">
-                {c.entry_time.slice(11, 16)} – {c.exit_time.slice(11, 16)}
+                {formatTimeHHMM(c.entry_time)} – {formatTimeHHMM(c.exit_time)}
               </span>
             </div>
           ))}
@@ -140,7 +149,7 @@ export function AIBlockRecommendationBanner({
               Current Slot
             </span>
             <span className="font-mono text-xs text-brand-secondary font-semibold">
-              {current_slot.start_time.slice(11, 16)} – {current_slot.end_time.slice(11, 16)}
+              {formatTimeHHMM(current_slot.start_time)} – {formatTimeHHMM(current_slot.end_time)}
             </span>
           </div>
           <div>
@@ -149,7 +158,7 @@ export function AIBlockRecommendationBanner({
               AI Recommended
             </span>
             <span className="font-mono text-xs text-emerald-700 font-bold">
-              {recommended_slot.start.slice(11, 16)} – {recommended_slot.end.slice(11, 16)}
+              {formatTimeHHMM(recommended_slot.start)} – {formatTimeHHMM(recommended_slot.end)}
             </span>
             <span className="text-[10px] text-brand-muted ml-1.5">
               ({recommended_slot.duration_minutes} min)

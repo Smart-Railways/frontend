@@ -1,11 +1,10 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from "axios";
 import { ApiResponse, ApiErrorDetail } from "@/types/common";
 
-const DEFAULT_API_BASE = "https://backend-oz3h.onrender.com/railways";
 
 export function getApiBaseUrl(): string {
-  const envUrl = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
-  if (!envUrl) return DEFAULT_API_BASE;
+  const envUrl = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "";
+  if (!envUrl) return "";
 
   // If user provided backend root URL without /railways, append it
   if (!envUrl.includes("/railways")) {

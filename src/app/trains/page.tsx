@@ -212,8 +212,12 @@ export default function TrainsPage() {
   const filteredTrackedTrains = useMemo<TrackedTrainOperation[]>(() => {
     const rawList = trackedOperationsData?.trains || [];
     if (!trackedSearchQuery.trim()) return rawList;
-    const q = trackedSearchQuery.toLowerCase();
-    return rawList.filter((t) => t.train_number.toLowerCase().includes(q) || t.train_name.toLowerCase().includes(q) || t.train_type.toLowerCase().includes(q));
+    const q = trackedSearchQuery.toLowerCase().trim();
+    const words = q.split(/\s+/).filter(Boolean);
+    return rawList.filter((t) => {
+      const searchableText = `${t.train_number || ""} ${t.train_name || ""} ${t.train_type || ""} ${t.section?.name || ""} ${t.section?.source_code || ""} ${t.section?.destination_code || ""}`.toLowerCase();
+      return words.every((word) => searchableText.includes(word));
+    });
   }, [trackedOperationsData, trackedSearchQuery]);
 
   useEffect(() => {
@@ -229,8 +233,57 @@ export default function TrainsPage() {
 
   const masterTimetableItems = useMemo<MasterScheduleItem[]>(() => {
     if (!schedules) return [];
-    return schedules.map((sch) => {
-      const trainObj = trains.find((t) => t.id === sch.train);
+    return schedules.map((sch: any) => {
+      // Extract nested train object if sch.train or sch.train_details is an object
+      const nestedTrain = typeof sch.train === "object" && sch.train !== null
+        ? sch.train
+        : typeof sch.train_details === "object" && sch.train_details !== null
+        ? sch.train_details
+        : null;
+
+      const targetTrainId = nestedTrain?.id ?? sch.train;
+      const targetTrainNum = nestedTrain?.train_number ?? sch.train_number ?? (typeof sch.train === "string" ? sch.train : undefined);
+
+      // Find matching train object in trains store using coerced string comparison
+      const trainObj = trains.find((t) => {
+        if (targetTrainId !== undefined && targetTrainId !== null && String(t.id) === String(targetTrainId)) return true;
+        if (targetTrainNum && String(t.train_number) === String(targetTrainNum)) return true;
+        return false;
+      });
+
+      // Resolve train number, name, type, and priority with robust fallback hierarchy
+      const resolvedTrainNumber = String(
+        nestedTrain?.train_number ||
+        trainObj?.train_number ||
+        sch.train_number ||
+        sch.train_code ||
+        (typeof sch.train === "string" || typeof sch.train === "number" ? sch.train : "---")
+      );
+
+      const resolvedTrainName = String(
+        nestedTrain?.name ||
+        nestedTrain?.train_name ||
+        trainObj?.name ||
+        (trainObj as any)?.train_name ||
+        sch.train_name ||
+        sch.name ||
+        "Express"
+      );
+
+      const resolvedTrainType = String(
+        nestedTrain?.train_type ||
+        trainObj?.train_type ||
+        sch.train_type ||
+        TrainType.EXPRESS
+      );
+
+      const resolvedPriority = Number(
+        nestedTrain?.priority ??
+        trainObj?.priority ??
+        sch.priority ??
+        5
+      );
+
       const runningDays = sch.running_days || "1111111";
       const runsToday = runningDays[selectedScheduleDayIndex] === "1";
       const durationInfo = calculateTimeDuration(sch.scheduled_entry_time, sch.scheduled_exit_time);
@@ -240,16 +293,18 @@ export default function TrainsPage() {
       let statusDot = "bg-emerald-500";
       if (!isActive) { statusText = "Suspended"; statusBadge = "bg-red-50 border-red-300 text-red-700"; statusDot = "bg-red-500"; }
       else if (!runsToday) { statusText = "Off-Schedule"; statusBadge = "bg-slate-100 border-slate-300 text-slate-600"; statusDot = "bg-slate-400"; }
-      const secObj = availableSections.find((s) => s.id === sch.section);
+
+      const secObj = availableSections.find((s) => String(s.id) === String(sch.section));
       const resolvedSectionName = secObj?.section_name || (sch.section_name && !/^\d+$/.test(sch.section_name) ? sch.section_name : sch.section ? `Corridor ${sch.section}` : "Corridor");
+
       return {
         id: `sch-${sch.id}`,
         scheduleId: sch.id,
-        trainId: trainObj?.id,
-        trainNumber: trainObj?.train_number || sch.train_number || "---",
-        trainName: trainObj?.name || sch.train_name || "Express",
-        trainType: trainObj?.train_type || TrainType.EXPRESS,
-        priority: trainObj?.priority || 5,
+        trainId: trainObj?.id ?? nestedTrain?.id,
+        trainNumber: resolvedTrainNumber,
+        trainName: resolvedTrainName,
+        trainType: resolvedTrainType,
+        priority: resolvedPriority,
         scheduledEntryTime: sch.scheduled_entry_time,
         scheduledExitTime: sch.scheduled_exit_time,
         durationMins: durationInfo.durationMins,
@@ -271,15 +326,17 @@ export default function TrainsPage() {
       if (runsTodayOnly && !item.runsToday) return false;
       if (scheduleTypeFilter !== "ALL") {
         if (scheduleTypeFilter === "TEJAS") {
-          // TEJAS isn't a TrainType enum — match by name
-          if (!item.trainName.toUpperCase().includes("TEJAS")) return false;
+          if (!String(item.trainName || "").toUpperCase().includes("TEJAS")) return false;
         } else {
           if (item.trainType !== scheduleTypeFilter) return false;
         }
       }
       if (scheduleSearchQuery.trim()) {
-        const q = scheduleSearchQuery.toLowerCase();
-        if (!item.trainNumber.toLowerCase().includes(q) && !item.trainName.toLowerCase().includes(q) && !item.sectionName.toLowerCase().includes(q)) return false;
+        const q = scheduleSearchQuery.toLowerCase().trim();
+        const words = q.split(/\s+/).filter(Boolean);
+        const searchableText = `${item.trainNumber} ${item.trainName} ${item.sectionName} ${item.trainType} ${item.scheduleId}`.toLowerCase();
+        
+        return words.every((word) => searchableText.includes(word));
       }
       return true;
     });
@@ -429,7 +486,29 @@ export default function TrainsPage() {
                   </div>
                 </div>
 
-             
+                {/* Search input sub-row for Tracked Trains */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-brand-border/60">
+                  <div className="relative w-full sm:w-72">
+                    <input
+                      type="text"
+                      placeholder="Search tracked train no., name, type..."
+                      value={trackedSearchQuery}
+                      onChange={(e) => setTrackedSearchQuery(e.target.value)}
+                      className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-xs text-brand-secondary placeholder:text-brand-muted rounded-xl pl-3 pr-8 py-1.5 outline-none font-medium shadow-2xs"
+                    />
+                    {trackedSearchQuery ? (
+                      <button
+                        onClick={() => setTrackedSearchQuery("")}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-muted hover:text-brand-secondary text-xs font-bold cursor-pointer"
+                        title="Clear search"
+                      >
+                        ✕
+                      </button>
+                    ) : (
+                      <Search className="w-3.5 h-3.5 text-brand-muted absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    )}
+                  </div>
+                </div>
               </div>
 
               <div className="overflow-x-auto border border-brand-border/80 rounded-xl">
@@ -732,9 +811,18 @@ export default function TrainsPage() {
                       onChange={(e) => setScheduleSearchQuery(e.target.value)}
                       className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-xs text-brand-secondary placeholder:text-brand-muted rounded-xl pl-3 pr-8 py-1.5 outline-none font-medium shadow-2xs"
                     />
-                    <Search className="w-3 h-3 text-brand-muted absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    {scheduleSearchQuery ? (
+                      <button
+                        onClick={() => setScheduleSearchQuery("")}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-muted hover:text-brand-secondary text-xs font-bold cursor-pointer"
+                        title="Clear search"
+                      >
+                        ✕
+                      </button>
+                    ) : (
+                      <Search className="w-3.5 h-3.5 text-brand-muted absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    )}
                   </div>
-
                 </div>
               </div>
 

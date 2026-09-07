@@ -220,7 +220,7 @@ export function IndiaLeafletMap({
   // Identify all corridor sections that have scheduled/active maintenance
   const scheduledMaintenanceSections = useMemo(() => {
     const scheduled = maintenanceTasks.filter(
-      (t) => t.task_status === "SCHEDULED" || t.task_status === "PENDING"
+      (t) => t.task_status?.toUpperCase() === "SCHEDULED"
     );
 
     const result: Array<{

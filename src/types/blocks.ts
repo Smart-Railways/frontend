@@ -22,6 +22,9 @@ export interface BlockWindow {
   id: number;
   section: number;
   section_name?: string;
+  task?: number | null;
+  task_code?: string | null;
+  task_id?: string | null;
   start_time: string;
   end_time: string;
   status: BlockStatus | string;
@@ -29,6 +32,8 @@ export interface BlockWindow {
 
 export interface CreateBlockWindowInput {
   section: number;
+  task?: number | null;
+  task_id?: string | null;
   start_time: string;
   end_time: string;
   status?: BlockStatus | string;
@@ -36,6 +41,8 @@ export interface CreateBlockWindowInput {
 
 export interface UpdateBlockWindowInput {
   section?: number;
+  task?: number | null;
+  task_id?: string | null;
   start_time?: string;
   end_time?: string;
   status?: BlockStatus | string;
@@ -44,6 +51,8 @@ export interface UpdateBlockWindowInput {
 /** Full replacement payload for PUT /block-windows/{id}/ */
 export interface BlockWindowPutPayload {
   section: number;
+  task?: number | null;
+  task_id?: string | null;
   start_time: string;
   end_time: string;
   status: string;
@@ -80,6 +89,7 @@ export interface ConflictCheckResponse {
 export interface FeasibleWindowsRequest {
   task_id: string;
   date: string; // YYYY-MM-DD
+  block_window_id?: number | string;
 }
 
 /**

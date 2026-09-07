@@ -90,7 +90,7 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
 
   const allNotifications = useMemo<RailwayNotification[]>(() => {
     return apiMaintenanceTasks
-      .filter((task) => task.task_status !== "COMPLETED") // Only show pending/active tasks
+      .filter((task) => task.task_status?.toUpperCase() === "SCHEDULED") // Only show scheduled tasks on dashboard
       .map((task) => {
         const isUrgent = task.urgency === "CRITICAL" || task.urgency === "HIGH";
         const isScheduled = task.task_status === "SCHEDULED";

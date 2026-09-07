@@ -40,18 +40,21 @@ export enum MaintenanceStatus {
   SCHEDULED = "SCHEDULED",
   COMPLETED = "COMPLETED",
   CANCELLED = "CANCELLED",
+  DELAYED = "DELAYED",
 }
 
 export const MAINTENANCE_STATUS_LABELS: Record<MaintenanceStatus, string> = {
-  [MaintenanceStatus.PENDING]: "Pending",
+  [MaintenanceStatus.PENDING]: "Block Window Needed",
   [MaintenanceStatus.SCHEDULED]: "Scheduled",
   [MaintenanceStatus.COMPLETED]: "Completed",
   [MaintenanceStatus.CANCELLED]: "Cancelled",
+  [MaintenanceStatus.DELAYED]: "Delayed",
 };
 
 export const MAINTENANCE_STATUS_DESCRIPTIONS: Record<MaintenanceStatus, string> = {
-  [MaintenanceStatus.PENDING]: "Task is created, awaiting scheduling and block allocation",
+  [MaintenanceStatus.PENDING]: "Maintenance task created, awaiting block window allocation",
   [MaintenanceStatus.SCHEDULED]: "Block window or maintenance plan has been allocated / approved",
   [MaintenanceStatus.COMPLETED]: "Maintenance work has finished successfully",
   [MaintenanceStatus.CANCELLED]: "Task has been dismissed or superseded",
+  [MaintenanceStatus.DELAYED]: "Maintenance task execution or block window has been delayed",
 };

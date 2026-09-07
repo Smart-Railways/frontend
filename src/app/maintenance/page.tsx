@@ -36,7 +36,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { MaintenancePageSkeleton, MaintenanceTasksTableSkeleton } from "./skeletons";
+import { checkBlockConflict } from "@/actions/blocks";
 import {
   useMaintenanceTasks,
   useAssets,
@@ -58,6 +65,7 @@ import {
   FeasibleWindowsResponse,
   FeasibleWindowSlot,
   BlockWindow,
+  FeasibleWindowsRequest,
 } from "@/types";
 import {
   MaintenancePriority,
@@ -107,7 +115,7 @@ const STATUS_CONFIG: Record<
   [MaintenanceStatus.PENDING]: {
     label: MAINTENANCE_STATUS_LABELS[MaintenanceStatus.PENDING],
     badge: "bg-amber-500 border-amber-600 text-white",
-    icon: Hourglass,
+    icon: AlertTriangle,
   },
   [MaintenanceStatus.SCHEDULED]: {
     label: MAINTENANCE_STATUS_LABELS[MaintenanceStatus.SCHEDULED],
@@ -123,6 +131,11 @@ const STATUS_CONFIG: Record<
     label: MAINTENANCE_STATUS_LABELS[MaintenanceStatus.CANCELLED],
     badge: "bg-slate-600 border-slate-700 text-white",
     icon: XCircle,
+  },
+  [MaintenanceStatus.DELAYED]: {
+    label: MAINTENANCE_STATUS_LABELS[MaintenanceStatus.DELAYED],
+    badge: "bg-rose-600 border-rose-700 text-white",
+    icon: Timer,
   },
 };
 
@@ -235,10 +248,34 @@ function getMaxMaintenanceDateTime(baseDate?: Date): string {
   return formatDateTimeLocal(maxDate);
 }
 
-// Rolling minimum for maintenance start (current local time).
+// Calculate maximum allowed End Time for a given Start Time (at most the next day up to 23:59).
+function getMaxEndTimeForStart(startStr?: string): string {
+  if (!startStr) return getMaxMaintenanceDateTime();
+  try {
+    const clean = startStr.trim().replace(" ", "T");
+    const sDate = new Date(clean);
+    if (Number.isNaN(sDate.getTime())) return getMaxMaintenanceDateTime();
+    const nextDay = new Date(sDate.getFullYear(), sDate.getMonth(), sDate.getDate() + 1, 23, 59);
+    return formatDateTimeLocal(nextDay);
+  } catch {
+    return getMaxMaintenanceDateTime();
+  }
+}
+
+// Rolling minimum for maintenance start (current local time + 1 hour).
 function getMinMaintenanceDateTime(baseDate?: Date): string {
   const base = baseDate || new Date();
-  return formatDateTimeLocal(base);
+  const minTime = new Date(base.getTime() + 60 * 60 * 1000);
+  return formatDateTimeLocal(minTime);
+}
+
+// Format timestamp string safely to HH:MM (handles null/undefined/various formats)
+function formatTimeHHMM(dtStr?: string | null): string {
+  if (!dtStr) return "--:--";
+  if (dtStr.length >= 16) return dtStr.slice(11, 16);
+  if (dtStr.includes(" ")) return dtStr.split(" ")[1]?.slice(0, 5) || dtStr;
+  if (dtStr.includes("T")) return dtStr.split("T")[1]?.slice(0, 5) || dtStr;
+  return dtStr;
 }
 
 // Convert API timestamp (e.g. "2026-09-04 04:00:00") to datetime-local value ("2026-09-04T04:00")
@@ -287,9 +324,9 @@ function validateMaintenanceTimes(
     const sDate = new Date(startVal.replace(" ", "T"));
     if (Number.isNaN(sDate.getTime())) {
       startError = "Invalid start date and time format.";
-    } else if (sDate.getTime() < now.getTime() - 45000) {
-      // 45-second grace buffer to account for elapsed seconds while interacting with the picker
-      startError = "Start Maintenance cannot be in the past. Current or future time only.";
+    } else if (sDate.getTime() < now.getTime() + 60 * 60 * 1000 - 45000) {
+      // Grace buffer for picker interaction elapsed seconds
+      startError = "Start Maintenance cannot be earlier than 1 hour from current time.";
     } else if (sDate.getTime() > maxDate.getTime()) {
       startError = "Start Maintenance cannot exceed the 30-day rolling window from today.";
     }
@@ -338,7 +375,7 @@ export default function MaintenancePage() {
   const { data: tasks = [], isLoading: loadingTasks, isRefetching: refetchingTasks, refetch: refetchTasks } = useMaintenanceTasks();
   const { data: assets = [], isLoading: loadingAssets, refetch: refetchAssets } = useAssets();
   const { data: sections = [] } = useRailwaySections();
-  const { data: blockWindows = [], isLoading: loadingBlockWindows } = useBlockWindows();
+  const { data: blockWindows = [], isLoading: loadingBlockWindows, refetch: refetchBlockWindows } = useBlockWindows();
 
   // Gate: show full-page skeleton until every first-load fetch resolves
   const isPageLoading = loadingTasks || loadingAssets || loadingBlockWindows;
@@ -390,7 +427,6 @@ export default function MaintenancePage() {
   const [editingTask, setEditingTask] = useState<MaintenanceTask | null>(null);
   const [deletingTask, setDeletingTask] = useState<MaintenanceTask | null>(null);
   const [inspectingTask, setInspectingTask] = useState<MaintenanceTask | null>(null);
-  const [openActionMenu, setOpenActionMenu] = useState<number | null>(null);
   const startDateTimeRef = useRef<HTMLInputElement>(null);
   const endDateTimeRef = useRef<HTMLInputElement>(null);
 
@@ -449,6 +485,7 @@ export default function MaintenancePage() {
 
   // Create / Update Block Window Modal State
   const [isBlockWindowModalOpen, setIsBlockWindowModalOpen] = useState<boolean>(false);
+  const [blockWindowStep, setBlockWindowStep] = useState<"FORM" | "AI_RECOMMENDATION">("FORM");
   const [selectedBlockTask, setSelectedBlockTask] = useState<MaintenanceTask | null>(null);
   const [editingBlockWindow, setEditingBlockWindow] = useState<BlockWindow | null>(null);
   const [blockWindowForm, setBlockWindowForm] = useState<{
@@ -456,26 +493,89 @@ export default function MaintenancePage() {
     start_time: string;
     end_time: string;
     status: string;
-  }>({
-    section: 1,
-    start_time: formatDateTimeLocal(new Date()),
-    end_time: formatDateTimeLocal(new Date(Date.now() + 60 * 60 * 1000)),
-    status: "RESERVED",
+  }>(() => {
+    const minStart = new Date(Date.now() + 60 * 60 * 1000);
+    return {
+      section: 1,
+      start_time: formatDateTimeLocal(minStart),
+      end_time: formatDateTimeLocal(new Date(minStart.getTime() + 60 * 60 * 1000)),
+      status: "RESERVED",
+    };
   });
   const [blockWindowError, setBlockWindowError] = useState<string | null>(null);
   const [blockWindowSuccessMsg, setBlockWindowSuccessMsg] = useState<string | null>(null);
+  const [standardConflictResult, setStandardConflictResult] = useState<ConflictCheckResponse | null>(null);
+  const [conflictCheckLoading, setConflictCheckLoading] = useState<boolean>(false);
+
+  // Live Standard Conflict Check inside Block Window form
+  useEffect(() => {
+    if (!isBlockWindowModalOpen || blockWindowStep !== "FORM") return;
+
+    let isCancelled = false;
+    const timer = setTimeout(async () => {
+      if (!blockWindowForm.start_time || !blockWindowForm.end_time || !blockWindowForm.section) {
+        setStandardConflictResult(null);
+        setConflictCheckLoading(false);
+        return;
+      }
+
+      const startTimeApi = toApiTimestamp(blockWindowForm.start_time);
+      const endTimeApi = toApiTimestamp(blockWindowForm.end_time);
+
+      const startMs = new Date(startTimeApi).getTime();
+      const endMs = new Date(endTimeApi).getTime();
+      if (Number.isNaN(startMs) || Number.isNaN(endMs) || startMs >= endMs) {
+        setStandardConflictResult(null);
+        setConflictCheckLoading(false);
+        return;
+      }
+
+      setConflictCheckLoading(true);
+      try {
+        const res = await checkBlockConflict({
+          section: Number(blockWindowForm.section),
+          maintenance_start: startTimeApi,
+          maintenance_end: endTimeApi,
+        });
+        if (!isCancelled) {
+          setStandardConflictResult(res.success && res.data ? res.data : null);
+          setConflictCheckLoading(false);
+        }
+      } catch {
+        if (!isCancelled) {
+          setStandardConflictResult(null);
+          setConflictCheckLoading(false);
+        }
+      }
+    }, 400);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+    };
+  }, [
+    isBlockWindowModalOpen,
+    blockWindowStep,
+    blockWindowForm.section,
+    blockWindowForm.start_time,
+    blockWindowForm.end_time,
+  ]);
 
   // Form State
   const [deadlineError, setDeadlineError] = useState<string | null>(null);
-  const [formData, setFormData] = useState<CreateMaintenanceTaskInput>({
-    task_code: "",
-    asset: 1,
-    details: "",
-    risk_rating: 8,
-    urgency: MaintenancePriority.HIGH,
-    deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-    estimated_duration: 45,
-    task_status: MaintenanceStatus.PENDING,
+  const [formData, setFormData] = useState<CreateMaintenanceTaskInput>(() => {
+    const now = new Date();
+    const future = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    return {
+      task_code: "",
+      asset: 0,
+      details: "",
+      risk_rating: 8,
+      urgency: MaintenancePriority.HIGH,
+      deadline: future.toISOString().split("T")[0],
+      estimated_duration: 45,
+      task_status: MaintenanceStatus.PENDING,
+    };
   });
 
   // Open Create Modal with auto-suggested task code
@@ -485,7 +585,7 @@ export default function MaintenancePage() {
     const randomSuffix = Math.floor(100 + Math.random() * 900);
     setFormData({
       task_code: `TMS-${randomSuffix}`,
-      asset: assets.length > 0 ? assets[0].id : 1,
+      asset: 0,
       details: "",
       risk_rating: 8,
       urgency: MaintenancePriority.HIGH,
@@ -566,6 +666,60 @@ export default function MaintenancePage() {
         showToast("error", err instanceof Error ? err.message : "Failed to delete task.");
       },
     });
+  };
+
+  // Mark Task as Completed Action (PUT request to update status)
+  const handleMarkAsCompleted = (task: MaintenanceTask) => {
+    updateTaskMutation.mutate(
+      {
+        id: task.id,
+        data: {
+          task_code: task.task_code,
+          asset: task.asset,
+          details: task.details || "",
+          risk_rating: task.risk_rating,
+          urgency: task.urgency,
+          deadline: task.deadline ? task.deadline.substring(0, 10) : new Date().toISOString().split("T")[0],
+          estimated_duration: task.estimated_duration,
+          task_status: MaintenanceStatus.COMPLETED,
+        },
+      },
+      {
+        onSuccess: () => {
+          showToast("success", `Maintenance task "${task.task_code}" marked as Completed.`);
+        },
+        onError: (err) => {
+          showToast("error", err instanceof Error ? err.message : "Failed to mark task as completed.");
+        },
+      }
+    );
+  };
+
+  // Mark Task as Cancelled Action (PUT request to update status)
+  const handleMarkAsCancelled = (task: MaintenanceTask) => {
+    updateTaskMutation.mutate(
+      {
+        id: task.id,
+        data: {
+          task_code: task.task_code,
+          asset: task.asset,
+          details: task.details || "",
+          risk_rating: task.risk_rating,
+          urgency: task.urgency,
+          deadline: task.deadline ? task.deadline.substring(0, 10) : new Date().toISOString().split("T")[0],
+          estimated_duration: task.estimated_duration,
+          task_status: MaintenanceStatus.CANCELLED,
+        },
+      },
+      {
+        onSuccess: () => {
+          showToast("success", `Maintenance task "${task.task_code}" marked as Cancelled.`);
+        },
+        onError: (err) => {
+          showToast("error", err instanceof Error ? err.message : "Failed to mark task as cancelled.");
+        },
+      }
+    );
   };
 
   // Conflict Modal Handlers
@@ -716,28 +870,40 @@ export default function MaintenancePage() {
     setEditingBlockWindow(bw || null);
     setBlockWindowError(null);
     setBlockWindowSuccessMsg(null);
+    setBlockWindowStep("FORM");
+    setCreatedBlockWindowId(null);
+    setStandardConflictResult(null);
 
     const taskAsset = assets.find((a) => a.id === task.asset);
     const defaultSection = bw?.section || taskAsset?.section || sections[0]?.id || 1;
+    const now = new Date();
+    const minStart = new Date(now.getTime() + 60 * 60 * 1000);
+    const minStartMs = minStart.getTime() - 60000;
+    const durationMins = task.estimated_duration || 60;
+
+    let initialStart = formatDateTimeLocal(minStart);
+    let initialEnd = formatDateTimeLocal(new Date(minStart.getTime() + durationMins * 60 * 1000));
 
     if (bw) {
-      setBlockWindowForm({
-        section: Number(bw.section),
-        start_time: toDatetimeLocalValue(bw.start_time),
-        end_time: toDatetimeLocalValue(bw.end_time),
-        status: bw.status || "RESERVED",
-      });
-    } else {
-      const now = new Date();
-      const durationMins = task.estimated_duration || 60;
-      const endTime = new Date(now.getTime() + durationMins * 60 * 1000);
-      setBlockWindowForm({
-        section: Number(defaultSection),
-        start_time: formatDateTimeLocal(now),
-        end_time: formatDateTimeLocal(endTime),
-        status: "RESERVED",
-      });
+      const parsedStartMs = new Date(toApiTimestamp(toDatetimeLocalValue(bw.start_time))).getTime();
+      const parsedEndMs = new Date(toApiTimestamp(toDatetimeLocalValue(bw.end_time))).getTime();
+
+      const validStart = parsedStartMs < minStartMs ? formatDateTimeLocal(minStart) : toDatetimeLocalValue(bw.start_time);
+      const validStartMs = new Date(toApiTimestamp(validStart)).getTime();
+      const validEnd = parsedEndMs <= validStartMs
+        ? formatDateTimeLocal(new Date(validStartMs + durationMins * 60 * 1000))
+        : toDatetimeLocalValue(bw.end_time);
+
+      initialStart = validStart;
+      initialEnd = validEnd;
     }
+
+    setBlockWindowForm({
+      section: Number(defaultSection),
+      start_time: initialStart,
+      end_time: initialEnd,
+      status: bw?.status || "RESERVED",
+    });
     setIsBlockWindowModalOpen(true);
   };
 
@@ -756,16 +922,16 @@ export default function MaintenancePage() {
 
     const startMs = new Date(startTimeApi).getTime();
     const endMs = new Date(endTimeApi).getTime();
-    const nowMs = Date.now() - 2 * 60 * 1000;
+    const minAllowedMs = Date.now() + 60 * 60 * 1000 - 2 * 60 * 1000;
     const maxMs = Date.now() + 30 * 24 * 60 * 60 * 1000;
 
-    if (startMs >= endMs) {
-      setBlockWindowError("End time must be strictly after start time.");
+    if (startMs < minAllowedMs) {
+      setBlockWindowError("Start time cannot be earlier than 1 hour from current time.");
       return;
     }
 
-    if (!editingBlockWindow && startMs < nowMs) {
-      setBlockWindowError("Start time cannot be in the past.");
+    if (endMs <= startMs) {
+      setBlockWindowError("End time must be strictly after start time.");
       return;
     }
 
@@ -779,26 +945,41 @@ export default function MaintenancePage() {
       return;
     }
 
+    if (blockWindowForm.start_time) {
+      const maxAllowedEndMs = new Date(toApiTimestamp(getMaxEndTimeForStart(blockWindowForm.start_time))).getTime();
+      if (endMs > maxAllowedEndMs) {
+        setBlockWindowError("End time date cannot exceed the next day from the selected start time.");
+        return;
+      }
+    }
+
     try {
       if (editingBlockWindow) {
         await updateBlockWindowMutation.mutateAsync({
           id: editingBlockWindow.id,
           data: {
             section: Number(blockWindowForm.section),
+            task: selectedBlockTask ? selectedBlockTask.id : undefined,
+            task_id: selectedBlockTask ? selectedBlockTask.task_code : undefined,
             start_time: startTimeApi,
             end_time: endTimeApi,
-            status: blockWindowForm.status,
+            status: "RESERVED",
           },
         });
         const msg = `Block Window #${editingBlockWindow.id} updated successfully!`;
         setBlockWindowSuccessMsg(msg);
         showToast("success", msg);
+        setTimeout(() => {
+          setIsBlockWindowModalOpen(false);
+        }, 1000);
       } else {
         const createdBlock = await createBlockWindowMutation.mutateAsync({
           section: Number(blockWindowForm.section),
+          task: selectedBlockTask ? selectedBlockTask.id : undefined,
+          task_id: selectedBlockTask ? selectedBlockTask.task_code : undefined,
           start_time: startTimeApi,
           end_time: endTimeApi,
-          status: blockWindowForm.status,
+          status: "RESERVED",
         });
 
         if (selectedBlockTask && selectedBlockTask.task_status !== MaintenanceStatus.SCHEDULED) {
@@ -808,14 +989,10 @@ export default function MaintenancePage() {
           });
         }
 
-        const msg = `New Block Window ${createdBlock?.id ? `#${createdBlock.id}` : ''} created successfully!`;
-        setBlockWindowSuccessMsg(msg);
-        showToast("success", msg);
-      }
-
-      setTimeout(() => {
+        showToast("success", `Block Window ${createdBlock?.id ? `#${createdBlock.id} ` : ""}created successfully!`);
         setIsBlockWindowModalOpen(false);
-      }, 1000);
+        setBlockWindowStep("FORM");
+      }
     } catch (err) {
       setBlockWindowError(err instanceof Error ? err.message : "Failed to save block window.");
     }
@@ -888,6 +1065,8 @@ export default function MaintenancePage() {
       // 1. Create the BlockWindow in RESERVED status
       const createdBlock = await createBlockWindowMutation.mutateAsync({
         section: Number(secId),
+        task: selectedFeasibleTask.id,
+        task_id: selectedFeasibleTask.task_code,
         start_time: slot.start,
         end_time: slot.end,
         status: "RESERVED",
@@ -924,64 +1103,84 @@ export default function MaintenancePage() {
 
     setExpandedAiTaskId(task.id);
 
+    const taskAsset = assets.find((a) => a.id === task.asset);
+    const secId = taskAsset?.section;
+    const secName = task.section_name || taskAsset?.section_name;
+    const matchingBw = task.block_window
+      ? {
+          id: task.block_window.id,
+          section: Number(task.block_window.section || secId || 1),
+          start_time: task.block_window.start_time,
+          end_time: task.block_window.end_time,
+          status: task.block_window.status || "RESERVED",
+        }
+      : blockWindows.find((bw) => {
+          if (bw.task && bw.task === task.id) return true;
+          if (bw.task_id && bw.task_id === task.task_code) return true;
+          if (bw.task_code && bw.task_code === task.task_code) return true;
+          return false;
+        });
+
+    const currentSlotLabel = matchingBw
+      ? (() => {
+          const info = formatWindowSlot(matchingBw.start_time, matchingBw.end_time);
+          return `${info.time} · ${info.date}`;
+        })()
+      : task.task_status === MaintenanceStatus.SCHEDULED
+      ? "Allocated"
+      : "Pending Allocation";
+
+    const targetDate = matchingBw?.start_time
+      ? matchingBw.start_time.substring(0, 10)
+      : task.deadline
+      ? task.deadline.substring(0, 10)
+      : new Date().toISOString().split("T")[0];
+
     if (!aiRecommendationsMap[task.id]) {
       setLoadingAiTaskId(task.id);
-      const taskAsset = assets.find((a) => a.id === task.asset);
-      const secId = taskAsset?.section;
-      const secName = task.section_name || taskAsset?.section_name;
-      const matchingBw = blockWindows.find((bw) => {
-        if (secId && Number(bw.section) === Number(secId)) return true;
-        if (
-          secName &&
-          bw.section_name &&
-          bw.section_name.trim().toLowerCase() === secName.trim().toLowerCase()
-        ) {
-          return true;
-        }
-        return false;
-      });
 
-      const targetDate = task.deadline
-        ? task.deadline.substring(0, 10)
-        : new Date().toISOString().split("T")[0];
+      const requestPayload: FeasibleWindowsRequest = matchingBw
+        ? {
+            block_window_id: matchingBw.id,
+            task_id: task.task_code,
+            date: targetDate,
+          }
+        : {
+            task_id: task.task_code,
+            date: targetDate,
+          };
 
       feasibleWindowsMutation.mutate(
+        requestPayload,
         {
-          task_id: task.task_code,
-          date: targetDate,
-        },
-        {
-          onSuccess: (data) => {
+          onSuccess: (data: any) => {
             setLoadingAiTaskId(null);
-            if (data && data.windows && data.windows.length > 0) {
-              const sorted = data.windows
-                .slice()
-                .sort((a, b) => (b.decision_score ?? 0) - (a.decision_score ?? 0));
-              const best = sorted[0];
-              const currentSlotLabel =
-                task.task_status === MaintenanceStatus.SCHEDULED
-                  ? "18:30 – 19:30"
-                  : "Pending Allocation";
+            const best =
+              data?.recommended_slot ||
+              (data?.windows && data.windows.length > 0 ? data.windows[0] : null);
+
+            if (best) {
               const slotTime = formatWindowSlot(best.start, best.end);
+              const reason =
+                data?.recommendation_reason ||
+                `Zero train conflicts in current slot. However, AI identified an optimized slot at ${slotTime.time}`;
 
               setAiRecommendationsMap((prev) => ({
                 ...prev,
                 [task.id]: {
                   current_slot: currentSlotLabel,
                   recommended_slot: best,
-                  reason: `Zero train conflicts in current slot. However, AI identified an optimized slot at ${slotTime.time}`,
+                  reason,
                 },
               }));
             } else {
               setAiRecommendationsMap((prev) => ({
                 ...prev,
                 [task.id]: {
-                  current_slot:
-                    task.task_status === MaintenanceStatus.SCHEDULED
-                      ? "18:30 – 19:30"
-                      : "Pending Allocation",
+                  current_slot: currentSlotLabel,
                   recommended_slot: null,
                   reason:
+                    data?.recommendation_reason ||
                     "No conflict-free AI recommendation found for this corridor on the target date.",
                 },
               }));
@@ -992,10 +1191,7 @@ export default function MaintenancePage() {
             setAiRecommendationsMap((prev) => ({
               ...prev,
               [task.id]: {
-                current_slot:
-                  task.task_status === MaintenanceStatus.SCHEDULED
-                    ? "18:30 – 19:30"
-                    : "Pending Allocation",
+                current_slot: currentSlotLabel,
                 recommended_slot: null,
                 reason:
                   err instanceof Error
@@ -1017,20 +1213,67 @@ export default function MaintenancePage() {
     if (!slot) return;
     const taskAsset = assets.find((a) => a.id === task.asset);
     const secId = taskAsset?.section || 1;
+    const secName = task.section_name || taskAsset?.section_name;
+
+    const matchingBw = task.block_window
+      ? {
+          id: task.block_window.id,
+          section: Number(task.block_window.section || secId || 1),
+          start_time: task.block_window.start_time,
+          end_time: task.block_window.end_time,
+          status: task.block_window.status || "RESERVED",
+        }
+      : blockWindows.find((bw) => {
+          if (bw.task && bw.task === task.id) return true;
+          if (bw.task_id && bw.task_id === task.task_code) return true;
+          if (bw.task_code && bw.task_code === task.task_code) return true;
+          return false;
+        });
 
     setSchedulingSlot(slot.start);
     try {
-      await createBlockWindowMutation.mutateAsync({
-        section: Number(secId),
-        start_time: slot.start,
-        end_time: slot.end,
-        status: "RESERVED",
+      if (matchingBw) {
+        await updateBlockWindowMutation.mutateAsync({
+          id: matchingBw.id,
+          data: {
+            section: Number(secId),
+            task: task.id,
+            task_id: task.task_code,
+            start_time: slot.start,
+            end_time: slot.end,
+            status: matchingBw.status || "RESERVED",
+          },
+        });
+      } else {
+        await createBlockWindowMutation.mutateAsync({
+          section: Number(secId),
+          task: task.id,
+          task_id: task.task_code,
+          start_time: slot.start,
+          end_time: slot.end,
+          status: "RESERVED",
+        });
+      }
+
+      if (task.task_status !== MaintenanceStatus.SCHEDULED) {
+        await patchMaintenanceTaskMutation.mutateAsync({
+          id: task.id,
+          data: { task_status: "SCHEDULED" },
+        });
+      }
+
+      // Invalidate cached AI recommendation for this task so next open is completely fresh
+      setAiRecommendationsMap((prev) => {
+        const next = { ...prev };
+        delete next[task.id];
+        return next;
       });
 
-      await patchMaintenanceTaskMutation.mutateAsync({
-        id: task.id,
-        data: { task_status: "SCHEDULED" },
-      });
+      // Refetch live tasks and block windows immediately
+      await Promise.all([
+        refetchTasks(),
+        refetchBlockWindows(),
+      ]);
 
       const timeInfo = formatWindowSlot(slot.start, slot.end);
       const msg = `AI Recommended Slot Accepted! Block Reserved for ${timeInfo.date} (${timeInfo.time}). Task ${task.task_code} marked as SCHEDULED.`;
@@ -1100,6 +1343,7 @@ export default function MaintenancePage() {
     const total = tasks.length;
     const pendingCount = tasks.filter((t) => t.task_status === MaintenanceStatus.PENDING).length;
     const scheduledCount = tasks.filter((t) => t.task_status === MaintenanceStatus.SCHEDULED).length;
+    const completedCount = tasks.filter((t) => t.task_status === MaintenanceStatus.COMPLETED).length;
     const criticalCount = tasks.filter(
       (t) => t.urgency === MaintenancePriority.CRITICAL || t.risk_rating >= 8
     ).length;
@@ -1109,6 +1353,7 @@ export default function MaintenancePage() {
       total,
       pendingCount,
       scheduledCount,
+      completedCount,
       criticalCount,
       totalMinutes,
     };
@@ -1199,18 +1444,18 @@ export default function MaintenancePage() {
 
             <div className="p-4 rounded-2xl bg-brand-surface border border-brand-border shadow-sm flex items-start gap-3.5">
               <div className="w-9 h-9 rounded-full bg-brand-secondary/80 text-white flex items-center justify-center flex-shrink-0 mt-0.5">
-                <Hourglass className="w-4 h-4" />
+                <CheckCircle2 className="w-4 h-4" />
               </div>
               <div>
                 <div className="text-xs font-bold text-brand-muted mb-0.5">
-                  Pending Execution
+                  Completed Maintenance
                 </div>
                 {loadingTasks ? (
                   <Skeleton className="h-8 w-14 my-0.5 rounded-lg" />
                 ) : (
-                  <div className="text-2xl font-black text-black tracking-tight">{stats.pendingCount}</div>
+                  <div className="text-2xl font-black text-brand-secondary/80 tracking-tight">{stats.completedCount}</div>
                 )}
-                <div className="text-[11px] text-brand-muted mt-0.5 font-medium">Needs block allocation</div>
+                <div className="text-[11px] text-brand-muted mt-0.5 font-medium">Finished successfully</div>
               </div>
             </div>
 
@@ -1323,6 +1568,9 @@ export default function MaintenancePage() {
                     <SelectItem value={MaintenanceStatus.CANCELLED} className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">
                       {MAINTENANCE_STATUS_LABELS[MaintenanceStatus.CANCELLED]}
                     </SelectItem>
+                    <SelectItem value={MaintenanceStatus.DELAYED} className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">
+                      {MAINTENANCE_STATUS_LABELS[MaintenanceStatus.DELAYED]}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1345,26 +1593,7 @@ export default function MaintenancePage() {
               </div>
             </div>
 
-            {/* Urgency Filter Badges */}
-            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 min-w-0 pt-3 border-t border-brand-border/60">
-              <span className="text-xs font-bold text-brand-muted mr-1 shrink-0">
-                Urgency:
-              </span>
-              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
-                {["ALL", "Critical", "High", "Medium", "Low"].map((urg) => (
-                  <button
-                    key={urg}
-                    onClick={() => setSelectedUrgencyFilter(urg)}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${selectedUrgencyFilter === urg
-                      ? "bg-brand-primary text-white shadow-xs"
-                      : "text-brand-muted hover:text-brand-secondary hover:bg-brand-tertiary"
-                      }`}
-                  >
-                    {urg === "ALL" ? "All Urgencies" : urg}
-                  </button>
-                ))}
-              </div>
-            </div>
+           
           </section>
 
           {/* Task List Content */}
@@ -1431,6 +1660,7 @@ export default function MaintenancePage() {
                       <th className="py-3 px-4 text-center font-semibold">Task Code</th>
                       <th className="py-3 px-4 text-center font-semibold">Target Asset</th>
                       <th className="py-3 px-4 text-center font-semibold">Corridor</th>
+                      <th className="py-3 px-4 text-center font-semibold">Criticality Score</th>
                       <th className="py-3 px-4 text-center font-semibold">Block Window</th>
                       <th className="py-3 px-4 text-center font-semibold">Duration</th>
                       <th className="py-3 px-4 text-center font-semibold">Deadline</th>
@@ -1450,17 +1680,26 @@ export default function MaintenancePage() {
 
                       const secId = taskAsset?.section;
                       const secName = task.section_name || taskAsset?.section_name;
-                      const matchingBw = blockWindows.find((bw) => {
-                        if (secId && Number(bw.section) === Number(secId)) return true;
-                        if (
-                          secName &&
-                          bw.section_name &&
-                          bw.section_name.trim().toLowerCase() === secName.trim().toLowerCase()
-                        ) {
-                          return true;
-                        }
-                        return false;
-                      });
+                      const matchingBw = task.block_window
+                        ? {
+                            id: task.block_window.id,
+                            section: Number(task.block_window.section || secId || 1),
+                            start_time: task.block_window.start_time,
+                            end_time: task.block_window.end_time,
+                            status: task.block_window.status || "RESERVED",
+                          }
+                        : blockWindows.find((bw) => {
+                            if (bw.task && bw.task === task.id) return true;
+                            if (bw.task_id && bw.task_id === task.task_code) return true;
+                            if (bw.task_code && bw.task_code === task.task_code) return true;
+                            return false;
+                          });
+
+                      const hasAllocatedWindow = Boolean(matchingBw);
+                      const effectiveStatKey = (statKey === MaintenanceStatus.COMPLETED || statKey === MaintenanceStatus.CANCELLED)
+                        ? statKey
+                        : (hasAllocatedWindow ? MaintenanceStatus.SCHEDULED : statKey);
+                      const effectiveStat = STATUS_CONFIG[effectiveStatKey] || stat;
 
                       return (
                         <React.Fragment key={task.id}>
@@ -1479,6 +1718,18 @@ export default function MaintenancePage() {
                                 <span>{corridorName}</span>
                               </div>
                             </td>
+                            {/* Criticality Score / Index */}
+                            <td className="py-3.5 px-4 text-center">
+                              <div className="inline-flex flex-col items-center gap-0.5">
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold`}
+                                >
+                                  <span className={`w-1.5 h-1.5 rounded-full ${urg.dot}`} />
+                                  <span>{task.risk_rating ?? 5}/10</span>
+                                </span>
+                             
+                              </div>
+                            </td>
                             <td className="py-3.5 px-4 text-center">
                               {matchingBw ? (
                                 (() => {
@@ -1495,9 +1746,16 @@ export default function MaintenancePage() {
                                   );
                                 })()
                               ) : (
-                                <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                                  Not Allocated
-                                </span>
+                                <div className="inline-flex flex-col items-center gap-1.5">
+                                  
+                                  <button
+                                    onClick={() => handleOpenBlockWindowModal(task)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-bold text-[11px] shadow-xs transition-colors cursor-pointer"
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                    <span>Add Block Window</span>
+                                  </button>
+                                </div>
                               )}
                             </td>
                             <td className="py-3.5 px-4 text-center font-mono text-brand-secondary font-semibold">
@@ -1508,17 +1766,17 @@ export default function MaintenancePage() {
                             </td>
                             <td className="py-3.5 px-4 text-center">
                               <span
-                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-semibold border ${stat.badge}`}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-semibold border ${effectiveStat.badge}`}
                               >
-                                <stat.icon className="w-3 h-3 text-white" />
-                                {stat.label}
+                                <effectiveStat.icon className="w-3 h-3 text-white" />
+                                {effectiveStat.label}
                               </span>
                             </td>
                             <td className="py-3.5 px-4 text-center">
                               <div className="relative flex items-center justify-end gap-1.5 max-w-[130px] mx-auto">
 
-                                {/* Dedicated AI Recommendation Icon Button on Row (only for active/pending tasks) */}
-                                {statKey !== MaintenanceStatus.COMPLETED && (
+                                {/* Dedicated AI Recommendation Icon Button on Row (only when block window is created and task is active) */}
+                                {effectiveStatKey !== MaintenanceStatus.COMPLETED && effectiveStatKey !== MaintenanceStatus.CANCELLED && task.task_status !== MaintenanceStatus.COMPLETED && task.task_status !== MaintenanceStatus.CANCELLED && Boolean(matchingBw) && (
                                   <button
                                     onClick={() => handleToggleAiRecommendation(task)}
                                     className={`p-2 rounded-lg border shadow-xs transition-all cursor-pointer flex items-center gap-1 text-xs font-bold ${
@@ -1533,86 +1791,82 @@ export default function MaintenancePage() {
                                   </button>
                                 )}
 
-                                {/* Vertical Ellipsis */}
-                                <button
-                                  onClick={() =>
-                                    setOpenActionMenu(
-                                      openActionMenu === task.id ? null : task.id
-                                    )
-                                  }
-                                  className="p-2 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-black shadow-xs transition-colors cursor-pointer"
-                                  title="Actions"
-                                >
-                                  <MoreVertical className="w-4 h-4" />
-                                </button>
-
                                 {/* Actions Dropdown */}
-                                {openActionMenu === task.id && (
-                                  <div className={`absolute right-0 ${isLastItem ? "bottom-10" : "top-10"} z-50 w-56 max-h-60 overflow-y-auto rounded-xl bg-brand-surface border border-brand-border shadow-xl p-1.5`}>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger
+                                    className="p-2 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-black shadow-xs transition-colors cursor-pointer outline-none focus:ring-2 focus:ring-brand-primary/20"
+                                    title="Actions"
+                                  >
+                                    <MoreVertical className="w-4 h-4" />
+                                  </DropdownMenuTrigger>
 
-                                    {/* View */}
-                                    <button
-                                      onClick={() => {
-                                        setInspectingTask(task);
-                                        setOpenActionMenu(null);
-                                      }}
-                                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary text-left"
+                                  <DropdownMenuContent
+                                    align="end"
+                                    sideOffset={6}
+                                    className="w-56 bg-brand-surface border-brand-border text-brand-secondary shadow-xl rounded-xl p-1.5 z-50"
+                                  >
+                                    <DropdownMenuItem
+                                      onClick={() => setInspectingTask(task)}
+                                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary cursor-pointer focus:bg-brand-tertiary focus:text-brand-secondary"
                                     >
                                       <Eye className="w-4 h-4" />
                                       <span>View Details</span>
-                                    </button>
+                                    </DropdownMenuItem>
 
-                                    {task.task_status !== MaintenanceStatus.COMPLETED && (
+                                    {effectiveStatKey !== MaintenanceStatus.COMPLETED && effectiveStatKey !== MaintenanceStatus.CANCELLED && task.task_status !== MaintenanceStatus.COMPLETED && task.task_status !== MaintenanceStatus.CANCELLED && (
                                       <>
-                                        {/* Edit */}
-                                        <button
-                                          onClick={() => {
-                                            handleOpenEditModal(task);
-                                            setOpenActionMenu(null);
-                                          }}
-                                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary text-left"
+                                        <DropdownMenuItem
+                                          onClick={() => handleMarkAsCompleted(task)}
+                                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-emerald-50 text-sm font-semibold text-emerald-700 cursor-pointer focus:bg-emerald-50 focus:text-emerald-700"
+                                        >
+                                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                          <span>Mark as Completed</span>
+                                        </DropdownMenuItem>
+
+                                        <DropdownMenuItem
+                                          onClick={() => handleMarkAsCancelled(task)}
+                                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-100 text-sm font-semibold text-slate-700 cursor-pointer focus:bg-slate-100 focus:text-slate-700"
+                                        >
+                                          <XCircle className="w-4 h-4 text-slate-600" />
+                                          <span>Mark as Cancelled</span>
+                                        </DropdownMenuItem>
+
+                                        <DropdownMenuItem
+                                          onClick={() => handleOpenEditModal(task)}
+                                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary cursor-pointer focus:bg-brand-tertiary focus:text-brand-secondary"
                                         >
                                           <Edit2 className="w-4 h-4 text-brand-primary" />
                                           <span>Edit Task</span>
-                                        </button>
+                                        </DropdownMenuItem>
 
-                                        {/* Delete */}
-                                        <button
-                                          onClick={() => {
-                                            setDeletingTask(task);
-                                            setOpenActionMenu(null);
-                                          }}
-                                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-red-50 text-sm font-semibold text-red-600 text-left"
+                                        <DropdownMenuItem
+                                          onClick={() => handleOpenBlockWindowModal(task, matchingBw)}
+                                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary cursor-pointer focus:bg-brand-tertiary focus:text-brand-secondary"
+                                        >
+                                          <Calendar className="w-4 h-4 text-brand-primary" />
+                                          <span>Block Window</span>
+                                        </DropdownMenuItem>
+
+                                        <DropdownMenuItem
+                                          onClick={() => setDeletingTask(task)}
+                                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-red-50 text-sm font-semibold text-red-600 cursor-pointer focus:bg-red-50 focus:text-red-600"
                                         >
                                           <Trash2 className="w-4 h-4" />
                                           <span>Delete Task</span>
-                                        </button>
-
-                                        {/* Create / Update Block Window */}
-                                        <button
-                                          onClick={() => {
-                                            handleOpenBlockWindowModal(task, matchingBw);
-                                            setOpenActionMenu(null);
-                                          }}
-                                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-purple-50 text-sm font-semibold text-brand-secondary text-left"
-                                        >
-                                          <Calendar className="w-4 h-4 text-purple-600" />
-                                          <span>{matchingBw ? "Update Block Window" : "Create Block Window"}</span>
-                                        </button>
+                                        </DropdownMenuItem>
                                       </>
                                     )}
-
-                                  </div>
-                                )}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
 
                               </div>
                             </td>
                           </tr>
 
                           {/* Inline AI Recommendation Expanded Panel (Not in Dialogue) */}
-                          {expandedAiTaskId === task.id && (
+                          {expandedAiTaskId === task.id && statKey !== MaintenanceStatus.PENDING && statKey !== MaintenanceStatus.COMPLETED && statKey !== MaintenanceStatus.CANCELLED && effectiveStatKey !== MaintenanceStatus.COMPLETED && effectiveStatKey !== MaintenanceStatus.CANCELLED && Boolean(matchingBw) && (
                             <tr key={`ai-${task.id}`} className="bg-brand-blue-light/10 border-b border-brand-border">
-                              <td colSpan={8} className="p-3.5">
+                              <td colSpan={9} className="p-3.5">
                                 {loadingAiTaskId === task.id ? (
                                   <div className="p-4 rounded-2xl bg-brand-surface border border-brand-primary/30 flex items-center justify-center gap-2 text-xs font-bold text-brand-secondary shadow-xs">
                                     <RefreshCw className="w-4 h-4 text-brand-primary animate-spin" />
@@ -1641,7 +1895,14 @@ export default function MaintenancePage() {
                                           <div>
                                             <span className="text-[10px] font-bold uppercase text-brand-muted block mb-0.5">Current Slot</span>
                                             <span className="font-mono font-bold text-brand-secondary">
-                                              {aiRecommendationsMap[task.id]?.current_slot}
+                                              {matchingBw ? (
+                                                (() => {
+                                                  const curInfo = formatWindowSlot(matchingBw.start_time, matchingBw.end_time);
+                                                  return `${curInfo.time} · ${curInfo.date}`;
+                                                })()
+                                              ) : (
+                                                aiRecommendationsMap[task.id]?.current_slot || "Pending Allocation"
+                                              )}
                                             </span>
                                           </div>
 
@@ -1653,7 +1914,8 @@ export default function MaintenancePage() {
                                               {(() => {
                                                 const recSlot = aiRecommendationsMap[task.id]?.recommended_slot;
                                                 if (!recSlot) return null;
-                                                return `${formatWindowSlot(recSlot.start, recSlot.end).time} (${recSlot.duration_minutes} min)`;
+                                                const recInfo = formatWindowSlot(recSlot.start, recSlot.end);
+                                                return `${recInfo.time} (${recSlot.duration_minutes} min) · ${recInfo.date}`;
                                               })()}
                                             </span>
                                           </div>
@@ -1750,6 +2012,9 @@ export default function MaintenancePage() {
                     required
                     className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none cursor-pointer font-bold shadow-2xs"
                   >
+                    <option value={0} disabled>
+                      -- Select Target Asset --
+                    </option>
                     {assets.map((a) => (
                       <option key={a.id} value={a.id}>
                         {a.asset_title} (#{a.id})
@@ -1772,38 +2037,20 @@ export default function MaintenancePage() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="font-extrabold text-brand-secondary block mb-1">
-                    Urgency Level
-                  </label>
-                  <select
-                    value={formData.urgency}
-                    onChange={(e) => setFormData({ ...formData, urgency: e.target.value as MaintenancePriority })}
-                    className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none cursor-pointer font-bold shadow-2xs"
-                  >
-                    <option value={MaintenancePriority.CRITICAL}>{MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.CRITICAL]}</option>
-                    <option value={MaintenancePriority.HIGH}>{MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.HIGH]}</option>
-                    <option value={MaintenancePriority.MEDIUM}>{MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.MEDIUM]}</option>
-                    <option value={MaintenancePriority.LOW}>{MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.LOW]}</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="font-extrabold text-brand-secondary block mb-1">
-                    Status
-                  </label>
-                  <select
-                    value={formData.task_status}
-                    onChange={(e) => setFormData({ ...formData, task_status: e.target.value as MaintenanceStatus })}
-                    className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none cursor-pointer font-bold shadow-2xs"
-                  >
-                    <option value={MaintenanceStatus.PENDING}>{MAINTENANCE_STATUS_LABELS[MaintenanceStatus.PENDING]}</option>
-                    <option value={MaintenanceStatus.SCHEDULED}>{MAINTENANCE_STATUS_LABELS[MaintenanceStatus.SCHEDULED]}</option>
-                    <option value={MaintenanceStatus.COMPLETED}>{MAINTENANCE_STATUS_LABELS[MaintenanceStatus.COMPLETED]}</option>
-                    <option value={MaintenanceStatus.CANCELLED}>{MAINTENANCE_STATUS_LABELS[MaintenanceStatus.CANCELLED]}</option>
-                  </select>
-                </div>
+              <div>
+                <label className="font-extrabold text-brand-secondary block mb-1">
+                  Urgency Level
+                </label>
+                <select
+                  value={formData.urgency}
+                  onChange={(e) => setFormData({ ...formData, urgency: e.target.value as MaintenancePriority })}
+                  className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none cursor-pointer font-bold shadow-2xs"
+                >
+                  <option value={MaintenancePriority.CRITICAL}>{MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.CRITICAL]}</option>
+                  <option value={MaintenancePriority.HIGH}>{MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.HIGH]}</option>
+                  <option value={MaintenancePriority.MEDIUM}>{MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.MEDIUM]}</option>
+                  <option value={MaintenancePriority.LOW}>{MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.LOW]}</option>
+                </select>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1955,17 +2202,20 @@ export default function MaintenancePage() {
               const taskAsset = assets.find((a) => a.id === inspectingTask.asset);
               const secId = taskAsset?.section;
               const secName = inspectingTask.section_name || taskAsset?.section_name;
-              const matchingBw = blockWindows.find((bw) => {
-                if (secId && Number(bw.section) === Number(secId)) return true;
-                if (
-                  secName &&
-                  bw.section_name &&
-                  bw.section_name.trim().toLowerCase() === secName.trim().toLowerCase()
-                ) {
-                  return true;
-                }
-                return false;
-              });
+              const matchingBw = inspectingTask.block_window
+                ? {
+                    id: inspectingTask.block_window.id,
+                    section: Number(inspectingTask.block_window.section || secId || 1),
+                    start_time: inspectingTask.block_window.start_time,
+                    end_time: inspectingTask.block_window.end_time,
+                    status: inspectingTask.block_window.status || "RESERVED",
+                  }
+                : blockWindows.find((bw) => {
+                    if (bw.task && bw.task === inspectingTask.id) return true;
+                    if (bw.task_id && bw.task_id === inspectingTask.task_code) return true;
+                    if (bw.task_code && bw.task_code === inspectingTask.task_code) return true;
+                    return false;
+                  });
 
 
               return (
@@ -1998,7 +2248,7 @@ export default function MaintenancePage() {
               <div>
                 <h3 className="text-base font-extrabold text-brand-secondary">Confirm Delete</h3>
                 <p className="text-xs text-brand-muted mt-0.5">
-                  Are you sure you want to delete task <span className="font-bold text-brand-secondary">"{deletingTask.task_code}"</span>?
+                  Are you sure you want to delete task <span className="font-bold text-brand-secondary">&quot;{deletingTask.task_code}&quot;</span>?
                 </p>
               </div>
             </div>
@@ -2618,15 +2868,21 @@ export default function MaintenancePage() {
           <div className="bg-brand-surface border border-brand-border rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-brand-border">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center border border-purple-200">
+                <div className="w-8 h-8 rounded-lg bg-brand-primary text-white flex items-center justify-center border border-purple-200">
                   <Calendar className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="text-base font-extrabold text-brand-secondary">
-                    {editingBlockWindow ? `Update Block Window #${editingBlockWindow.id}` : "Create Block Window"}
+                    {blockWindowStep === "AI_RECOMMENDATION"
+                      ? "AI Slot Optimization"
+                      : editingBlockWindow
+                      ? `Update Block Window #${editingBlockWindow.id}`
+                      : "Create Block Window"}
                   </h3>
                   <p className="text-xs text-brand-muted">
-                    {editingBlockWindow
+                    {blockWindowStep === "AI_RECOMMENDATION"
+                      ? "Continuous CP-SAT conflict analysis and collision-free slot recommendation"
+                      : editingBlockWindow
                       ? "Modify allocated time bounds and status for this corridor block window"
                       : "Reserve a dedicated corridor maintenance window for this task"}
                   </p>
@@ -2640,134 +2896,200 @@ export default function MaintenancePage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmitBlockWindow} className="space-y-4">
-              {selectedBlockTask && (
-                <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border space-y-1">
-                  <div className="text-[11px] font-bold text-brand-muted uppercase">Target Maintenance Task</div>
-                  <div className="text-xs font-bold text-brand-secondary flex items-center justify-between">
-                    <span>{selectedBlockTask.task_code} - {selectedBlockTask.asset_name || `Asset #${selectedBlockTask.asset}`}</span>
-                    <span className="font-mono text-purple-700 font-extrabold">{selectedBlockTask.estimated_duration} mins required</span>
+            {blockWindowStep === "FORM" ? (
+              <form onSubmit={handleSubmitBlockWindow} className="space-y-4">
+                {selectedBlockTask && (
+                  <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border space-y-1">
+                    <div className="text-[11px] font-bold text-brand-muted uppercase">Target Maintenance Task</div>
+                    <div className="text-xs font-bold text-brand-secondary flex items-center justify-between">
+                      <span>{selectedBlockTask.task_code} - {selectedBlockTask.asset_name || `Asset #${selectedBlockTask.asset}`}</span>
+                      <span className="font-mono text-brand-primary font-extrabold">{selectedBlockTask.estimated_duration} mins required</span>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              <div className="space-y-3">
-                {/* Corridor / Section Select */}
-                <div>
-                  <label className="block text-xs font-bold text-brand-secondary mb-1">
-                    Corridor / Railway Section
-                  </label>
-                  <select
-                    value={blockWindowForm.section}
-                    onChange={(e) => setBlockWindowForm((prev) => ({ ...prev, section: Number(e.target.value) }))}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-brand-tertiary border border-brand-border hover:border-brand-primary/50 text-brand-secondary text-xs font-semibold outline-none focus:ring-1 focus:ring-brand-primary/30 transition-colors cursor-pointer"
-                  >
-                    {sections.map((sec) => (
-                      <option key={sec.id} value={sec.id}>
-                        {sec.section_name || `Section #${sec.id}`} ({sec.source_station_code || sec.origin_station || "SRC"} → {sec.destination_station_code || sec.end_station || "DST"})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Start Time & End Time inputs (24h format) */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-3">
+                  {/* Corridor / Section Select (Disabled: fixed to asset corridor) */}
                   <div>
                     <label className="block text-xs font-bold text-brand-secondary mb-1">
-                      Start Time (24h)
+                      Corridor / Railway Section
                     </label>
-                    <input
-                      type="datetime-local"
-                      value={blockWindowForm.start_time}
-                      min={editingBlockWindow && new Date(editingBlockWindow.start_time).getTime() < new Date().getTime()
-                        ? toDatetimeLocalValue(editingBlockWindow.start_time)
-                        : getMinMaintenanceDateTime()}
-                      max={getMaxMaintenanceDateTime()}
-                      onChange={(e) => setBlockWindowForm((prev) => ({ ...prev, start_time: e.target.value }))}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-brand-tertiary border border-brand-border hover:border-brand-primary/50 text-brand-secondary text-xs font-mono font-semibold outline-none focus:ring-1 focus:ring-brand-primary/30 transition-colors cursor-pointer"
-                      required
-                    />
+                    <select
+                      value={blockWindowForm.section}
+                      disabled
+                      onChange={(e) => setBlockWindowForm((prev) => ({ ...prev, section: Number(e.target.value) }))}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-brand-tertiary/80 border border-brand-border text-brand-secondary text-xs font-semibold outline-none disabled:opacity-80 disabled:cursor-not-allowed shadow-2xs"
+                    >
+                      {sections.map((sec) => (
+                        <option key={sec.id} value={sec.id}>
+                          {sec.section_name || `Section #${sec.id}`} ({sec.source_station_code || sec.origin_station || "SRC"} → {sec.destination_station_code || sec.end_station || "DST"})
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-brand-secondary mb-1">
-                      End Time (24h)
-                    </label>
-                    <input
-                      type="datetime-local"
-                      value={blockWindowForm.end_time}
-                      min={blockWindowForm.start_time || getMinMaintenanceDateTime()}
-                      max={getMaxMaintenanceDateTime()}
-                      onChange={(e) => setBlockWindowForm((prev) => ({ ...prev, end_time: e.target.value }))}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-brand-tertiary border border-brand-border hover:border-brand-primary/50 text-brand-secondary text-xs font-mono font-semibold outline-none focus:ring-1 focus:ring-brand-primary/30 transition-colors cursor-pointer"
-                      required
-                    />
+                  {/* Start Time & End Time inputs (24h format) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-brand-secondary mb-1">
+                        Start Time (24h)
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={blockWindowForm.start_time}
+                        min={getMinMaintenanceDateTime()}
+                        max={getMaxMaintenanceDateTime()}
+                        onChange={(e) => {
+                          const newStart = e.target.value;
+                          setBlockWindowForm((prev) => {
+                            let updatedEnd = prev.end_time;
+                            if (newStart && updatedEnd) {
+                              const sTime = new Date(newStart).getTime();
+                              const eTime = new Date(updatedEnd).getTime();
+                              const maxAllowedETime = new Date(toApiTimestamp(getMaxEndTimeForStart(newStart))).getTime();
+
+                              if (eTime <= sTime) {
+                                const durationMins = selectedBlockTask?.estimated_duration || 60;
+                                updatedEnd = formatDateTimeLocal(new Date(sTime + durationMins * 60 * 1000));
+                              } else if (eTime > maxAllowedETime) {
+                                updatedEnd = getMaxEndTimeForStart(newStart);
+                              }
+                            }
+                            return { ...prev, start_time: newStart, end_time: updatedEnd };
+                          });
+                        }}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-brand-tertiary border border-brand-border hover:border-brand-primary/50 text-brand-secondary text-xs font-mono font-semibold outline-none focus:ring-1 focus:ring-brand-primary/30 transition-colors cursor-pointer"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-brand-secondary mb-1">
+                        End Time (24h)
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={blockWindowForm.end_time}
+                        min={blockWindowForm.start_time || getMinMaintenanceDateTime()}
+                        max={getMaxEndTimeForStart(blockWindowForm.start_time)}
+                        onChange={(e) => setBlockWindowForm((prev) => ({ ...prev, end_time: e.target.value }))}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-brand-tertiary border border-brand-border hover:border-brand-primary/50 text-brand-secondary text-xs font-mono font-semibold outline-none focus:ring-1 focus:ring-brand-primary/30 transition-colors cursor-pointer"
+                        required
+                      />
+                    </div>
                   </div>
                 </div>
 
-                {/* Block Status Select */}
-                <div>
-                  <label className="block text-xs font-bold text-brand-secondary mb-1">
-                    Block Window Status
-                  </label>
-                  <select
-                    value={blockWindowForm.status}
-                    onChange={(e) => setBlockWindowForm((prev) => ({ ...prev, status: e.target.value }))}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-brand-tertiary border border-brand-border hover:border-brand-primary/50 text-brand-secondary text-xs font-semibold outline-none focus:ring-1 focus:ring-brand-primary/30 transition-colors cursor-pointer"
-                  >
-                    <option value="RESERVED">RESERVED</option>
-                    <option value="APPROVED">APPROVED</option>
-                    <option value="REQUESTED">REQUESTED</option>
-                    <option value="ACTIVE">ACTIVE</option>
-                    <option value="COMPLETED">COMPLETED</option>
-                    <option value="CANCELLED">CANCELLED</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Success Alert */}
-              {blockWindowSuccessMsg && (
-                <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs flex items-center gap-2.5 animate-in fade-in duration-200">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span className="font-bold">{blockWindowSuccessMsg}</span>
-                </div>
-              )}
-
-              {/* Error Alert */}
-              {blockWindowError && (
-                <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs flex items-center gap-2.5">
-                  <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
-                  <span className="font-bold">{blockWindowError}</span>
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-brand-border">
-                <button
-                  type="button"
-                  onClick={() => setIsBlockWindowModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-brand-secondary transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createBlockWindowMutation.isPending || updateBlockWindowMutation.isPending}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-xs font-bold text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
-                >
-                  {(createBlockWindowMutation.isPending || updateBlockWindowMutation.isPending) ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>Saving Window...</span>
-                    </>
+                {/* Standard Backend Conflict Recommendation Banner */}
+                {conflictCheckLoading ? (
+                  <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border flex items-center gap-2.5 text-xs font-semibold text-brand-muted animate-pulse">
+                    <RefreshCw className="w-4 h-4 text-brand-primary animate-spin" />
+                    <span>Checking corridor train traffic & conflicts...</span>
+                  </div>
+                ) : standardConflictResult ? (
+                  standardConflictResult.has_conflict ? (
+                    <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 space-y-2 text-xs">
+                      <div className="flex items-center gap-2 text-amber-900 font-extrabold">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>Standard Conflict Warning ({standardConflictResult.conflict_count} train conflict{standardConflictResult.conflict_count > 1 ? "s" : ""})</span>
+                      </div>
+                      {standardConflictResult.conflicts.length > 0 && (
+                        <div className="space-y-1 pl-6">
+                          {standardConflictResult.conflicts.map((c) => (
+                            <div key={c.train_number} className="text-[11px] font-medium text-amber-800 flex items-center justify-between">
+                              <span>Train {c.train_number} ({c.train_name})</span>
+                              <span className="font-mono text-amber-700 font-semibold">{formatTimeHHMM(c.entry_time)} – {formatTimeHHMM(c.exit_time)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <p className="text-[11px] text-amber-700 font-medium leading-relaxed pt-1 border-t border-amber-200/60">
+                        You can still create this block window manually. Our AI engine will suggest optimal conflict-free slots immediately after creation.
+                      </p>
+                    </div>
                   ) : (
-                    <>
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>{editingBlockWindow ? "Update Block Window" : "Create Block Window"}</span>
-                    </>
-                  )}
-                </button>
+                    <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center gap-2 text-xs font-bold text-emerald-800">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>All Clear: No train movements conflict with the selected timeframe.</span>
+                    </div>
+                  )
+                ) : null}
+
+                {/* Success Alert */}
+                {blockWindowSuccessMsg && (
+                  <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs flex items-center gap-2.5 animate-in fade-in duration-200">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span className="font-bold">{blockWindowSuccessMsg}</span>
+                  </div>
+                )}
+
+                {/* Error Alert */}
+                {blockWindowError && (
+                  <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs flex items-center gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                    <span className="font-bold">{blockWindowError}</span>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-brand-border">
+                  <button
+                    type="button"
+                    onClick={() => setIsBlockWindowModalOpen(false)}
+                    className="px-4 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-brand-secondary transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={createBlockWindowMutation.isPending || updateBlockWindowMutation.isPending}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-xs font-bold text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    {(createBlockWindowMutation.isPending || updateBlockWindowMutation.isPending) ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Saving Window...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>{editingBlockWindow ? "Update Block Window" : "Create Block Window"}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              /* Post-Creation AI Optimization Step */
+              <div className="space-y-4">
+                <div className="p-3.5 rounded-xl bg-brand-tertiary border border-brand-border space-y-1">
+                  <div className="text-[10px] font-bold uppercase text-brand-muted">Newly Created Block Window #{createdBlockWindowId}</div>
+                  <div className="text-xs font-bold text-brand-secondary">
+                    {selectedBlockTask?.task_code} - {selectedBlockTask?.asset_name || `Asset #${selectedBlockTask?.asset}`}
+                  </div>
+                </div>
+
+                {createdBlockWindowId && (
+                  <AIBlockRecommendationBanner
+                    blockWindowId={createdBlockWindowId}
+                    taskId={selectedBlockTask?.task_code}
+                    onSlotUpdated={() => {
+                      showToast("success", "⚡ AI recommended slot accepted & block window updated!");
+                      setIsBlockWindowModalOpen(false);
+                    }}
+                  />
+                )}
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-brand-border">
+                  <button
+                    type="button"
+                    onClick={() => setIsBlockWindowModalOpen(false)}
+                    className="px-4 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-brand-secondary transition-colors cursor-pointer"
+                  >
+                    Keep My Slot & Finish
+                  </button>
+                </div>
               </div>
-            </form>
+            )}
           </div>
         </div>
       )}

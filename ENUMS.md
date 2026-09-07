@@ -83,6 +83,7 @@ This document provides a comprehensive reference of all Enumerations (`models.Te
 | `SCHEDULED` | Scheduled | Block window or maintenance plan has been allocated / approved |
 | `COMPLETED` | Completed | Maintenance work has finished successfully |
 | `CANCELLED` | Cancelled | Task has been dismissed or superseded |
+| `DELAYED` | Delayed | Maintenance task execution or block window has been delayed |
 
 ---
 

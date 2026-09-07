@@ -30,6 +30,8 @@ import {
   getBlockRecommendation,
   updateBlockWindowFull,
   applyBlockRecommendation,
+  getBlockWindowByTaskId,
+  updateBlockWindowByTaskId,
 } from "@/actions";
 import {
   CreateAssetInput,
@@ -227,6 +229,7 @@ export function useDeleteMaintenanceTask() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["maintenance-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["blocks"] });
     },
   });
 }
@@ -385,6 +388,7 @@ export function useCreateBlockWindow() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["blocks"] });
+      queryClient.invalidateQueries({ queryKey: ["maintenance-tasks"] });
     },
   });
 }
@@ -470,6 +474,7 @@ export function useUpdateBlockWindow() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["blocks"] });
       queryClient.invalidateQueries({ queryKey: ["blocks", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["maintenance-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["block-recommendation", variables.id] });
     },
   });
@@ -493,7 +498,49 @@ export function useApplyBlockRecommendation() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["blocks"] });
       queryClient.invalidateQueries({ queryKey: ["blocks", variables.blockWindowId] });
+      queryClient.invalidateQueries({ queryKey: ["maintenance-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["block-recommendation", variables.blockWindowId] });
+    },
+  });
+}
+
+/**
+ * Retrieve block window directly for a maintenance task by task_id (e.g. "TMS-190")
+ */
+export function useBlockWindowByTaskId(taskId?: string | null) {
+  return useQuery({
+    queryKey: ["blocks", "by-task", taskId],
+    queryFn: async () => {
+      if (!taskId) return null;
+      const res = await getBlockWindowByTaskId(taskId);
+      if (!res.success) return null;
+      return res.data ?? null;
+    },
+    enabled: !!taskId,
+  });
+}
+
+/**
+ * Update (or create) block window directly using the maintenance task_id
+ */
+export function useUpdateBlockWindowByTaskId() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      taskId,
+      data,
+    }: {
+      taskId: string;
+      data: Partial<CreateBlockWindowInput> | BlockWindowPutPayload;
+    }) => {
+      const res = await updateBlockWindowByTaskId(taskId, data);
+      if (!res.success) throw new Error(res.error || `Failed to update block window for task ${taskId}`);
+      return res.data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["blocks"] });
+      queryClient.invalidateQueries({ queryKey: ["blocks", "by-task", variables.taskId] });
+      queryClient.invalidateQueries({ queryKey: ["maintenance-tasks"] });
     },
   });
 }
