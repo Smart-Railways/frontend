@@ -591,39 +591,39 @@ export default function MaintenancePage() {
     // Select the nearest block window whose START is strictly now or in future and within 30 days
     const matchingWindow = targetTask
       ? blockWindows
-        .filter((bw) => {
-          if (
-            taskAsset?.section &&
-            Number(bw.section) === Number(taskAsset.section)
-          ) {
-            return true;
-          }
+          .filter((bw) => {
+            if (
+              taskAsset?.section &&
+              Number(bw.section) === Number(taskAsset.section)
+            ) {
+              return true;
+            }
 
-          return Boolean(
-            sectionName &&
-            bw.section_name &&
-            bw.section_name.trim().toLowerCase() ===
-            sectionName.trim().toLowerCase()
-          );
-        })
-        .filter((bw) => {
-          const startTime = new Date(bw.start_time);
-          const endTime = new Date(bw.end_time);
+            return Boolean(
+              sectionName &&
+              bw.section_name &&
+              bw.section_name.trim().toLowerCase() ===
+                sectionName.trim().toLowerCase()
+            );
+          })
+          .filter((bw) => {
+            const startTime = new Date(bw.start_time);
+            const endTime = new Date(bw.end_time);
 
-          // Only use a window that starts in the future, ends after start, and fits within 30-day window
-          return (
-            startTime >= now &&
-            startTime <= maxDate &&
-            endTime > startTime &&
-            endTime <= maxDate
-          );
-        })
-        .sort((a, b) => {
-          return (
-            new Date(a.start_time).getTime() -
-            new Date(b.start_time).getTime()
-          );
-        })[0]
+            // Only use a window that starts in the future, ends after start, and fits within 30-day window
+            return (
+              startTime >= now &&
+              startTime <= maxDate &&
+              endTime > startTime &&
+              endTime <= maxDate
+            );
+          })
+          .sort((a, b) => {
+            return (
+              new Date(a.start_time).getTime() -
+              new Date(b.start_time).getTime()
+            );
+          })[0]
       : null;
 
     // If there is no future block window, create a safe future fallback.
@@ -1521,10 +1521,11 @@ export default function MaintenancePage() {
                                 {statKey !== MaintenanceStatus.COMPLETED && (
                                   <button
                                     onClick={() => handleToggleAiRecommendation(task)}
-                                    className={`p-2 rounded-lg border shadow-xs transition-all cursor-pointer flex items-center gap-1 text-xs font-bold ${expandedAiTaskId === task.id
+                                    className={`p-2 rounded-lg border shadow-xs transition-all cursor-pointer flex items-center gap-1 text-xs font-bold ${
+                                      expandedAiTaskId === task.id
                                         ? "bg-brand-primary text-white border-brand-primary shadow-sm"
                                         : "bg-brand-blue-light/50 hover:bg-brand-blue-light border-brand-primary/30 text-brand-primary"
-                                      }`}
+                                    }`}
                                     title="AI Recommended Slot"
                                   >
                                     <Sparkles className={`w-4 h-4 ${expandedAiTaskId === task.id ? "text-white" : "text-brand-primary fill-brand-primary/20"}`} />
@@ -1626,7 +1627,7 @@ export default function MaintenancePage() {
                                         <span>Live AI Monitoring</span>
                                         <span className="text-[10px] font-normal text-brand-muted">· auto-refreshes every 60 s</span>
                                       </div>
-
+                                     
                                     </div>
 
                                     {/* Reason Description */}
@@ -1969,7 +1970,7 @@ export default function MaintenancePage() {
 
               return (
                 <div >
-
+                  
                 </div>
               );
             })()}
@@ -2098,10 +2099,11 @@ export default function MaintenancePage() {
                           setConflictEndError(valRes.endError);
                           if (conflictError) setConflictError(null);
                         }}
-                        className={`w-full px-3 py-2 pr-20 rounded-xl bg-brand-tertiary border text-brand-secondary text-xs font-mono font-semibold focus:outline-hidden cursor-pointer transition-colors ${conflictStartError
+                        className={`w-full px-3 py-2 pr-20 rounded-xl bg-brand-tertiary border text-brand-secondary text-xs font-mono font-semibold focus:outline-hidden cursor-pointer transition-colors ${
+                          conflictStartError
                             ? "border-red-400 bg-red-50/40 focus:border-red-500"
                             : "border-brand-border focus:border-brand-primary"
-                          }`}
+                        }`}
                       />
                       <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 bg-brand-tertiary">
                         <button
@@ -2162,10 +2164,11 @@ export default function MaintenancePage() {
                           setConflictEndError(valRes.endError);
                           if (conflictError) setConflictError(null);
                         }}
-                        className={`w-full px-3 py-2 pr-20 rounded-xl bg-brand-tertiary border text-brand-secondary text-xs font-mono font-semibold focus:outline-hidden cursor-pointer transition-colors ${conflictEndError
+                        className={`w-full px-3 py-2 pr-20 rounded-xl bg-brand-tertiary border text-brand-secondary text-xs font-mono font-semibold focus:outline-hidden cursor-pointer transition-colors ${
+                          conflictEndError
                             ? "border-red-400 bg-red-50/40 focus:border-red-500"
                             : "border-brand-border focus:border-brand-primary"
-                          }`}
+                        }`}
                       />
                       <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 bg-brand-tertiary">
                         <button
@@ -2530,32 +2533,34 @@ export default function MaintenancePage() {
                               {scorePercent != null && (
                                 <div className="pt-2 border-t border-emerald-200/70 flex items-center justify-between gap-2">
                                   <div className="flex items-center gap-2">
-                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${scorePercent >= 70
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                      scorePercent >= 70
                                         ? "bg-red-50 text-red-700 border-red-200"
                                         : scorePercent >= 40
-                                          ? "bg-amber-50 text-amber-800 border-amber-200"
-                                          : "bg-emerald-50 text-emerald-800 border-emerald-200"
-                                      }`}>
+                                        ? "bg-amber-50 text-amber-800 border-amber-200"
+                                        : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                    }`}>
                                       Risk Factor: {scorePercent}%
                                     </span>
                                     <span className="text-[10px] text-gray-500 font-medium hidden sm:inline">
                                       {scorePercent >= 70
                                         ? "High Urgency"
                                         : scorePercent >= 40
-                                          ? "Moderate"
-                                          : "Routine"}
+                                        ? "Moderate"
+                                        : "Routine"}
                                     </span>
                                   </div>
 
                                   <div className="flex items-center gap-2 w-32">
                                     <div className="w-full bg-emerald-200/80 rounded-full h-1.5 overflow-hidden">
                                       <div
-                                        className={`h-1.5 rounded-full ${scorePercent >= 70
+                                        className={`h-1.5 rounded-full ${
+                                          scorePercent >= 70
                                             ? "bg-red-500"
                                             : scorePercent >= 40
-                                              ? "bg-amber-500"
-                                              : "bg-emerald-600"
-                                          }`}
+                                            ? "bg-amber-500"
+                                            : "bg-emerald-600"
+                                        }`}
                                         style={{ width: `${scorePercent}%` }}
                                       />
                                     </div>
