@@ -145,15 +145,15 @@ export default function Home() {
       />
 
       {/* Main App Container with Left Navbar Offset & Right Notification Panel */}
-      <div className="flex-1 flex pl-0 lg:pl-64 pt-14 lg:pt-0">
+      <div className="flex-1 flex pl-0 lg:pl-64 pt-14 lg:pt-0 animate-fade-in-up">
         {/* 2. Center Content Area */}
         <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-7 flex flex-col space-y-4 max-w-[1600px] mx-auto w-full">
           
           {/* Top Operational Header */}
-          <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-brand-border/80">
+          <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-brand-border/80 animate-fade-in-down">
             <div>
               <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-brand-secondary/80 text-white shadow-xs flex-shrink-0">
+                <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-brand-secondary/80 text-white shadow-xs flex-shrink-0 transition-transform duration-300 hover:scale-105">
                   <Route className="w-5 h-5 text-white" />
                 </div>
                 <div>
@@ -174,7 +174,7 @@ export default function Home() {
           </header>
 
           {/* 3. Horizontal Route Selector */}
-          <section aria-label="Route Selector">
+          <section aria-label="Route Selector" className="animate-fade-in-up delay-50">
             <HorizontalRouteSelector
               sourceId={sourceId}
               targetId={targetId}
@@ -186,7 +186,7 @@ export default function Home() {
           </section>
 
           {/* 4. Center Stage: India Railway Map */}
-          <section aria-label="India Railway Map" className="flex-1 min-h-[580px]">
+          <section aria-label="India Railway Map" className="flex-1 min-h-[580px] animate-fade-in-up delay-100">
             <IndiaRailwayMap
               sourceId={sourceId}
               targetId={targetId}
@@ -196,7 +196,7 @@ export default function Home() {
         </main>
 
         {/* 5. Right-side Notification Panel */}
-        <div className="hidden xl:block shrink-0 sticky top-0 h-screen overflow-hidden">
+        <div className="hidden xl:block shrink-0 sticky top-0 h-screen overflow-hidden animate-fade-in-up delay-150">
           <NotificationPanel
             onSelectCorridor={handleSelectCorridorFromNotification}
           />

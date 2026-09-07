@@ -1375,7 +1375,7 @@ export default function MaintenancePage() {
     <div className="min-h-screen bg-brand-tertiary text-brand-secondary flex flex-col font-sans selection:bg-brand-primary/20 selection:text-brand-primary">
       <VerticalNavbar activeTab={activeNavTab} onTabChange={setActiveNavTab} unreadCount={1} />
 
-      <div className="flex-1 flex pl-0 lg:pl-64 pt-14 lg:pt-0">
+      <div className="flex-1 flex pl-0 lg:pl-64 pt-14 lg:pt-0 animate-fade-in-up">
         <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-7 flex flex-col space-y-5 max-w-[1600px] mx-auto w-full">
 
           {/* Toast Notification Banner */}
@@ -1402,10 +1402,10 @@ export default function MaintenancePage() {
           )}
 
           {/* Header */}
-          <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-brand-border/80">
+          <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-brand-border/80 animate-fade-in-down">
             <div>
               <div className="flex items-center gap-2.5">
-                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-brand-secondary/80 text-brand-tertiary">
+                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-brand-secondary/80 text-brand-tertiary transition-transform duration-300 hover:scale-105">
                   <Wrench className="w-4 h-4" />
                 </div>
                 <h1 className="text-xl sm:text-2xl font-bold text-brand-secondary tracking-tight">
@@ -1425,7 +1425,7 @@ export default function MaintenancePage() {
 
           {/* Metric Cards */}
           <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            <div className="p-4 rounded-2xl bg-brand-surface border border-brand-border shadow-sm flex items-start gap-3.5">
+            <div className="smooth-card p-4 rounded-2xl bg-brand-surface border border-brand-border shadow-sm flex items-start gap-3.5">
               <div className="w-9 h-9 rounded-full bg-brand-secondary/80 text-white flex items-center justify-center flex-shrink-0 mt-0.5">
                 <Wrench className="w-4 h-4" />
               </div>
@@ -1442,7 +1442,7 @@ export default function MaintenancePage() {
               </div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-brand-surface border border-brand-border shadow-sm flex items-start gap-3.5">
+            <div className="smooth-card p-4 rounded-2xl bg-brand-surface border border-brand-border shadow-sm flex items-start gap-3.5">
               <div className="w-9 h-9 rounded-full bg-brand-secondary/80 text-white flex items-center justify-center flex-shrink-0 mt-0.5">
                 <CheckCircle2 className="w-4 h-4" />
               </div>

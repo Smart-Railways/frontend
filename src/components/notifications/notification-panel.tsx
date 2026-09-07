@@ -200,7 +200,8 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
               <h2 className="text-sm font-extrabold text-brand-secondary tracking-tight">
                 Railway Alerts
               </h2>
-              <span className="text-[10px] px-1.5 py-0.2 rounded bg-brand-blue-light text-brand-primary font-bold border border-brand-primary/20">
+              <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-brand-blue-light text-brand-primary font-bold border border-brand-primary/20">
+                <span className="w-1.5 h-1.5 rounded-full bg-brand-primary animate-beacon-pulse" />
                 LIVE
               </span>
             </div>
@@ -214,10 +215,10 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
           <button
             onClick={() => refetch()}
             disabled={isRefetching}
-            className="p-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-brand-secondary shadow-xs transition-colors cursor-pointer"
+            className="smooth-btn p-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-brand-secondary shadow-xs hover:border-brand-primary/30 active:scale-90 transition-all cursor-pointer"
             title="Refresh alerts"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefetching ? "animate-spin text-brand-primary" : ""}`} />
+            <RefreshCw className={`w-3.5 h-3.5 transition-transform ${isRefetching ? "animate-spin text-brand-primary" : ""}`} />
           </button>
         </div>
       </div>
@@ -234,9 +235,9 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
           <button
             key={tab.id}
             onClick={() => setFilter(tab.id as typeof filter)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+            className={`smooth-btn px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer active:scale-95 ${
               filter === tab.id
-                ? "bg-brand-primary text-white shadow-xs"
+                ? "bg-brand-primary text-white shadow-xs scale-100"
                 : "text-brand-muted hover:text-brand-secondary hover:bg-brand-surface"
             }`}
           >
@@ -291,12 +292,13 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
             </p>
           </div>
         ) : (
-          filteredNotifications.map((notif) => {
+          filteredNotifications.map((notif, idx) => {
             return (
               <div
                 key={notif.id}
                 onClick={() => handleCardClick(notif)}
-                className="p-4 rounded-2xl bg-brand-surface border border-brand-border shadow-xs hover:shadow-md transition-all cursor-pointer space-y-3"
+                style={{ animationDelay: `${Math.min(idx * 60, 300)}ms` }}
+                className="smooth-card animate-fade-in-up p-4 rounded-2xl bg-brand-surface border border-brand-border shadow-xs hover:border-brand-primary/40 cursor-pointer space-y-3"
               >
                 {/* Top Row: Category badge, Task Code, Time */}
                 <div className="flex items-center justify-between">
@@ -308,7 +310,7 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
                         ? "bg-amber-500 text-white"
                         : "bg-brand-primary text-white"
                     }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full bg-white ${notif.severity === "critical" ? "animate-pulse" : ""}`}></span>
+                      <span className={`w-1.5 h-1.5 rounded-full bg-white ${notif.severity === "critical" ? "animate-beacon-pulse" : ""}`}></span>
                       <span>{notif.severity.toUpperCase()}</span>
                     </span>
 

@@ -142,7 +142,7 @@ export function HorizontalRouteSelector({
   const handleSwapClick = () => {
     setIsSwapping(true);
     onSwap();
-    setTimeout(() => setIsSwapping(false), 300);
+    setTimeout(() => setIsSwapping(false), 500);
   };
 
   const selectedSource = getStationById(sourceId);
@@ -157,7 +157,8 @@ return (
         "rounded-2xl border border-brand-border/70",
         "bg-brand-surface/80 backdrop-blur-sm",
         "p-2",
-        "shadow-[0_2px_12px_rgba(0,0,0,0.035)]"
+        "shadow-[0_2px_12px_rgba(0,0,0,0.035)]",
+        "smooth-card hover:border-brand-primary/20 transition-all duration-300"
       )}
     >
       {/* ORIGIN */}
@@ -279,10 +280,11 @@ return (
             "bg-brand-surface",
             "text-brand-secondary",
             "shadow-[0_1px_4px_rgba(0,0,0,0.06)]",
-            "transition-all duration-200",
-            "hover:border-brand-primary/30",
+            "smooth-btn group",
+            "hover:border-brand-primary/40",
             "hover:bg-brand-blue-light/60",
             "hover:text-brand-primary",
+            "hover:scale-105",
             "active:scale-90",
             "disabled:cursor-not-allowed disabled:opacity-40",
             "cursor-pointer"
@@ -290,8 +292,8 @@ return (
         >
           <ArrowRightLeft
             className={cn(
-              "size-3.5 transition-transform duration-300",
-              isSwapping && "rotate-180 text-brand-primary"
+              "size-3.5 transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]",
+              isSwapping ? "rotate-180 scale-110 text-brand-primary" : "group-hover:rotate-45"
             )}
           />
         </Button>
