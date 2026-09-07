@@ -111,7 +111,7 @@ export function AIBlockRecommendationBanner({
 
   return (
     <div
-      className={`p-4 rounded-xl border space-y-3 ${
+      className={`animate-fade-in-up smooth-card p-4 rounded-xl border space-y-3 ${
         hasConflict
           ? "bg-red-50 border-red-200"
           : "bg-amber-50 border-amber-200"
@@ -173,7 +173,7 @@ export function AIBlockRecommendationBanner({
           <button
             onClick={handleAccept}
             disabled={updateMutation.isPending}
-            className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-sm"
+            className="smooth-btn flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-sm"
           >
             {updateMutation.isPending ? (
               <>

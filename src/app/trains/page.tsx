@@ -385,12 +385,12 @@ export default function TrainsPage() {
     <div className="min-h-screen bg-brand-tertiary text-brand-secondary flex flex-col font-sans">
       <VerticalNavbar activeTab={activeNavTab} onTabChange={setActiveNavTab} unreadCount={1} />
 
-      <div className="flex-1 flex pl-0 lg:pl-64 pt-14 lg:pt-0">
+      <div className="flex-1 flex pl-0 lg:pl-64 pt-14 lg:pt-0 animate-fade-in-up">
         <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-7 flex flex-col space-y-6 max-w-[1680px] mx-auto w-full">
-          <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-brand-border/80">
+          <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-brand-border/80 animate-fade-in-down">
             <div>
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-brand-secondary/80 text-white flex items-center justify-center shadow-xs">
+                <div className="w-8 h-8 rounded-xl bg-brand-secondary/80 text-white flex items-center justify-center shadow-xs transition-transform duration-300 hover:scale-105">
                   <TrainIcon className="w-4 h-4" />
                 </div>
                 <h1 className="text-xl sm:text-2xl font-bold text-brand-secondary tracking-tight">Train Operations & Schedules</h1>
@@ -402,7 +402,7 @@ export default function TrainsPage() {
           </header>
 
           {(activeViewMode === "all" || activeViewMode === "tracked") && (
-            <section className="rounded-2xl bg-brand-surface border border-brand-border shadow-sm overflow-hidden space-y-4 p-4 sm:p-5">
+            <section className="smooth-card rounded-2xl bg-brand-surface border border-brand-border shadow-sm overflow-hidden space-y-4 p-4 sm:p-5">
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-brand-border/80">
                 <div className="space-y-1">
                   <h2 className="text-base sm:text-lg font-black text-brand-secondary tracking-tight flex items-center gap-2">
@@ -1092,7 +1092,7 @@ export default function TrainsPage() {
       {/* ========================================================================= */}
       {inspectTrackedTrain && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-brand-surface border border-brand-border rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-brand-surface border border-brand-border rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto animate-scale-in">
             <div className="flex items-center justify-between pb-3 border-b border-brand-border">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">

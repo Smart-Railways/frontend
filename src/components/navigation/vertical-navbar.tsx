@@ -8,8 +8,6 @@ import {
   Train,
   Building2,
   Wrench,
-  ChevronLeft,
-  ChevronRight,
   Menu,
   X,
 } from "lucide-react";
@@ -25,16 +23,17 @@ interface VerticalNavbarProps {
 export function VerticalNavbar({
   activeTab,
   onTabChange,
-  unreadCount = 3,
 }: VerticalNavbarProps) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
 
-  // Close mobile drawer on route change
-  useEffect(() => {
+  // Synchronize mobile drawer close on route change during render
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  if (prevPathname !== pathname) {
+    setPrevPathname(pathname);
     setMobileOpen(false);
-  }, [pathname]);
+  }
 
   // Close mobile drawer on Escape key press
   useEffect(() => {
@@ -113,9 +112,9 @@ export function VerticalNavbar({
           <button
             onClick={() => setMobileOpen(true)}
             aria-label="Open Navigation Menu"
-            className="p-2 rounded-xl bg-brand-tertiary/80 border border-brand-border/80 text-brand-secondary hover:text-brand-primary active:scale-95 transition-all cursor-pointer flex items-center justify-center shrink-0"
+            className="smooth-btn p-2 rounded-xl bg-brand-tertiary/80 border border-brand-border/80 text-brand-secondary hover:text-brand-primary active:scale-90 hover:bg-brand-blue-light/50 transition-all cursor-pointer flex items-center justify-center shrink-0 shadow-2xs"
           >
-            <Menu className="w-5 h-5" />
+            <Menu className="w-5 h-5 transition-transform group-active:scale-95" />
           </button>
         </div>
 
@@ -131,7 +130,7 @@ export function VerticalNavbar({
       {mobileOpen && (
         <div
           data-mobile-overlay
-          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-[9998] lg:hidden transition-opacity duration-300 animate-in fade-in"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] lg:hidden transition-opacity duration-300 ease-out animate-in fade-in"
           onClick={() => setMobileOpen(false)}
           aria-hidden="true"
         />
@@ -148,7 +147,7 @@ export function VerticalNavbar({
           bg-brand-secondary
           border-r border-[#262b34]
           flex flex-col justify-between
-          transition-all duration-300 ease-in-out
+          transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] transform-gpu
           select-none
           ${/* Mobile Drawer positioning */ ""}
           ${mobileOpen ? "translate-x-0 w-64 z-[9999] shadow-2xl" : "-translate-x-full lg:translate-x-0 lg:z-30"}
@@ -162,10 +161,10 @@ export function VerticalNavbar({
             <Link
               href="/"
               onClick={() => setMobileOpen(false)}
-              className="flex items-center gap-3 overflow-hidden cursor-pointer"
+              className="flex items-center gap-3 overflow-hidden cursor-pointer group"
             >
               {/* Brand Logo */}
-              <div className="relative flex items-center justify-center w-10 h-10 rounded-xl flex-shrink-0">
+              <div className="relative flex items-center justify-center w-10 h-10 rounded-xl flex-shrink-0 transition-transform duration-200 group-hover:scale-105">
                 <Image
                   src="/logo.png"
                   alt="Sanket Logo"
@@ -178,12 +177,12 @@ export function VerticalNavbar({
 
               {/* Brand Text: always show in mobile drawer; on desktop hide when collapsed */}
               <div
-                className={`transition-opacity duration-200 ${
+                className={`transition-all duration-200 ${
                   collapsed ? "lg:hidden" : "block"
                 }`}
               >
                 <div className="flex items-center gap-1.5">
-                  <span className="font-extrabold text-sm tracking-tight text-white">
+                  <span className="font-extrabold text-sm tracking-tight text-white group-hover:text-blue-300 transition-colors">
                     Sanket
                   </span>
                 </div>
@@ -197,7 +196,7 @@ export function VerticalNavbar({
             <button
               onClick={() => setMobileOpen(false)}
               aria-label="Close navigation sidebar"
-              className="lg:hidden p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              className="smooth-btn lg:hidden p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 active:scale-90 transition-all cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -228,12 +227,15 @@ export function VerticalNavbar({
                     rounded-xl
                     text-xs
                     font-medium
-                    transition-colors
+                    transition-all
+                    duration-200
+                    ease-out
+                    active:scale-[0.98]
                     group
                     ${
                       isCurrent
-                        ? "bg-[#1f2b3e] text-blue-400 border border-brand-primary/30 font-semibold"
-                        : "text-slate-400 hover:text-slate-200 hover:bg-[#1f242d] border border-transparent"
+                        ? "bg-[#1f2b3e] text-blue-400 border border-brand-primary/40 font-semibold shadow-xs shadow-blue-500/10 translate-x-0.5"
+                        : "text-slate-400 hover:text-slate-100 hover:bg-[#1f242d] hover:translate-x-1 border border-transparent"
                     }
                   `}
                 >
@@ -241,15 +243,16 @@ export function VerticalNavbar({
                     <Icon
                       className={`
                         w-4 h-4
-                        transition-colors
+                        transition-all
+                        duration-200
                         ${
                           isCurrent
-                            ? "text-blue-400"
-                            : "text-slate-400 group-hover:text-slate-200"
+                            ? "text-blue-400 scale-105"
+                            : "text-slate-400 group-hover:text-blue-400 group-hover:scale-110"
                         }
                       `}
                     />
-                    <span className={collapsed ? "lg:hidden" : "inline"}>
+                    <span className={`transition-colors duration-150 ${collapsed ? "lg:hidden" : "inline"}`}>
                       {item.label}
                     </span>
                   </div>
