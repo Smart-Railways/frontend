@@ -79,7 +79,7 @@ function extractStationIds(text: string): { sourceId?: string; targetId?: string
 }
 
 export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) {
-  const [filter, setFilter] = useState<"all" | "critical" | "maintenance">("all");
+  const [filter, setFilter] = useState<"all" | "critical" | "high">("all");
 
   // Dynamically fetch strictly REAL pending/active maintenance tasks from backend API
   const { data: apiMaintenanceTasks = [], isLoading: loadingTasks, refetch, isRefetching } = useMaintenanceTasks();
@@ -146,8 +146,8 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
           rawTaskId: task.id,
           title: `${taskCodeDisplay}: ${detailsDisplay.slice(0, 52)}${detailsDisplay.length > 52 ? "..." : ""}`,
           description: detailsDisplay,
-          category: isUrgent ? "critical" : "maintenance",
-          severity: isUrgent ? (task.urgency === "CRITICAL" ? "critical" : "high") : "medium",
+          category: task.urgency === "CRITICAL" ? "critical" : "maintenance",
+          severity: task.urgency === "CRITICAL" ? "critical" : task.urgency === "HIGH" ? "high" : "medium",
           timestamp: task.logged_at ? new Date(task.logged_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "",
           corridorOrStation: corridorDisplay,
           stationId: targetId || (sourceId !== "ndls" ? sourceId : undefined),
@@ -166,17 +166,17 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
 
   const filteredNotifications = allNotifications.filter((n) => {
     if (filter === "all") return true;
-    if (filter === "critical") return n.severity === "critical" || n.category === "critical";
-    if (filter === "maintenance") return n.category === "maintenance" || n.status === "SCHEDULED";
+    if (filter === "critical") return n.severity === "critical";
+    if (filter === "high") return n.severity === "high";
     return true;
   });
 
   const criticalCount = allNotifications.filter(
-    (n) => n.severity === "critical" || n.category === "critical"
+    (n) => n.severity === "critical"
   ).length;
 
-  const scheduledMaintenanceCount = allNotifications.filter(
-    (n) => n.status === "SCHEDULED" || n.category === "maintenance"
+  const highCount = allNotifications.filter(
+    (n) => n.severity === "high"
   ).length;
 
   const handleCardClick = (notif: RailwayNotification) => {
@@ -229,7 +229,7 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
           [
             { id: "all", label: `All (${allNotifications.length})` },
             { id: "critical", label: `Critical (${criticalCount})` },
-            { id: "maintenance", label: `Maintenance (${scheduledMaintenanceCount})` },
+            { id: "high", label: `High (${highCount})` },
           ] as const
         ).map((tab) => (
           <button

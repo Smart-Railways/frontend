@@ -30,7 +30,12 @@ export function getTrainTypeTheme(trainType?: string, trainName?: string): Train
     };
   }
 
-  if (t.includes(TrainType.SHATABDI) || n.includes(TrainType.SHATABDI)) {
+  if (
+    t.includes(TrainType.SHATABDI) ||
+    n.includes(TrainType.SHATABDI) ||
+    t.includes("GATIMAAN") ||
+    n.includes("GATIMAAN")
+  ) {
     return {
       typeKey: TrainType.SHATABDI,
       displayName: `${TRAIN_TYPE_LABELS[TrainType.SHATABDI]} Express`,
