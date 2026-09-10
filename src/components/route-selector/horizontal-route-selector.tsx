@@ -158,7 +158,7 @@ return (
         "bg-brand-surface/80 backdrop-blur-sm",
         "p-2",
         "shadow-[0_2px_12px_rgba(0,0,0,0.035)]",
-        "smooth-card hover:border-brand-primary/20 transition-all duration-300"
+        "hover:border-brand-primary/20 transition-all duration-300"
       )}
     >
       {/* ORIGIN */}

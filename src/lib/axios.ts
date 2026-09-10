@@ -25,9 +25,21 @@ export const api: AxiosInstance = axios.create({
   timeout: 30000,
 });
 
-// Request interceptor: ensure trailing slash for Django REST Framework endpoints
+// Request interceptor: attach X-DEV-KEY in dev mode and ensure trailing slash for DRF endpoints
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    // Attach X-DEV-KEY header only in development mode if present in environment variables
+    if (process.env.NODE_ENV === "development") {
+      const devKey = process.env.NEXT_PUBLIC_X_DEV_KEY || process.env.X_DEV_KEY;
+      if (devKey) {
+        if (typeof config.headers?.set === "function") {
+          config.headers.set("X-DEV-KEY", devKey);
+        } else if (config.headers) {
+          config.headers["X-DEV-KEY"] = devKey;
+        }
+      }
+    }
+
     if (config.url) {
       const [urlPath, queryString] = config.url.split("?");
       const trimmedPath = urlPath.endsWith("/") ? urlPath : `${urlPath}/`;
