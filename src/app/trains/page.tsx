@@ -402,7 +402,7 @@ export default function TrainsPage() {
           </header>
 
           {(activeViewMode === "all" || activeViewMode === "tracked") && (
-            <section className="smooth-card rounded-2xl bg-brand-surface border border-brand-border shadow-sm overflow-hidden space-y-4 p-4 sm:p-5">
+            <section className="rounded-2xl bg-brand-surface border border-brand-border shadow-sm overflow-hidden space-y-4 p-4 sm:p-5">
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-brand-border/80">
                 <div className="space-y-1">
                   <h2 className="text-base sm:text-lg font-black text-brand-secondary tracking-tight flex items-center gap-2">

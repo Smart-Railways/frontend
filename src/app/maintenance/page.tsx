@@ -27,6 +27,7 @@ import {
   Cpu,
   Info,
   MapPin,
+  Brain,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -1786,7 +1787,7 @@ export default function MaintenancePage() {
                                     }`}
                                     title="AI Recommended Slot"
                                   >
-                                    <Sparkles className={`w-4 h-4 ${expandedAiTaskId === task.id ? "text-white" : "text-brand-primary fill-brand-primary/20"}`} />
+                                    <Brain className={`w-4 h-4 ${expandedAiTaskId === task.id ? "text-white" : "text-brand-primary fill-brand-primary/20"}`} />
                                     <span className="hidden xl:inline text-[11px]">AI Slot</span>
                                   </button>
                                 )}
@@ -1877,7 +1878,7 @@ export default function MaintenancePage() {
                                     {/* Header */}
                                     <div className="flex items-center justify-between flex-wrap gap-2">
                                       <div className="flex items-center gap-2 text-xs font-bold text-brand-secondary">
-                                        <Sparkles className="w-4 h-4 text-brand-primary fill-brand-primary/20" />
+                                        <Brain className="w-4 h-4 text-brand-primary fill-brand-primary/20" />
                                         <span>Live AI Monitoring</span>
                                         <span className="text-[10px] font-normal text-brand-muted">· auto-refreshes every 60 s</span>
                                       </div>
@@ -3073,7 +3074,7 @@ export default function MaintenancePage() {
                     blockWindowId={createdBlockWindowId}
                     taskId={selectedBlockTask?.task_code}
                     onSlotUpdated={() => {
-                      showToast("success", "⚡ AI recommended slot accepted & block window updated!");
+                      showToast("success", "AI recommended slot accepted & block window updated!");
                       setIsBlockWindowModalOpen(false);
                     }}
                   />

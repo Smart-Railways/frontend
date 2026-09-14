@@ -183,7 +183,7 @@ export function AIBlockRecommendationBanner({
             ) : (
               <>
                 <ArrowRight className="w-3.5 h-3.5" />
-                <span>⚡ Accept AI Slot</span>
+                <span>Accept AI Slot</span>
               </>
             )}
           </button>

@@ -16,6 +16,7 @@ import {
   RefreshCw,
   Sparkles,
   Zap,
+  Brain,
 } from "lucide-react";
 import { useMaintenanceTasks, useBlockWindows, useAssets } from "@/hooks";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -358,7 +359,7 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
                   <div className="p-2.5 rounded-lg bg-brand-blue-light/50 border border-brand-primary/30 flex items-center justify-between gap-2">
                     <div>
                       <span className="text-[9px] font-bold uppercase text-brand-primary flex items-center gap-1 tracking-wider">
-                        <Sparkles className="w-3 h-3 text-brand-primary fill-brand-primary/20" /> AI RECOMMENDED SLOT
+                        <Brain className="w-3 h-3 text-brand-primary fill-brand-primary/20" /> AI RECOMMENDED SLOT
                       </span>
                       <span className="font-mono text-xs font-bold text-brand-primary block mt-0.5">
                         {notif.aiRecommendedSlot}
