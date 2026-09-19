@@ -79,7 +79,7 @@ function getRiskBadge(level: number) {
   if (level >= 8) {
     return {
       bg: "bg-red-600 border-transparent text-white",
-      dot: "bg-white animate-pulse",
+      dot: "bg-white",
       label: "Critical Risk",
     };
   }

@@ -27,7 +27,7 @@ import {
   Cpu,
   Info,
   MapPin,
-  Brain,
+  Bot,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -746,39 +746,39 @@ export default function MaintenancePage() {
     // Select the nearest block window whose START is strictly now or in future and within 30 days
     const matchingWindow = targetTask
       ? blockWindows
-          .filter((bw) => {
-            if (
-              taskAsset?.section &&
-              Number(bw.section) === Number(taskAsset.section)
-            ) {
-              return true;
-            }
+        .filter((bw) => {
+          if (
+            taskAsset?.section &&
+            Number(bw.section) === Number(taskAsset.section)
+          ) {
+            return true;
+          }
 
-            return Boolean(
-              sectionName &&
-              bw.section_name &&
-              bw.section_name.trim().toLowerCase() ===
-                sectionName.trim().toLowerCase()
-            );
-          })
-          .filter((bw) => {
-            const startTime = new Date(bw.start_time);
-            const endTime = new Date(bw.end_time);
+          return Boolean(
+            sectionName &&
+            bw.section_name &&
+            bw.section_name.trim().toLowerCase() ===
+            sectionName.trim().toLowerCase()
+          );
+        })
+        .filter((bw) => {
+          const startTime = new Date(bw.start_time);
+          const endTime = new Date(bw.end_time);
 
-            // Only use a window that starts in the future, ends after start, and fits within 30-day window
-            return (
-              startTime >= now &&
-              startTime <= maxDate &&
-              endTime > startTime &&
-              endTime <= maxDate
-            );
-          })
-          .sort((a, b) => {
-            return (
-              new Date(a.start_time).getTime() -
-              new Date(b.start_time).getTime()
-            );
-          })[0]
+          // Only use a window that starts in the future, ends after start, and fits within 30-day window
+          return (
+            startTime >= now &&
+            startTime <= maxDate &&
+            endTime > startTime &&
+            endTime <= maxDate
+          );
+        })
+        .sort((a, b) => {
+          return (
+            new Date(a.start_time).getTime() -
+            new Date(b.start_time).getTime()
+          );
+        })[0]
       : null;
 
     // If there is no future block window, create a safe future fallback.
@@ -1109,47 +1109,47 @@ export default function MaintenancePage() {
     const secName = task.section_name || taskAsset?.section_name;
     const matchingBw = task.block_window
       ? {
-          id: task.block_window.id,
-          section: Number(task.block_window.section || secId || 1),
-          start_time: task.block_window.start_time,
-          end_time: task.block_window.end_time,
-          status: task.block_window.status || "RESERVED",
-        }
+        id: task.block_window.id,
+        section: Number(task.block_window.section || secId || 1),
+        start_time: task.block_window.start_time,
+        end_time: task.block_window.end_time,
+        status: task.block_window.status || "RESERVED",
+      }
       : blockWindows.find((bw) => {
-          if (bw.task && bw.task === task.id) return true;
-          if (bw.task_id && bw.task_id === task.task_code) return true;
-          if (bw.task_code && bw.task_code === task.task_code) return true;
-          return false;
-        });
+        if (bw.task && bw.task === task.id) return true;
+        if (bw.task_id && bw.task_id === task.task_code) return true;
+        if (bw.task_code && bw.task_code === task.task_code) return true;
+        return false;
+      });
 
     const currentSlotLabel = matchingBw
       ? (() => {
-          const info = formatWindowSlot(matchingBw.start_time, matchingBw.end_time);
-          return `${info.time} · ${info.date}`;
-        })()
+        const info = formatWindowSlot(matchingBw.start_time, matchingBw.end_time);
+        return `${info.time} · ${info.date}`;
+      })()
       : task.task_status === MaintenanceStatus.SCHEDULED
-      ? "Allocated"
-      : "Pending Allocation";
+        ? "Allocated"
+        : "Pending Allocation";
 
     const targetDate = matchingBw?.start_time
       ? matchingBw.start_time.substring(0, 10)
       : task.deadline
-      ? task.deadline.substring(0, 10)
-      : new Date().toISOString().split("T")[0];
+        ? task.deadline.substring(0, 10)
+        : new Date().toISOString().split("T")[0];
 
     if (!aiRecommendationsMap[task.id]) {
       setLoadingAiTaskId(task.id);
 
       const requestPayload: FeasibleWindowsRequest = matchingBw
         ? {
-            block_window_id: matchingBw.id,
-            task_id: task.task_code,
-            date: targetDate,
-          }
+          block_window_id: matchingBw.id,
+          task_id: task.task_code,
+          date: targetDate,
+        }
         : {
-            task_id: task.task_code,
-            date: targetDate,
-          };
+          task_id: task.task_code,
+          date: targetDate,
+        };
 
       feasibleWindowsMutation.mutate(
         requestPayload,
@@ -1218,18 +1218,18 @@ export default function MaintenancePage() {
 
     const matchingBw = task.block_window
       ? {
-          id: task.block_window.id,
-          section: Number(task.block_window.section || secId || 1),
-          start_time: task.block_window.start_time,
-          end_time: task.block_window.end_time,
-          status: task.block_window.status || "RESERVED",
-        }
+        id: task.block_window.id,
+        section: Number(task.block_window.section || secId || 1),
+        start_time: task.block_window.start_time,
+        end_time: task.block_window.end_time,
+        status: task.block_window.status || "RESERVED",
+      }
       : blockWindows.find((bw) => {
-          if (bw.task && bw.task === task.id) return true;
-          if (bw.task_id && bw.task_id === task.task_code) return true;
-          if (bw.task_code && bw.task_code === task.task_code) return true;
-          return false;
-        });
+        if (bw.task && bw.task === task.id) return true;
+        if (bw.task_id && bw.task_id === task.task_code) return true;
+        if (bw.task_code && bw.task_code === task.task_code) return true;
+        return false;
+      });
 
     setSchedulingSlot(slot.start);
     try {
@@ -1594,7 +1594,7 @@ export default function MaintenancePage() {
               </div>
             </div>
 
-           
+
           </section>
 
           {/* Task List Content */}
@@ -1661,10 +1661,8 @@ export default function MaintenancePage() {
                       <th className="py-3 px-4 text-center font-semibold">Task Code</th>
                       <th className="py-3 px-4 text-center font-semibold">Target Asset</th>
                       <th className="py-3 px-4 text-center font-semibold">Corridor</th>
-                      <th className="py-3 px-4 text-center font-semibold">Criticality Score</th>
                       <th className="py-3 px-4 text-center font-semibold">Block Window</th>
-                      <th className="py-3 px-4 text-center font-semibold">Duration</th>
-                      <th className="py-3 px-4 text-center font-semibold">Deadline</th>
+                      <th className="py-3 px-4 text-center font-semibold">Criticality Score</th>
                       <th className="py-3 px-4 text-center font-semibold">Status</th>
                       <th className="py-3 px-4 text-center font-semibold">Actions</th>
                     </tr>
@@ -1683,18 +1681,18 @@ export default function MaintenancePage() {
                       const secName = task.section_name || taskAsset?.section_name;
                       const matchingBw = task.block_window
                         ? {
-                            id: task.block_window.id,
-                            section: Number(task.block_window.section || secId || 1),
-                            start_time: task.block_window.start_time,
-                            end_time: task.block_window.end_time,
-                            status: task.block_window.status || "RESERVED",
-                          }
+                          id: task.block_window.id,
+                          section: Number(task.block_window.section || secId || 1),
+                          start_time: task.block_window.start_time,
+                          end_time: task.block_window.end_time,
+                          status: task.block_window.status || "RESERVED",
+                        }
                         : blockWindows.find((bw) => {
-                            if (bw.task && bw.task === task.id) return true;
-                            if (bw.task_id && bw.task_id === task.task_code) return true;
-                            if (bw.task_code && bw.task_code === task.task_code) return true;
-                            return false;
-                          });
+                          if (bw.task && bw.task === task.id) return true;
+                          if (bw.task_id && bw.task_id === task.task_code) return true;
+                          if (bw.task_code && bw.task_code === task.task_code) return true;
+                          return false;
+                        });
 
                       const hasAllocatedWindow = Boolean(matchingBw);
                       const effectiveStatKey = (statKey === MaintenanceStatus.COMPLETED || statKey === MaintenanceStatus.CANCELLED)
@@ -1719,18 +1717,7 @@ export default function MaintenancePage() {
                                 <span>{corridorName}</span>
                               </div>
                             </td>
-                            {/* Criticality Score / Index */}
-                            <td className="py-3.5 px-4 text-center">
-                              <div className="inline-flex flex-col items-center gap-0.5">
-                                <span
-                                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold`}
-                                >
-                                  <span className={`w-1.5 h-1.5 rounded-full ${urg.dot}`} />
-                                  <span>{task.risk_rating ?? 5}/10</span>
-                                </span>
-                             
-                              </div>
-                            </td>
+                           
                             <td className="py-3.5 px-4 text-center">
                               {matchingBw ? (
                                 (() => {
@@ -1748,7 +1735,7 @@ export default function MaintenancePage() {
                                 })()
                               ) : (
                                 <div className="inline-flex flex-col items-center gap-1.5">
-                                  
+
                                   <button
                                     onClick={() => handleOpenBlockWindowModal(task)}
                                     className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-bold text-[11px] shadow-xs transition-colors cursor-pointer"
@@ -1759,12 +1746,36 @@ export default function MaintenancePage() {
                                 </div>
                               )}
                             </td>
-                            <td className="py-3.5 px-4 text-center font-mono text-brand-secondary font-semibold">
-                              {task.estimated_duration} mins
+                            
+                         
+
+                             {/* Criticality Score / Index */}
+                            <td className="py-3.5 px-4 text-center">
+                              <div className="inline-flex items-center justify-center">
+                                {(() => {
+                                  const score = task.risk_rating ?? 5;
+
+                                  const riskColor =
+                                    score >= 8
+                                      ? "bg-red-600"
+                                      : score >= 6
+                                        ? "bg-orange-500"
+                                      : score >= 4
+                                        ? "bg-amber-500"
+                                        : "bg-emerald-500";
+
+                                  return (
+                                    <span
+                                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-bold text-white ${riskColor}`}
+                                    >
+                                      <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                                      <span>{score}/10</span>
+                                    </span>
+                                  );
+                                })()}
+                              </div>
                             </td>
-                            <td className="py-3.5 px-4 text-center font-mono text-brand-secondary font-semibold">
-                              {formatDate(task.deadline)}
-                            </td>
+
                             <td className="py-3.5 px-4 text-center">
                               <span
                                 className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-semibold border ${effectiveStat.badge}`}
@@ -1780,15 +1791,14 @@ export default function MaintenancePage() {
                                 {effectiveStatKey !== MaintenanceStatus.COMPLETED && effectiveStatKey !== MaintenanceStatus.CANCELLED && task.task_status !== MaintenanceStatus.COMPLETED && task.task_status !== MaintenanceStatus.CANCELLED && Boolean(matchingBw) && (
                                   <button
                                     onClick={() => handleToggleAiRecommendation(task)}
-                                    className={`p-2 rounded-lg border shadow-xs transition-all cursor-pointer flex items-center gap-1 text-xs font-bold ${
-                                      expandedAiTaskId === task.id
+                                    className={`p-2 rounded-lg border shadow-xs transition-all cursor-pointer flex items-center gap-1 text-xs font-bold ${expandedAiTaskId === task.id
                                         ? "bg-brand-primary text-white border-brand-primary shadow-sm"
                                         : "bg-brand-blue-light/50 hover:bg-brand-blue-light border-brand-primary/30 text-brand-primary"
-                                    }`}
+                                      }`}
                                     title="AI Recommended Slot"
                                   >
-                                    <Brain className={`w-4 h-4 ${expandedAiTaskId === task.id ? "text-white" : "text-brand-primary fill-brand-primary/20"}`} />
-                                    <span className="hidden xl:inline text-[11px]">AI Slot</span>
+                                    <Bot className={`w-4 h-4 ${expandedAiTaskId === task.id ? "text-white" : "text-brand-primary fill-brand-primary/20"}`} />
+                                    
                                   </button>
                                 )}
 
@@ -1867,7 +1877,7 @@ export default function MaintenancePage() {
                           {/* Inline AI Recommendation Expanded Panel (Not in Dialogue) */}
                           {expandedAiTaskId === task.id && statKey !== MaintenanceStatus.PENDING && statKey !== MaintenanceStatus.COMPLETED && statKey !== MaintenanceStatus.CANCELLED && effectiveStatKey !== MaintenanceStatus.COMPLETED && effectiveStatKey !== MaintenanceStatus.CANCELLED && Boolean(matchingBw) && (
                             <tr key={`ai-${task.id}`} className="bg-brand-blue-light/10 border-b border-brand-border">
-                              <td colSpan={9} className="p-3.5">
+                              <td colSpan={7} className="p-3.5">
                                 {loadingAiTaskId === task.id ? (
                                   <div className="p-4 rounded-2xl bg-brand-surface border border-brand-primary/30 flex items-center justify-center gap-2 text-xs font-bold text-brand-secondary shadow-xs">
                                     <RefreshCw className="w-4 h-4 text-brand-primary animate-spin" />
@@ -1878,11 +1888,11 @@ export default function MaintenancePage() {
                                     {/* Header */}
                                     <div className="flex items-center justify-between flex-wrap gap-2">
                                       <div className="flex items-center gap-2 text-xs font-bold text-brand-secondary">
-                                        <Brain className="w-4 h-4 text-brand-primary fill-brand-primary/20" />
+                                        <Bot className="w-4 h-4 text-brand-primary fill-brand-primary/20" />
                                         <span>Live AI Monitoring</span>
                                         <span className="text-[10px] font-normal text-brand-muted">· auto-refreshes every 60 s</span>
                                       </div>
-                                     
+
                                     </div>
 
                                     {/* Reason Description */}
@@ -2205,23 +2215,23 @@ export default function MaintenancePage() {
               const secName = inspectingTask.section_name || taskAsset?.section_name;
               const matchingBw = inspectingTask.block_window
                 ? {
-                    id: inspectingTask.block_window.id,
-                    section: Number(inspectingTask.block_window.section || secId || 1),
-                    start_time: inspectingTask.block_window.start_time,
-                    end_time: inspectingTask.block_window.end_time,
-                    status: inspectingTask.block_window.status || "RESERVED",
-                  }
+                  id: inspectingTask.block_window.id,
+                  section: Number(inspectingTask.block_window.section || secId || 1),
+                  start_time: inspectingTask.block_window.start_time,
+                  end_time: inspectingTask.block_window.end_time,
+                  status: inspectingTask.block_window.status || "RESERVED",
+                }
                 : blockWindows.find((bw) => {
-                    if (bw.task && bw.task === inspectingTask.id) return true;
-                    if (bw.task_id && bw.task_id === inspectingTask.task_code) return true;
-                    if (bw.task_code && bw.task_code === inspectingTask.task_code) return true;
-                    return false;
-                  });
+                  if (bw.task && bw.task === inspectingTask.id) return true;
+                  if (bw.task_id && bw.task_id === inspectingTask.task_code) return true;
+                  if (bw.task_code && bw.task_code === inspectingTask.task_code) return true;
+                  return false;
+                });
 
 
               return (
                 <div >
-                  
+
                 </div>
               );
             })()}
@@ -2350,11 +2360,10 @@ export default function MaintenancePage() {
                           setConflictEndError(valRes.endError);
                           if (conflictError) setConflictError(null);
                         }}
-                        className={`w-full px-3 py-2 pr-20 rounded-xl bg-brand-tertiary border text-brand-secondary text-xs font-mono font-semibold focus:outline-hidden cursor-pointer transition-colors ${
-                          conflictStartError
+                        className={`w-full px-3 py-2 pr-20 rounded-xl bg-brand-tertiary border text-brand-secondary text-xs font-mono font-semibold focus:outline-hidden cursor-pointer transition-colors ${conflictStartError
                             ? "border-red-400 bg-red-50/40 focus:border-red-500"
                             : "border-brand-border focus:border-brand-primary"
-                        }`}
+                          }`}
                       />
                       <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 bg-brand-tertiary">
                         <button
@@ -2415,11 +2424,10 @@ export default function MaintenancePage() {
                           setConflictEndError(valRes.endError);
                           if (conflictError) setConflictError(null);
                         }}
-                        className={`w-full px-3 py-2 pr-20 rounded-xl bg-brand-tertiary border text-brand-secondary text-xs font-mono font-semibold focus:outline-hidden cursor-pointer transition-colors ${
-                          conflictEndError
+                        className={`w-full px-3 py-2 pr-20 rounded-xl bg-brand-tertiary border text-brand-secondary text-xs font-mono font-semibold focus:outline-hidden cursor-pointer transition-colors ${conflictEndError
                             ? "border-red-400 bg-red-50/40 focus:border-red-500"
                             : "border-brand-border focus:border-brand-primary"
-                        }`}
+                          }`}
                       />
                       <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 bg-brand-tertiary">
                         <button
@@ -2784,34 +2792,32 @@ export default function MaintenancePage() {
                               {scorePercent != null && (
                                 <div className="pt-2 border-t border-emerald-200/70 flex items-center justify-between gap-2">
                                   <div className="flex items-center gap-2">
-                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                      scorePercent >= 70
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${scorePercent >= 70
                                         ? "bg-red-50 text-red-700 border-red-200"
                                         : scorePercent >= 40
-                                        ? "bg-amber-50 text-amber-800 border-amber-200"
-                                        : "bg-emerald-50 text-emerald-800 border-emerald-200"
-                                    }`}>
+                                          ? "bg-amber-50 text-amber-800 border-amber-200"
+                                          : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                      }`}>
                                       Risk Factor: {scorePercent}%
                                     </span>
                                     <span className="text-[10px] text-gray-500 font-medium hidden sm:inline">
                                       {scorePercent >= 70
                                         ? "High Urgency"
                                         : scorePercent >= 40
-                                        ? "Moderate"
-                                        : "Routine"}
+                                          ? "Moderate"
+                                          : "Routine"}
                                     </span>
                                   </div>
 
                                   <div className="flex items-center gap-2 w-32">
                                     <div className="w-full bg-emerald-200/80 rounded-full h-1.5 overflow-hidden">
                                       <div
-                                        className={`h-1.5 rounded-full ${
-                                          scorePercent >= 70
+                                        className={`h-1.5 rounded-full ${scorePercent >= 70
                                             ? "bg-red-500"
                                             : scorePercent >= 40
-                                            ? "bg-amber-500"
-                                            : "bg-emerald-600"
-                                        }`}
+                                              ? "bg-amber-500"
+                                              : "bg-emerald-600"
+                                          }`}
                                         style={{ width: `${scorePercent}%` }}
                                       />
                                     </div>
@@ -2877,15 +2883,15 @@ export default function MaintenancePage() {
                     {blockWindowStep === "AI_RECOMMENDATION"
                       ? "AI Slot Optimization"
                       : editingBlockWindow
-                      ? `Update Block Window #${editingBlockWindow.id}`
-                      : "Create Block Window"}
+                        ? `Update Block Window #${editingBlockWindow.id}`
+                        : "Create Block Window"}
                   </h3>
                   <p className="text-xs text-brand-muted">
                     {blockWindowStep === "AI_RECOMMENDATION"
                       ? "Continuous CP-SAT conflict analysis and collision-free slot recommendation"
                       : editingBlockWindow
-                      ? "Modify allocated time bounds and status for this corridor block window"
-                      : "Reserve a dedicated corridor maintenance window for this task"}
+                        ? "Modify allocated time bounds and status for this corridor block window"
+                        : "Reserve a dedicated corridor maintenance window for this task"}
                   </p>
                 </div>
               </div>

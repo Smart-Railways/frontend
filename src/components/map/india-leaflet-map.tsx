@@ -43,7 +43,7 @@ function createStationIcon(
   isSource: boolean,
   isTarget: boolean,
   isOnRoute: boolean,
-  isMaintenanceStation?: boolean
+  maintenanceStatus?: "ACTIVE" | "SCHEDULED"
 ) {
   // Origin Station: START badge with Royal Blue dot
   if (isSource) {
@@ -82,22 +82,27 @@ function createStationIcon(
     });
   }
 
-  // Station on a Scheduled Maintenance Corridor
-  if (isMaintenanceStation) {
+  // Maintenance station: ACTIVE = red, SCHEDULED = amber
+  if (maintenanceStatus) {
+    const isActive = maintenanceStatus === "ACTIVE";
+    const color = isActive ? "#DC2626" : "#F59E0B";
+    const bg = isActive ? "#FEF2F2" : "#FFFBEB";
+    const border = isActive ? "#FCA5A5" : "#FCD34D";
+
     return L.divIcon({
       className: "custom-leaflet-marker",
       html: `
         <div class="relative flex flex-col items-center -translate-x-1/2 -translate-y-1/2 group select-none">
-          <div class="w-3.5 h-3.5 rounded-full bg-[#991B1B] border-2 border-white shadow-md flex items-center justify-center animate-pulse">
+          <div class="w-3.5 h-3.5 rounded-full border-2 border-white shadow-md flex items-center justify-center ${isActive ? "animate-pulse" : ""}" style="background:${color};">
             <div class="w-1.5 h-1.5 rounded-full bg-white"></div>
           </div>
-          <span class="mt-1 px-1.5 py-0.5 rounded bg-red-50 border border-red-300 text-[9px] font-extrabold text-[#991B1B] whitespace-nowrap shadow-xs">
+          <span class="mt-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold whitespace-nowrap shadow-xs" style="background:${bg}; border:1px solid ${border}; color:${color};">
             ${station.name}
           </span>
         </div>
       `,
-      iconSize: [70, 30],
-      iconAnchor: [35, 10],
+      iconSize: [80, 32],
+      iconAnchor: [40, 10],
     });
   }
 
@@ -217,11 +222,20 @@ export function IndiaLeafletMap({
   const sourceStation = getStationById(sourceId);
   const targetStation = getStationById(targetId);
 
-  // Identify all corridor sections that have scheduled/active maintenance
-  const scheduledMaintenanceSections = useMemo(() => {
-    const scheduled = maintenanceTasks.filter(
-      (t) => t.task_status?.toUpperCase() === "SCHEDULED"
-    );
+  // Maintenance status used by the map:
+  // ACTIVE / IN_PROGRESS / ONGOING / UNDER_MAINTENANCE -> RED
+  // SCHEDULED -> AMBER
+  const maintenanceSections = useMemo(() => {
+    const maintenance = maintenanceTasks.filter((task) => {
+      const status = task.task_status?.toUpperCase();
+      return (
+        status === "SCHEDULED" ||
+        status === "ACTIVE" ||
+        status === "IN_PROGRESS" ||
+        status === "ONGOING" ||
+        status === "UNDER_MAINTENANCE"
+      );
+    });
 
     const result: Array<{
       key: string;
@@ -230,86 +244,106 @@ export function IndiaLeafletMap({
       fromStation: RailwayStation;
       toStation: RailwayStation;
       coordinates: [number, number][];
+      maintenanceStatus: "ACTIVE" | "SCHEDULED";
     }> = [];
 
-    // Group tasks by section name
-    const map = new Map<string, typeof maintenanceTasks>();
-    scheduled.forEach((t) => {
-      const name = (t.section_name || "").toLowerCase().trim();
-      if (name) {
-        const arr = map.get(name) || [];
-        arr.push(t);
-        map.set(name, arr);
-      }
+    const taskMap = new Map<string, typeof maintenanceTasks>();
+
+    maintenance.forEach((task) => {
+      const name = (task.section_name || "").toLowerCase().trim();
+      if (!name) return;
+      const arr = taskMap.get(name) || [];
+      arr.push(task);
+      taskMap.set(name, arr);
     });
 
-    // Match with backend sections
     sections.forEach((sec) => {
       const secNameLower = sec.section_name.toLowerCase().trim();
-      const tasksForSec = map.get(secNameLower);
-      if (tasksForSec && tasksForSec.length > 0) {
-        const fromSt =
-          getStationById(sec.source_station_code || "") ||
-          getStationByName(sec.origin_station);
-        const toSt =
-          getStationById(sec.destination_station_code || "") ||
-          getStationByName(sec.end_station);
+      const tasksForSec = taskMap.get(secNameLower);
+      if (!tasksForSec?.length) return;
 
-        if (fromSt && toSt) {
-          result.push({
-            key: `sec-${sec.id}`,
-            sectionName: sec.section_name,
-            tasks: tasksForSec,
-            fromStation: fromSt,
-            toStation: toSt,
-            coordinates: [
-              [fromSt.lat, fromSt.lng],
-              [toSt.lat, toSt.lng],
-            ],
-          });
-        }
-      }
+      const fromSt =
+        getStationById(sec.source_station_code || "") ||
+        getStationByName(sec.origin_station);
+      const toSt =
+        getStationById(sec.destination_station_code || "") ||
+        getStationByName(sec.end_station);
+
+      if (!fromSt || !toSt) return;
+
+      const isActive = tasksForSec.some((task) => {
+        const status = task.task_status?.toUpperCase();
+        return (
+          status === "ACTIVE" ||
+          status === "IN_PROGRESS" ||
+          status === "ONGOING" ||
+          status === "UNDER_MAINTENANCE"
+        );
+      });
+
+      result.push({
+        key: `sec-${sec.id}`,
+        sectionName: sec.section_name,
+        tasks: tasksForSec,
+        fromStation: fromSt,
+        toStation: toSt,
+        coordinates: [
+          [fromSt.lat, fromSt.lng],
+          [toSt.lat, toSt.lng],
+        ],
+        maintenanceStatus: isActive ? "ACTIVE" : "SCHEDULED",
+      });
     });
 
-    // Also match any task whose section name connects two known stations
-    map.forEach((tasksForSec, secNameLower) => {
+    // Also support section names like "New Delhi - Mathura".
+    taskMap.forEach((tasksForSec, secNameLower) => {
       const exists = result.some(
         (r) => r.sectionName.toLowerCase().trim() === secNameLower
       );
-      if (!exists) {
-        const parts = secNameLower.split(/[-–—/]/).map((p) => p.trim());
-        if (parts.length >= 2) {
-          const fromSt = getStationByName(parts[0]) || getStationById(parts[0]);
-          const toSt = getStationByName(parts[1]) || getStationById(parts[1]);
-          if (fromSt && toSt) {
-            result.push({
-              key: `custom-${fromSt.id}-${toSt.id}`,
-              sectionName: `${fromSt.name} - ${toSt.name}`,
-              tasks: tasksForSec,
-              fromStation: fromSt,
-              toStation: toSt,
-              coordinates: [
-                [fromSt.lat, fromSt.lng],
-                [toSt.lat, toSt.lng],
-              ],
-            });
-          }
-        }
-      }
+      if (exists) return;
+
+      const parts = secNameLower.split(/[-–—/]/).map((p) => p.trim());
+      if (parts.length < 2) return;
+
+      const fromSt = getStationByName(parts[0]) || getStationById(parts[0]);
+      const toSt = getStationByName(parts[1]) || getStationById(parts[1]);
+      if (!fromSt || !toSt) return;
+
+      const isActive = tasksForSec.some((task) => {
+        const status = task.task_status?.toUpperCase();
+        return (
+          status === "ACTIVE" ||
+          status === "IN_PROGRESS" ||
+          status === "ONGOING" ||
+          status === "UNDER_MAINTENANCE"
+        );
+      });
+
+      result.push({
+        key: `custom-${fromSt.id}-${toSt.id}`,
+        sectionName: `${fromSt.name} - ${toSt.name}`,
+        tasks: tasksForSec,
+        fromStation: fromSt,
+        toStation: toSt,
+        coordinates: [
+          [fromSt.lat, fromSt.lng],
+          [toSt.lat, toSt.lng],
+        ],
+        maintenanceStatus: isActive ? "ACTIVE" : "SCHEDULED",
+      });
     });
 
     return result;
   }, [maintenanceTasks, sections]);
 
-  // Set of station IDs belonging to scheduled maintenance sections
   const maintenanceStationIdSet = useMemo(() => {
     const set = new Set<string>();
-    scheduledMaintenanceSections.forEach((sec) => {
+    maintenanceSections.forEach((sec) => {
       set.add(sec.fromStation.id);
       set.add(sec.toStation.id);
     });
     return set;
-  }, [scheduledMaintenanceSections]);
+  }, [maintenanceSections]);
 
   // Set of station IDs strictly belonging to the active corridor
   const activeStationIdSet = useMemo(() => {
@@ -319,7 +353,7 @@ export function IndiaLeafletMap({
     return set;
   }, [activeRoute, sourceId, targetId]);
 
-  // Breakdown active route into individual consecutive segments
+  // Breakdown active route into individual consecutive segments.
   const routeSegments = useMemo(() => {
     if (!activeRoute || activeRoute.stationIds.length < 2) return [];
 
@@ -332,6 +366,7 @@ export function IndiaLeafletMap({
       hasMaintenance: boolean;
       maintenanceTasks: typeof maintenanceTasks;
       sectionName?: string;
+      maintenanceStatus?: "ACTIVE" | "SCHEDULED";
     }> = [];
 
     for (let i = 0; i < activeRoute.stationIds.length - 1; i++) {
@@ -339,45 +374,73 @@ export function IndiaLeafletMap({
       const toId = activeRoute.stationIds[i + 1];
       const fromStation = getStationById(fromId);
       const toStation = getStationById(toId);
+      if (!fromStation || !toStation) continue;
 
-      if (fromStation && toStation) {
-        // Check if this segment matches any scheduled maintenance section
-        const matchingSec = scheduledMaintenanceSections.find((sec) => {
+      const matchingSec = maintenanceSections.find((sec) =>
+        (sec.fromStation.id === fromId && sec.toStation.id === toId) ||
+        (sec.fromStation.id === toId && sec.toStation.id === fromId)
+      );
+
+      const segmentTasks = matchingSec
+        ? matchingSec.tasks
+        : maintenanceTasks.filter((task) => {
+            const status = task.task_status?.toUpperCase();
+            const statusOk =
+              status === "SCHEDULED" ||
+              status === "ACTIVE" ||
+              status === "IN_PROGRESS" ||
+              status === "ONGOING" ||
+              status === "UNDER_MAINTENANCE";
+            if (!statusOk) return false;
+
+            const taskText =
+              `${task.section_name || ""} ${task.asset_name || ""} ${task.details || ""}`.toLowerCase();
+
+            const hasFrom =
+              taskText.includes(fromStation.name.toLowerCase()) ||
+              taskText.includes(fromStation.code.toLowerCase());
+            const hasTo =
+              taskText.includes(toStation.name.toLowerCase()) ||
+              taskText.includes(toStation.code.toLowerCase());
+
+            return hasFrom && hasTo;
+          });
+
+      const hasMaintenance = Boolean(matchingSec || segmentTasks.length);
+      const hasActive =
+        matchingSec?.maintenanceStatus === "ACTIVE" ||
+        segmentTasks.some((task) => {
+          const status = task.task_status?.toUpperCase();
           return (
-            (sec.fromStation.id === fromId && sec.toStation.id === toId) ||
-            (sec.fromStation.id === toId && sec.toStation.id === fromId)
+            status === "ACTIVE" ||
+            status === "IN_PROGRESS" ||
+            status === "ONGOING" ||
+            status === "UNDER_MAINTENANCE"
           );
         });
 
-        const segmentTasks = matchingSec
-          ? matchingSec.tasks
-          : maintenanceTasks.filter((t) => {
-              const statusOk = t.task_status === "SCHEDULED" || t.task_status === "PENDING";
-              if (!statusOk) return false;
-              const text = `${t.section_name || ""} ${t.asset_name || ""} ${t.details || ""}`.toLowerCase();
-              const hasFrom = text.includes(fromStation.name.toLowerCase()) || text.includes(fromStation.code.toLowerCase());
-              const hasTo = text.includes(toStation.name.toLowerCase()) || text.includes(toStation.code.toLowerCase());
-              return hasFrom && hasTo;
-            });
-
-        segments.push({
-          fromId,
-          toId,
-          fromStation,
-          toStation,
-          coordinates: [
-            [fromStation.lat, fromStation.lng],
-            [toStation.lat, toStation.lng],
-          ],
-          hasMaintenance: Boolean(matchingSec || segmentTasks.length > 0),
-          maintenanceTasks: matchingSec ? matchingSec.tasks : segmentTasks,
-          sectionName: matchingSec?.sectionName,
-        });
-      }
+      segments.push({
+        fromId,
+        toId,
+        fromStation,
+        toStation,
+        coordinates: [
+          [fromStation.lat, fromStation.lng],
+          [toStation.lat, toStation.lng],
+        ],
+        hasMaintenance,
+        maintenanceTasks: segmentTasks,
+        sectionName: matchingSec?.sectionName,
+        maintenanceStatus: hasMaintenance
+          ? hasActive
+            ? "ACTIVE"
+            : "SCHEDULED"
+          : undefined,
+      });
     }
 
     return segments;
-  }, [activeRoute, scheduledMaintenanceSections, maintenanceTasks]);
+  }, [activeRoute, maintenanceSections, maintenanceTasks]);
 
   // Coordinates for the highlighted corridor route
   const routeCoordinates: [number, number][] = useMemo(() => {
@@ -385,10 +448,10 @@ export function IndiaLeafletMap({
     return activeRoute.geoCoordinates;
   }, [activeRoute]);
 
-  // STRICTLY FILTER STATIONS: Show corridor stations + maintenance corridor stations
+  // Show corridor stations + maintenance corridor stations
   const visibleStations = useMemo(() => {
     const combinedSet = new Set<string>(activeStationIdSet);
-    scheduledMaintenanceSections.forEach((sec) => {
+    maintenanceSections.forEach((sec) => {
       combinedSet.add(sec.fromStation.id);
       combinedSet.add(sec.toStation.id);
     });
@@ -396,8 +459,15 @@ export function IndiaLeafletMap({
     if (combinedSet.size > 0) {
       return STATIONS.filter((s) => combinedSet.has(s.id));
     }
-    return STATIONS.filter((s) => s.id === "ndls" || s.id === "mtj" || s.id === "st" || s.id === "mmct");
-  }, [activeStationIdSet, scheduledMaintenanceSections]);
+
+    return STATIONS.filter(
+      (s) =>
+        s.id === "ndls" ||
+        s.id === "mtj" ||
+        s.id === "st" ||
+        s.id === "mmct"
+    );
+  }, [activeStationIdSet, maintenanceSections]);
 
   const handleResetIndiaView = () => {
     if (mapInstance && routeCoordinates.length > 1) {
@@ -415,15 +485,19 @@ export function IndiaLeafletMap({
 
       {/* Bottom Left Map Legend */}
       <div
-        className="absolute bottom-4 left-4 z-10 flex items-center gap-3 px-3 py-1.5 rounded-xl bg-brand-surface/95 backdrop-blur-md border border-brand-border shadow-sm text-[11px] font-bold text-brand-secondary pointer-events-auto"
+        className="absolute bottom-4 left-4 z-10 flex items-center gap-4 px-3 py-1.5 rounded-xl bg-brand-surface/95 backdrop-blur-md border border-brand-border shadow-sm text-[11px] font-bold text-brand-secondary pointer-events-auto"
       >
         <div className="flex items-center gap-1.5">
           <span className="w-4 h-1 rounded bg-[#2563EB]"></span>
-          <span>Clear Corridor</span>
+          <span>Normal</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-4 h-1.5 rounded bg-[#991B1B] border-t border-dashed border-[#FCA5A5]"></span>
-          <span className="text-[#991B1B] font-extrabold">Maintenance Scheduled</span>
+          <span className="w-4 h-1.5 rounded bg-[#DC2626]"></span>
+          <span className="text-[#DC2626] font-extrabold">Active Maintenance</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-4 h-1.5 rounded bg-[#F59E0B]"></span>
+          <span className="text-[#F59E0B] font-extrabold">Scheduled Maintenance</span>
         </div>
       </div>
 
@@ -458,25 +532,30 @@ export function IndiaLeafletMap({
         {/* 1. ACTIVE ROUTE SEGMENTS */}
         {routeSegments.map((segment, idx) => {
           if (segment.hasMaintenance) {
-            // HIGHLIGHT IN DARK RED (#991B1B) FOR SCHEDULED MAINTENANCE
+            const isActive = segment.maintenanceStatus === "ACTIVE";
+            const mainColor = isActive ? "#DC2626" : "#F59E0B";
+            const overlayColor = isActive ? "#FCA5A5" : "#FCD34D";
+            const label = isActive
+              ? "ACTIVE MAINTENANCE"
+              : "SCHEDULED MAINTENANCE";
+
             return (
               <React.Fragment key={`seg-maint-${idx}`}>
-                {/* Thick dark red base line */}
                 <Polyline
                   positions={segment.coordinates}
                   pathOptions={{
-                    color: "#991B1B", // Dark red
+                    color: mainColor,
                     weight: 6,
                     opacity: 1,
                     lineCap: "round",
                     lineJoin: "round",
                   }}
                 />
-                {/* Dashed hazard track overlay */}
+
                 <Polyline
                   positions={segment.coordinates}
                   pathOptions={{
-                    color: "#FCA5A5",
+                    color: overlayColor,
                     weight: 3,
                     opacity: 0.95,
                     dashArray: "6, 8",
@@ -484,31 +563,51 @@ export function IndiaLeafletMap({
                   }}
                 >
                   <Tooltip direction="top" offset={[0, -10]} opacity={0.95}>
-                    <div className="text-xs font-bold text-[#991B1B] px-1 flex items-center gap-1">
-                      <AlertTriangle className="w-3 h-3 text-[#991B1B]" />
-                      <span>Scheduled Maintenance: {segment.sectionName || `${segment.fromStation.name} - ${segment.toStation.name}`}</span>
+                    <div className="text-xs font-bold px-1 flex items-center gap-1" style={{ color: mainColor }}>
+                      <AlertTriangle className="w-3 h-3" style={{ color: mainColor }} />
+                      <span>
+                        {label}: {segment.sectionName || `${segment.fromStation.name} - ${segment.toStation.name}`}
+                      </span>
                     </div>
                   </Tooltip>
+
                   <Popup className="custom-leaflet-popup">
                     <div className="p-2 space-y-2 text-xs text-brand-secondary">
-                      <div className="flex items-center gap-1.5 font-extrabold text-[#991B1B]">
-                        <AlertTriangle className="w-4 h-4 text-[#991B1B] shrink-0" />
-                        <span>SCHEDULED TRACK MAINTENANCE</span>
+                      <div className="flex items-center gap-1.5 font-extrabold" style={{ color: mainColor }}>
+                        <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: mainColor }} />
+                        <span>{label}</span>
                       </div>
                       <div className="font-bold text-brand-secondary">
                         Corridor: {segment.sectionName || `${segment.fromStation.name} - ${segment.toStation.name}`}
                       </div>
-                      {segment.maintenanceTasks.map((t) => (
-                        <div key={t.id} className="p-2 rounded-lg bg-red-50 border border-red-200 text-xs space-y-1">
+                      {segment.maintenanceTasks.map((task) => (
+                        <div
+                          key={task.id}
+                          className="p-2 rounded-lg text-xs space-y-1"
+                          style={{
+                            backgroundColor: isActive ? "#FEF2F2" : "#FFFBEB",
+                            border: `1px solid ${isActive ? "#FECACA" : "#FDE68A"}`,
+                          }}
+                        >
                           <div className="flex items-center justify-between">
-                            <span className="font-mono font-bold text-red-800">{t.task_code}</span>
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-red-200 text-red-900 uppercase">
-                              {t.task_status}
+                            <span className="font-mono font-bold" style={{ color: mainColor }}>
+                              {task.task_code}
+                            </span>
+                            <span
+                              className="px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase"
+                              style={{
+                                backgroundColor: isActive ? "#FECACA" : "#FDE68A",
+                                color: isActive ? "#991B1B" : "#92400E",
+                              }}
+                            >
+                              {task.task_status}
                             </span>
                           </div>
-                          <p className="text-[11px] text-red-900 font-medium">{t.details || t.asset_name}</p>
-                          <div className="text-[10px] text-red-700 font-mono">
-                            Duration: {t.estimated_duration} mins • Urgency: {t.urgency}
+                          <p className="text-[11px] font-medium">
+                            {task.details || task.asset_name}
+                          </p>
+                          <div className="text-[10px] font-mono" style={{ color: mainColor }}>
+                            Duration: {task.estimated_duration} mins • Urgency: {task.urgency}
                           </div>
                         </div>
                       ))}
@@ -519,7 +618,7 @@ export function IndiaLeafletMap({
             );
           }
 
-          // Normal active route segment in Royal Blue
+          // Normal route remains blue.
           return (
             <React.Fragment key={`seg-normal-${idx}`}>
               <Polyline
@@ -546,83 +645,112 @@ export function IndiaLeafletMap({
           );
         })}
 
-        {/* 2. NETWORK-WIDE SCHEDULED MAINTENANCE CORRIDORS (Always in DARK RED) */}
-        {scheduledMaintenanceSections
-          .filter((sec) => {
-            // Avoid duplicate rendering if already in active route segments
-            return !routeSegments.some(
+        {/* 2. NETWORK-WIDE MAINTENANCE CORRIDORS */}
+        {maintenanceSections
+          .filter((sec) =>
+            !routeSegments.some(
               (seg) =>
                 seg.hasMaintenance &&
                 ((seg.fromId === sec.fromStation.id && seg.toId === sec.toStation.id) ||
                   (seg.fromId === sec.toStation.id && seg.toId === sec.fromStation.id))
-            );
-          })
-          .map((sec) => (
-            <React.Fragment key={sec.key}>
-              {/* Dark red solid track */}
-              <Polyline
-                positions={sec.coordinates}
-                pathOptions={{
-                  color: "#991B1B", // Dark red
-                  weight: 6,
-                  opacity: 0.95,
-                  lineCap: "round",
-                  lineJoin: "round",
-                }}
-              />
-              {/* Dashed hazard overlay */}
-              <Polyline
-                positions={sec.coordinates}
-                pathOptions={{
-                  color: "#FCA5A5",
-                  weight: 3,
-                  opacity: 0.95,
-                  dashArray: "6, 8",
-                  lineCap: "round",
-                }}
-              >
-                <Tooltip direction="top" offset={[0, -10]} opacity={0.95}>
-                  <div className="text-xs font-bold text-[#991B1B] px-1 flex items-center gap-1">
-                    <AlertTriangle className="w-3 h-3 text-[#991B1B]" />
-                    <span>Scheduled Maintenance: {sec.sectionName}</span>
-                  </div>
-                </Tooltip>
-                <Popup className="custom-leaflet-popup">
-                  <div className="p-2 space-y-2 text-xs text-brand-secondary">
-                    <div className="flex items-center gap-1.5 font-extrabold text-[#991B1B]">
-                      <AlertTriangle className="w-4 h-4 text-[#991B1B] shrink-0" />
-                      <span>SCHEDULED TRACK MAINTENANCE</span>
+            )
+          )
+          .map((sec) => {
+            const isActive = sec.maintenanceStatus === "ACTIVE";
+            const mainColor = isActive ? "#DC2626" : "#F59E0B";
+            const overlayColor = isActive ? "#FCA5A5" : "#FCD34D";
+            const label = isActive ? "ACTIVE MAINTENANCE" : "SCHEDULED MAINTENANCE";
+
+            return (
+              <React.Fragment key={sec.key}>
+                <Polyline
+                  positions={sec.coordinates}
+                  pathOptions={{
+                    color: mainColor,
+                    weight: 6,
+                    opacity: 0.95,
+                    lineCap: "round",
+                    lineJoin: "round",
+                  }}
+                />
+                <Polyline
+                  positions={sec.coordinates}
+                  pathOptions={{
+                    color: overlayColor,
+                    weight: 3,
+                    opacity: 0.95,
+                    dashArray: "6, 8",
+                    lineCap: "round",
+                  }}
+                >
+                  <Tooltip direction="top" offset={[0, -10]} opacity={0.95}>
+                    <div className="text-xs font-bold px-1 flex items-center gap-1" style={{ color: mainColor }}>
+                      <AlertTriangle className="w-3 h-3" style={{ color: mainColor }} />
+                      <span>{label}: {sec.sectionName}</span>
                     </div>
-                    <div className="font-bold text-brand-secondary">
-                      Corridor: {sec.sectionName}
-                    </div>
-                    {sec.tasks.map((t) => (
-                      <div key={t.id} className="p-2 rounded-lg bg-red-50 border border-red-200 text-xs space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="font-mono font-bold text-red-800">{t.task_code}</span>
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-red-200 text-red-900 uppercase">
-                            {t.task_status}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-red-900 font-medium">{t.details || t.asset_name}</p>
-                        <div className="text-[10px] text-red-700 font-mono">
-                          Duration: {t.estimated_duration} mins • Urgency: {t.urgency}
-                        </div>
+                  </Tooltip>
+                  <Popup className="custom-leaflet-popup">
+                    <div className="p-2 space-y-2 text-xs text-brand-secondary">
+                      <div className="flex items-center gap-1.5 font-extrabold" style={{ color: mainColor }}>
+                        <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: mainColor }} />
+                        <span>{label}</span>
                       </div>
-                    ))}
-                  </div>
-                </Popup>
-              </Polyline>
-            </React.Fragment>
-          ))}
+                      <div className="font-bold text-brand-secondary">Corridor: {sec.sectionName}</div>
+                      {sec.tasks.map((task) => (
+                        <div
+                          key={task.id}
+                          className="p-2 rounded-lg text-xs space-y-1"
+                          style={{
+                            backgroundColor: isActive ? "#FEF2F2" : "#FFFBEB",
+                            border: `1px solid ${isActive ? "#FECACA" : "#FDE68A"}`,
+                          }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono font-bold" style={{ color: mainColor }}>{task.task_code}</span>
+                            <span
+                              className="px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase"
+                              style={{
+                                backgroundColor: isActive ? "#FECACA" : "#FDE68A",
+                                color: isActive ? "#991B1B" : "#92400E",
+                              }}
+                            >
+                              {task.task_status}
+                            </span>
+                          </div>
+                          <p className="text-[11px] font-medium">{task.details || task.asset_name}</p>
+                          <div className="text-[10px] font-mono" style={{ color: mainColor }}>
+                            Duration: {task.estimated_duration} mins • Urgency: {task.urgency}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </Popup>
+                </Polyline>
+              </React.Fragment>
+            );
+          })}
 
         {/* 3. STATIONS ALONG THE CORRIDOR & MAINTENANCE SECTIONS */}
         {visibleStations.map((station) => {
           const isSource = station.id === sourceId;
           const isTarget = station.id === targetId;
           const isOnRoute = activeStationIdSet.has(station.id);
-          const isMaintenanceStation = maintenanceStationIdSet.has(station.id);
-          const icon = createStationIcon(station, isSource, isTarget, isOnRoute, isMaintenanceStation);
+
+          const maintenanceSection = maintenanceSections.find(
+            (sec) =>
+              sec.fromStation.id === station.id ||
+              sec.toStation.id === station.id
+          );
+
+          const maintenanceStatus = maintenanceSection?.maintenanceStatus;
+
+          const icon = createStationIcon(
+            station,
+            isSource,
+            isTarget,
+            isOnRoute,
+            maintenanceStatus
+          );
 
           return (
             <Marker
@@ -636,7 +764,7 @@ export function IndiaLeafletMap({
               <Tooltip direction="top" offset={[0, -10]} opacity={0.95}>
                 <div className="text-[11px] font-bold text-brand-secondary px-1">
                   {station.name} ({station.code}) — {station.city}
-                  {isMaintenanceStation && " [Maintenance Section]"}
+                  {maintenanceStatus && ` [${maintenanceStatus === "ACTIVE" ? "Active" : "Scheduled"} Maintenance]`}
                 </div>
               </Tooltip>
 
@@ -656,10 +784,24 @@ export function IndiaLeafletMap({
                   <div className="text-[10px] text-brand-muted font-mono">
                     Platforms: <strong>{station.platforms}</strong> • Corridor Station
                   </div>
-                  {isMaintenanceStation && (
-                    <div className="mt-1 p-1 rounded bg-red-50 text-[10px] text-red-800 font-bold border border-red-200 flex items-center gap-1">
-                      <AlertTriangle className="w-3 h-3 text-red-600" />
-                      <span>Corridor section with scheduled maintenance</span>
+                  {maintenanceStatus && (
+                    <div
+                      className="mt-1 p-1 rounded text-[10px] font-bold border flex items-center gap-1"
+                      style={{
+                        backgroundColor: maintenanceStatus === "ACTIVE" ? "#FEF2F2" : "#FFFBEB",
+                        color: maintenanceStatus === "ACTIVE" ? "#991B1B" : "#92400E",
+                        borderColor: maintenanceStatus === "ACTIVE" ? "#FECACA" : "#FDE68A",
+                      }}
+                    >
+                      <AlertTriangle
+                        className="w-3 h-3"
+                        style={{ color: maintenanceStatus === "ACTIVE" ? "#DC2626" : "#F59E0B" }}
+                      />
+                      <span>
+                        {maintenanceStatus === "ACTIVE"
+                          ? "Active maintenance section"
+                          : "Scheduled maintenance section"}
+                      </span>
                     </div>
                   )}
                 </div>
