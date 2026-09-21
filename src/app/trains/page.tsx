@@ -7,21 +7,11 @@ import {
   Train as TrainIcon,
   Search,
   RefreshCw,
-  Plus,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
   Eye,
-  CalendarCheck,
-  ArrowLeftRight,
-  Crown,
-  CheckCircle2,
-  AlertTriangle,
-  Clock,
-  Timer,
   Radio,
 } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -31,39 +21,45 @@ import {
 } from "@/components/ui/select";
 import {
   useRailwaySections,
-  useTrains,
-  useTrainSchedules,
-  usePaginatedTrainSchedules,
   useTrainMovements,
-  useTrackedTrainOperations,
 } from "@/hooks";
 import {
-  TrackedTrainOperation,
-  TrainSchedule,
-  CreateTrainMovementInput,
   RailwaySection,
+  TrainMovement,
+  Train,
+  TrainSchedule,
 } from "@/types";
 import { TrainType } from "@/enums";
 import {
   formatTrainTimeIST,
-  formatTimeString,
   formatDateToISO,
-  formatDisplayDate,
   formatDelayMetric,
   calculateTimeDuration,
 } from "@/lib/time-utils";
 import { getTrainTypeTheme } from "@/lib/train-theme";
-import { getDateBounds, validateDate, clampDate } from "@/lib/date-schemas";
+import { validateDate, clampDate } from "@/lib/date-schemas";
 import {
   TrainsPageSkeleton,
   TrackedTrainsTableSkeleton,
-  MasterSchedulesTableSkeleton,
 } from "./skeletons";
+
+function getYesterdayISO(): string {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  return formatDateToISO(yesterday);
+}
+
+function normaliseSearchText(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
 
 const DAYS_FULL = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-
-// Item structure for Master Schedules Table
 interface MasterScheduleItem {
   id: string | number;
   scheduleId?: number;
@@ -86,49 +82,52 @@ interface MasterScheduleItem {
   statusDot: string;
 }
 
+
 export default function TrainsPage() {
   const [activeNavTab, setActiveNavTab] = useState<string>("trains");
-  const [activeViewMode, setActiveViewMode] = useState<"all" | "tracked" | "schedules">("all");
-  // Default to 2026-09-04 where active train operations are seeded in the backend database
-  // Clamped to valid live-tracking range (today - 7 days → today)
-  const [trackedDate, setTrackedDate] = useState<string>(() => formatDateToISO(new Date()));
-  const [trackedDateError, setTrackedDateError] = useState<string | null>(null);
+  const [activeViewMode] = useState<"all" | "tracked" | "schedules">("all");
   const [scheduleDateError, setScheduleDateError] = useState<string | null>(null);
   const [trackedSectionId, setTrackedSectionId] = useState<number>(1);
   const [sourceCode, setSourceCode] = useState<string>("NDLS");
   const [destinationCode, setDestinationCode] = useState<string>("MTJ");
+  const [movementDate, setMovementDate] = useState<string>(() => formatDateToISO(new Date()));
   const [trackedSearchQuery, setTrackedSearchQuery] = useState<string>("");
-  const [inspectTrackedTrain, setInspectTrackedTrain] = useState<TrackedTrainOperation | null>(null);
+  const [inspectTrackedTrain, setInspectTrackedTrain] = useState<TrainMovement | null>(null);
 
   const [trackedCurrentPage, setTrackedCurrentPage] = useState<number>(1);
   const [trackedPageSize, setTrackedPageSize] = useState<number>(10);
-
-  const {
-    data: trackedOperationsData,
-    isLoading: loadingTracked,
-    isRefetching: refetchingTracked,
-    refetch: refetchTracked,
-  } = useTrackedTrainOperations({
-    date: trackedDate,
-    source: sourceCode,
-    destination: destinationCode,
-  });
 
   const [selectedScheduleDate, setSelectedScheduleDate] = useState<string>(formatDateToISO(new Date()));
   const [selectedSectionId, setSelectedSectionId] = useState<number | null>(1);
   const [scheduleSearchQuery, setScheduleSearchQuery] = useState<string>("");
   const [scheduleTypeFilter, setScheduleTypeFilter] = useState<string>("ALL");
   const [runsTodayOnly, setRunsTodayOnly] = useState<boolean>(false);
-
   const [schedulesCurrentPage, setSchedulesCurrentPage] = useState<number>(1);
-  const [schedulesPageSize, setSchedulesPageSize] = useState<number>(10);
-
+  const [schedulesPageSize] = useState<number>(10);
   const [inspectScheduleItem, setInspectScheduleItem] = useState<MasterScheduleItem | null>(null);
-  const [isLogMovementModalOpen, setIsLogMovementModalOpen] = useState<boolean>(false);
 
-  const { data: sections = [], isLoading: loadingSections, refetch: refetchSections } = useRailwaySections();
-  const { data: trains = [], isLoading: loadingTrains, refetch: refetchTrains } = useTrains();
-  const { data: movements = [], isLoading: loadingMovements, refetch: refetchMovements } = useTrainMovements();
+  const { data: sections = [], isLoading: loadingSections } = useRailwaySections();
+  // This screen only renders live movements. These placeholders keep the
+  // unused timetable modal inert without issuing trains or train-schedules calls.
+  const trains: Train[] = [];
+  const schedules: TrainSchedule[] = [];
+  const movementQueryParams = useMemo(
+    () => ({
+      date: movementDate,
+      from: sourceCode,
+      to: destinationCode,
+      page: trackedSearchQuery.trim() ? 1 : trackedCurrentPage,
+      page_size: trackedSearchQuery.trim() ? 100 : trackedPageSize,
+    }),
+    [movementDate, sourceCode, destinationCode, trackedCurrentPage, trackedPageSize, trackedSearchQuery]
+  );
+  const {
+    data: movementsData,
+    isLoading: loadingMovements,
+    isFetching: fetchingMovements,
+    isRefetching: refetchingMovements,
+    refetch: refetchMovements,
+  } = useTrainMovements(movementQueryParams);
 
   const availableSections = useMemo<RailwaySection[]>(() => {
     return sections || [];
@@ -144,6 +143,7 @@ export default function TrainsPage() {
 
   const handleSelectTrackedSection = (secId: number) => {
     setTrackedSectionId(secId);
+    setTrackedCurrentPage(1);
     const sec = availableSections.find((s: RailwaySection) => s.id === secId);
     if (sec) {
       const src = sec.source_station_code || sec.origin_station || "NDLS";
@@ -153,83 +153,44 @@ export default function TrainsPage() {
     }
   };
 
-  const selectedScheduleSection = useMemo<RailwaySection | null>(() => {
-    if (!selectedSectionId) return null;
-    return availableSections.find((s: RailwaySection) => s.id === selectedSectionId) || null;
-  }, [availableSections, selectedSectionId]);
-
-  const scheduleQueryParams = useMemo(() => {
-    return {
-      date: selectedScheduleDate || undefined,
-      source: selectedScheduleSection
-        ? selectedScheduleSection.source_station_code || selectedScheduleSection.origin_station
-        : undefined,
-      destination: selectedScheduleSection
-        ? selectedScheduleSection.destination_station_code || selectedScheduleSection.end_station
-        : undefined,
-      page: schedulesCurrentPage,
-      page_size: schedulesPageSize,
-    };
-  }, [selectedScheduleDate, selectedScheduleSection, schedulesCurrentPage, schedulesPageSize]);
-
-  const {
-    data: paginatedSchedulesData,
-    isLoading: loadingSchedules,
-    isFetching: fetchingSchedules,
-    isRefetching: refetchingSchedules,
-    refetch: refetchSchedules,
-  } = usePaginatedTrainSchedules(scheduleQueryParams);
-
-  const isSchedulesLoading = loadingSchedules || fetchingSchedules || refetchingSchedules;
-
-  // Gate: show full-page skeleton only on initial load of core metadata
-  const isPageLoading =
-    loadingSections ||
-    loadingTrains ||
-    loadingMovements;
-
-  const schedules = useMemo(() => {
-    return paginatedSchedulesData?.results || [];
-  }, [paginatedSchedulesData]);
-
-  const handleRefetchAll = () => {
-    refetchTracked();
-    refetchSchedules();
-    refetchSections();
-    refetchTrains();
-    refetchMovements();
-  };
+  const isPageLoading = loadingSections;
 
   const selectedScheduleDayIndex = useMemo(() => {
-    try {
-      const [y, m, d] = selectedScheduleDate.split("-").map(Number);
-      const date = new Date(y, m - 1, d);
-      return (date.getDay() + 6) % 7;
-    } catch { return 0; }
+    const [year, month, day] = selectedScheduleDate.split("-").map(Number);
+    return (new Date(year, month - 1, day).getDay() + 6) % 7;
   }, [selectedScheduleDate]);
 
 
-  const filteredTrackedTrains = useMemo<TrackedTrainOperation[]>(() => {
-    const rawList = trackedOperationsData?.trains || [];
+  const filteredTrackedTrains = useMemo<TrainMovement[]>(() => {
+    const rawList = movementsData?.results || [];
     if (!trackedSearchQuery.trim()) return rawList;
-    const q = trackedSearchQuery.toLowerCase().trim();
-    const words = q.split(/\s+/).filter(Boolean);
+    const words = normaliseSearchText(trackedSearchQuery).split(" ").filter(Boolean);
     return rawList.filter((t) => {
-      const searchableText = `${t.train_number || ""} ${t.train_name || ""} ${t.train_type || ""} ${t.section?.name || ""} ${t.section?.source_code || ""} ${t.section?.destination_code || ""}`.toLowerCase();
+      const searchableText = normaliseSearchText([
+        t.train_number,
+        t.train,
+        t.train_name,
+        t.section,
+        t.section_name,
+        t.service_date,
+        t.status_label,
+        t.delay_minutes === 0 ? "on time" : t.delay_minutes == null ? "live status unavailable" : `${t.delay_minutes} min delay`,
+        t.scheduled_entry_time,
+        t.scheduled_exit_time,
+      ].join(" "));
       return words.every((word) => searchableText.includes(word));
     });
-  }, [trackedOperationsData, trackedSearchQuery]);
+  }, [movementsData, trackedSearchQuery]);
 
-  useEffect(() => {
-    setTrackedCurrentPage(1);
-  }, [trackedSearchQuery, trackedDate, sourceCode, destinationCode]);
-
-  const paginatedTrackedTrains = useMemo(() => {
-    const startIndex = (trackedCurrentPage - 1) * trackedPageSize;
-    return filteredTrackedTrains.slice(startIndex, startIndex + trackedPageSize);
-  }, [filteredTrackedTrains, trackedCurrentPage, trackedPageSize]);
-
-  const totalTrackedPages = Math.max(1, Math.ceil(filteredTrackedTrains.length / trackedPageSize));
+  const isSearchingTrackedTrains = Boolean(trackedSearchQuery.trim());
+  const totalTrackedCount = isSearchingTrackedTrains ? filteredTrackedTrains.length : (movementsData?.count ?? 0);
+  const totalTrackedPages = Math.max(1, Math.ceil(totalTrackedCount / trackedPageSize));
+  const displayedTrackedTrains = isSearchingTrackedTrains
+    ? filteredTrackedTrains.slice(
+        (trackedCurrentPage - 1) * trackedPageSize,
+        trackedCurrentPage * trackedPageSize
+      )
+    : filteredTrackedTrains;
 
   const masterTimetableItems = useMemo<MasterScheduleItem[]>(() => {
     if (!schedules) return [];
@@ -350,7 +311,7 @@ export default function TrainsPage() {
   // Do NOT slice again — use filteredSchedules directly for rendering.
   const paginatedSchedules = filteredSchedules;
 
-  const totalScheduleCount = paginatedSchedulesData?.count || masterTimetableItems.length;
+  const totalScheduleCount = masterTimetableItems.length;
   const totalSchedulePages = Math.max(1, Math.ceil(totalScheduleCount / schedulesPageSize));
 
   const scheduleStats = useMemo(() => {
@@ -359,18 +320,6 @@ export default function TrainsPage() {
     const highPriority = masterTimetableItems.filter((t) => t.priority >= 8).length;
     return { total, runningToday, highPriority };
   }, [totalScheduleCount, masterTimetableItems]);
-
-  const [movementForm, setMovementForm] = useState<{
-    scheduleId: number | string;
-    serviceDate: string;
-    actualEntry: string;
-    actualExit: string;
-  }>({
-    scheduleId: "",
-    serviceDate: trackedDate,
-    actualEntry: "06:00",
-    actualExit: "07:45",
-  });
 
   if (isPageLoading) {
     return (
@@ -414,38 +363,23 @@ export default function TrainsPage() {
 
               <div className="p-4 rounded-xl bg-brand-tertiary/70 border border-brand-border/70 space-y-3.5">
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-                  {/* Operation Date — Live Tracking: Today − 7 days → Today */}
                   <div className="md:col-span-4 space-y-1">
                     <label className="text-[10px] font-extrabold text-brand-muted tracking-wider flex items-center justify-between">
-                      <span>Operation Date</span>
+                      <span>Service Date</span>
                     </label>
                     <input
                       type="date"
-                      value={trackedDate}
-                      min={getDateBounds("live-tracking").min}
-                      max={getDateBounds("live-tracking").max}
+                      value={movementDate}
+                      min={getYesterdayISO()}
+                      max={formatDateToISO(new Date())}
                       onChange={(e) => {
-                        const val = e.target.value;
-                        const error = validateDate(val, "live-tracking");
-                        setTrackedDateError(error);
-                        if (!error) {
-                          setTrackedDate(val);
-                        }
+                        setMovementDate(e.target.value);
+                        setTrackedCurrentPage(1);
                       }}
-                      className={`h-10 w-full bg-brand-surface border text-brand-secondary text-xs rounded-xl px-3 outline-none font-bold cursor-pointer ${
-                        trackedDateError
-                          ? "border-red-400 focus:border-red-500"
-                          : "border-brand-border"
-                      }`}
+                      className="h-10 w-full bg-brand-surface border border-brand-border text-brand-secondary text-xs rounded-xl px-3 outline-none font-bold cursor-pointer"
                     />
-                    {trackedDateError && (
-                      <p className="text-[10px] text-red-500 font-semibold mt-0.5">
-                        {trackedDateError}
-                      </p>
-                    )}
                   </div>
 
-                  {/* Single Section Name Dropdown (Replaces the 2 separate station dropdowns & swap button) */}
                   <div className="md:col-span-6 space-y-1">
                     <label className="text-[10px] font-extrabold text-brand-muted tracking-wider flex items-center justify-between">
                       <span>Railway Corridor Section</span>
@@ -476,12 +410,12 @@ export default function TrainsPage() {
                   {/* Refresh Button */}
                   <div className="md:col-span-2 flex justify-end">
                     <button
-                      onClick={() => refetchTracked()}
-                      disabled={refetchingTracked || loadingTracked}
+                      onClick={() => refetchMovements()}
+                      disabled={refetchingMovements || loadingMovements}
                       className="h-10 w-full px-4 rounded-xl bg-brand-primary hover:bg-blue-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition-all disabled:opacity-60"
                     >
-                      <RefreshCw className={`w-3.5 h-3.5 ${refetchingTracked ? "animate-spin" : ""}`} />
-                      <span>{refetchingTracked ? "Refreshing..." : "Refresh"}</span>
+                      <RefreshCw className={`w-3.5 h-3.5 ${refetchingMovements ? "animate-spin" : ""}`} />
+                      <span>{refetchingMovements ? "Refreshing..." : "Refresh"}</span>
                     </button>
                   </div>
                 </div>
@@ -493,12 +427,18 @@ export default function TrainsPage() {
                       type="text"
                       placeholder="Search tracked train no., name, type..."
                       value={trackedSearchQuery}
-                      onChange={(e) => setTrackedSearchQuery(e.target.value)}
+                      onChange={(e) => {
+                        setTrackedSearchQuery(e.target.value);
+                        setTrackedCurrentPage(1);
+                      }}
                       className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-xs text-brand-secondary placeholder:text-brand-muted rounded-xl pl-3 pr-8 py-1.5 outline-none font-medium shadow-2xs"
                     />
                     {trackedSearchQuery ? (
                       <button
-                        onClick={() => setTrackedSearchQuery("")}
+                      onClick={() => {
+                        setTrackedSearchQuery("");
+                        setTrackedCurrentPage(1);
+                      }}
                         className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-muted hover:text-brand-secondary text-xs font-bold cursor-pointer"
                         title="Clear search"
                       >
@@ -516,64 +456,47 @@ export default function TrainsPage() {
                   <thead className="bg-brand-surface text-brand-muted font-bold tracking-wider border-b border-brand-border text-[10px] lg:text-[12px]">
                     <tr>
                       <th className="py-3 px-4">Train No. & Name</th>
-                      <th className="py-3 px-4">Priority</th>
                       <th className="py-3 px-4">Section</th>
-                      <th className="py-3 px-4 font-semibold">Window</th>
-                      <th className="py-3 px-4">Actuals</th>
-                      <th className="py-3 px-4 text-center">Delay Matrix (IST)</th>
+                      <th className="py-3 px-4 font-semibold">Scheduled</th>
+                      <th className="py-3 px-4">Actual</th>
+                      <th className="py-3 px-4 text-center">Delay (IST)</th>
                       <th className="py-3 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-border/60 text-brand-secondary">
-                    {(loadingTracked || refetchingTracked) ? (
+                    {(loadingMovements || fetchingMovements || refetchingMovements) ? (
                       <TrackedTrainsTableSkeleton count={5} />
                     ) : filteredTrackedTrains.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="py-12 text-center text-brand-muted">
+                        <td colSpan={6} className="py-12 text-center text-brand-muted">
                           <div className="flex flex-col items-center justify-center gap-2 max-w-md mx-auto">
                             <TrainIcon className="w-8 h-8 text-brand-muted opacity-50" />
-                            <div className="text-sm font-bold text-brand-secondary">No tracked train operations found</div>
+                            <div className="text-sm font-bold text-brand-secondary">No live train movements found</div>
                             <p className="text-xs text-brand-muted">
-                              No operation logs recorded in the backend database for {formatDisplayDate(trackedDate)} on corridor {sourceCode} → {destinationCode}.
+                              No live movements are available for corridor {sourceCode} → {destinationCode}.
                             </p>
                          
                           </div>
                         </td>
                       </tr>
                     ) : (
-                      paginatedTrackedTrains.map((item, idx) => {
-                        const theme = getTrainTypeTheme(item.train_type, item.train_name);
-                        const delayObj = formatDelayMetric(item.delay_minutes);
+                      displayedTrackedTrains.map((item) => {
+                        const theme = getTrainTypeTheme(undefined, String(item.train));
+                        const delayObj = formatDelayMetric(item.delay_minutes ?? null);
                         return (
-                          <tr key={`${item.train_number}-${idx}`} className="hover:bg-brand-tertiary/60">
+                          <tr key={item.id} className="hover:bg-brand-tertiary/60">
                             <td className="py-3 px-4">
                               <div className="flex items-center gap-2.5">
                                 <div className={`w-1.5 h-8 rounded-full ${theme.lineColor}`} />
                                 <div>
                                   <div className="font-bold text-sm">{item.train_number}</div>
-                                  <div className="text-brand-muted font-medium text-xs">{item.train_name}</div>
+                                  <div className="text-brand-muted font-medium text-xs">{String(item.train || "Train")}</div>
                                 </div>
                               </div>
                             </td>
-                            <td className="py-3 px-4">
-                              <span className="ml-2 font-bold">{item.priority}/10</span>
-                            </td>
-                             <td className="py-3 px-4 font-semibold">
-                               {(() => {
-                                 const secObj = availableSections.find(
-                                   (s) =>
-                                     String(s.id) === String(item.section.name) ||
-                                     (s.source_station_code === item.section.source_code && s.destination_station_code === item.section.destination_code)
-                                 );
-                                 return (
-                                   secObj?.section_name ||
-                                   currentTrackedSection?.section_name ||
-                                   (item.section.name && !/^\d+$/.test(item.section.name) ? item.section.name : "Corridor")
-                                 );
-                               })()}
-                             </td>
-                            <td className="py-3 px-4 font-mono font-semibold">{formatTimeString(item.schedule.entry_time)} → {formatTimeString(item.schedule.exit_time)}</td>
-                            <td className="py-3 px-4 font-mono font-semibold">{formatTimeString(item.movement?.actual_entry_time)} → {formatTimeString(item.movement?.actual_exit_time)}</td>
+                            <td className="py-3 px-4 font-semibold">{String(item.section || currentTrackedSection?.section_name || "Corridor")}</td>
+                            <td className="py-3 px-4 font-mono font-semibold">{formatTrainTimeIST(item.scheduled_entry_time)} → {formatTrainTimeIST(item.scheduled_exit_time)}</td>
+                            <td className="py-3 px-4 font-mono font-semibold">{formatTrainTimeIST(item.actual_entry_time ?? item.estimated_entry_time)} → {formatTrainTimeIST(item.actual_exit_time ?? item.estimated_exit_time)}</td>
                             <td className="py-3 px-4 text-center">
                               <span className={`inline-flex items-center justify-center whitespace-nowrap px-2.5 py-1 rounded-full text-[10px] font-extrabold border ${delayObj.badgeClass}`}>
                                 {delayObj.text}
@@ -595,24 +518,23 @@ export default function TrainsPage() {
                 </table>
               </div>
 
-              {/* Table 1 Frontend Pagination Controls */}
-              {filteredTrackedTrains.length > 0 && (
+              {totalTrackedCount > 0 && (
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 text-xs">
                   <div className="flex items-center gap-2 text-brand-muted font-medium">
                     <span>
                       Showing{" "}
                       <strong className="text-brand-secondary">
-                        {(trackedCurrentPage - 1) * trackedPageSize + 1}
+                        {displayedTrackedTrains.length ? (trackedCurrentPage - 1) * trackedPageSize + 1 : 0}
                       </strong>{" "}
                       to{" "}
                       <strong className="text-brand-secondary">
-                        {Math.min(trackedCurrentPage * trackedPageSize, filteredTrackedTrains.length)}
+                        {Math.min(trackedCurrentPage * trackedPageSize, totalTrackedCount)}
                       </strong>{" "}
                       of{" "}
                       <strong className="text-brand-secondary">
-                        {filteredTrackedTrains.length}
+                        {totalTrackedCount}
                       </strong>{" "}
-                      tracked trains
+                      {isSearchingTrackedTrains ? "matching live train movements" : "live train movements"}
                     </span>
 
                     <div className="flex items-center gap-1.5 pl-3 border-l border-brand-border">
@@ -637,7 +559,7 @@ export default function TrainsPage() {
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => setTrackedCurrentPage((p) => Math.max(1, p - 1))}
-                      disabled={trackedCurrentPage === 1}
+                      disabled={isSearchingTrackedTrains ? trackedCurrentPage === 1 : !movementsData?.previous || fetchingMovements}
                       className="p-1.5 rounded-lg bg-brand-surface border border-brand-border hover:bg-brand-tertiary disabled:opacity-40 disabled:pointer-events-none text-brand-secondary transition-colors cursor-pointer shadow-2xs"
                     >
                       <ChevronLeft className="w-4 h-4" />
@@ -678,7 +600,7 @@ export default function TrainsPage() {
 
                     <button
                       onClick={() => setTrackedCurrentPage((p) => Math.min(totalTrackedPages, p + 1))}
-                      disabled={trackedCurrentPage === totalTrackedPages}
+                      disabled={isSearchingTrackedTrains ? trackedCurrentPage === totalTrackedPages : !movementsData?.next || fetchingMovements}
                       className="p-1.5 rounded-lg bg-brand-surface border border-brand-border hover:bg-brand-tertiary disabled:opacity-40 disabled:pointer-events-none text-brand-secondary transition-colors cursor-pointer shadow-2xs"
                     >
                       <ChevronRight className="w-4 h-4" />
@@ -705,10 +627,10 @@ export default function TrainsPage() {
                 </div>
                 <div>
                   <h3 className="text-base font-extrabold text-brand-secondary">
-                    {inspectTrackedTrain.train_number} — {inspectTrackedTrain.train_name}
+                    {inspectTrackedTrain.train_number} — {String(inspectTrackedTrain.train || "Train")}
                   </h3>
                   <span className="text-xs text-brand-muted">
-                    Tracked Operation Record • {inspectTrackedTrain.section.source_code} → {inspectTrackedTrain.section.destination_code}
+                    Live movement • {String(inspectTrackedTrain.section || currentTrackedSection?.section_name || "Corridor")}
                   </span>
                 </div>
               </div>
@@ -722,39 +644,31 @@ export default function TrainsPage() {
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
               <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
-                <span className="text-brand-muted block text-[10px] uppercase font-bold">Service Type</span>
-                <span className="font-bold text-brand-secondary mt-0.5 block">{inspectTrackedTrain.train_type}</span>
+                <span className="text-brand-muted block text-[10px] uppercase font-bold">Service Date</span>
+                <span className="font-bold text-brand-secondary mt-0.5 block">{inspectTrackedTrain.service_date || "Unavailable"}</span>
               </div>
               <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
-                <span className="text-brand-muted block text-[10px] uppercase font-bold">Priority Rating</span>
-                <span className="font-bold text-brand-primary mt-0.5 block">{inspectTrackedTrain.priority} / 10</span>
+                <span className="text-brand-muted block text-[10px] uppercase font-bold">Live Status</span>
+                <span className="font-bold text-brand-primary mt-0.5 block">{inspectTrackedTrain.status_label || "Live status unavailable"}</span>
               </div>
               <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
                 <span className="text-brand-muted block text-[10px] uppercase font-bold">Corridor Section</span>
                 <span className="font-bold text-brand-secondary mt-0.5 block">
-                  {(() => {
-                    const secObj = availableSections.find(
-                      (s) =>
-                        String(s.id) === String(inspectTrackedTrain.section.name) ||
-                        (s.source_station_code === inspectTrackedTrain.section.source_code && s.destination_station_code === inspectTrackedTrain.section.destination_code)
-                    );
-                    return secObj?.section_name || (inspectTrackedTrain.section.name && !/^\d+$/.test(inspectTrackedTrain.section.name) ? inspectTrackedTrain.section.name : "Corridor");
-                  })()}
+                  {String(inspectTrackedTrain.section || currentTrackedSection?.section_name || "Corridor")}
                 </span>
               </div>
               <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
                 <span className="text-brand-muted block text-[10px] uppercase font-bold">Scheduled Entry</span>
-                <span className="font-bold text-brand-primary mt-0.5 block font-mono">{formatTrainTimeIST(inspectTrackedTrain.schedule.entry_time)}</span>
+                <span className="font-bold text-brand-primary mt-0.5 block font-mono">{formatTrainTimeIST(inspectTrackedTrain.scheduled_entry_time)}</span>
               </div>
               <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
                 <span className="text-brand-muted block text-[10px] uppercase font-bold">Scheduled Exit</span>
-                <span className="font-bold text-brand-primary mt-0.5 block font-mono">{formatTrainTimeIST(inspectTrackedTrain.schedule.exit_time)}</span>
+                <span className="font-bold text-brand-primary mt-0.5 block font-mono">{formatTrainTimeIST(inspectTrackedTrain.scheduled_exit_time)}</span>
               </div>
               <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
                 <span className="text-brand-muted block text-[10px] uppercase font-bold">Delay Offset</span>
-                <span className={`font-bold mt-0.5 block ${(inspectTrackedTrain.delay_minutes ?? 0) > 0 ? "text-red-600" : "text-emerald-600"
-                  }`}>
-                  {formatDelayMetric(inspectTrackedTrain.delay_minutes).text}
+                <span className={`font-bold mt-0.5 block ${inspectTrackedTrain.delay_minutes == null ? "text-slate-600" : inspectTrackedTrain.delay_minutes > 0 ? "text-red-600" : "text-emerald-600"}`}>
+                  {formatDelayMetric(inspectTrackedTrain.delay_minutes ?? null).text}
                 </span>
               </div>
             </div>
@@ -765,13 +679,13 @@ export default function TrainsPage() {
                 <div>
                   <span className="text-brand-muted block text-[10px]">Actual Entry Time:</span>
                   <span className=" text-brand-secondary font-bold">
-                    {formatTrainTimeIST(inspectTrackedTrain.movement?.actual_entry_time, "Not logged yet")}
+                    {formatTrainTimeIST(inspectTrackedTrain.actual_entry_time, "Not logged yet")}
                   </span>
                 </div>
                 <div>
                   <span className="text-brand-muted block text-[10px]">Actual Exit Time:</span>
                   <span className=" text-brand-secondary font-bold">
-                    {formatTrainTimeIST(inspectTrackedTrain.movement?.actual_exit_time, "Not logged yet")}
+                    {formatTrainTimeIST(inspectTrackedTrain.actual_exit_time, "Not logged yet")}
                   </span>
                 </div>
               </div>

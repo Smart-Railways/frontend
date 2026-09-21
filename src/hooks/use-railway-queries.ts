@@ -47,6 +47,7 @@ import {
   FeasibleWindowsRequest,
   BlockWindowPutPayload,
   GetTrainOperationsParams,
+  GetTrainMovementsParams,
 } from "@/types";
 
 // ==========================================
@@ -56,6 +57,7 @@ import {
 export const TIMETABLE_STALE_TIME = 30 * 60 * 1000;
 // 60 minutes garbage collection time retention
 export const TIMETABLE_GC_TIME = 60 * 60 * 1000;
+export const LIVE_MOVEMENTS_STALE_TIME = 60 * 60 * 1000;
 
 // ==========================================
 // Sections Queries
@@ -336,15 +338,15 @@ export function useTrainSchedule(id?: number | string | null) {
 // Train Movements Queries & Mutations
 // ==========================================
 
-export function useTrainMovements() {
+export function useTrainMovements(params?: GetTrainMovementsParams) {
   return useQuery({
-    queryKey: ["train-movements"],
+    queryKey: ["train-movements", params],
     queryFn: async () => {
-      const res = await getTrainMovements();
+      const res = await getTrainMovements(params);
       if (!res.success) throw new Error(res.error || "Failed to fetch train movements");
-      return res.data ?? [];
+      return res.data ?? { count: 0, next: null, previous: null, results: [] };
     },
-    staleTime: TIMETABLE_STALE_TIME,
+    staleTime: LIVE_MOVEMENTS_STALE_TIME,
     gcTime: TIMETABLE_GC_TIME,
     refetchOnWindowFocus: false,
   });

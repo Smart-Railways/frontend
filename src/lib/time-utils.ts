@@ -135,8 +135,8 @@ export interface DelayMetric {
 export function formatDelayMetric(delayMinutes: number | null): DelayMetric {
   if (delayMinutes === null || delayMinutes === undefined) {
     return {
-      text: "Awaiting Log",
-      subText: "Pending Entry",
+      text: "Live status unavailable",
+      subText: "No live delay reported",
       isLate: false,
       isHighLate: false,
       isOnTime: false,
@@ -208,4 +208,3 @@ export function calculateTimeDuration(
   const formatted = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
   return { durationMins: diff, formatted };
 }
-

@@ -36,9 +36,9 @@ Sanket bridges real-time timetable operations, infrastructure condition monitori
   - **Shatabdi Express** (Priority 10)
   - **Express / Superfast** (Priority 6–9)
   - **Passenger & Freight** (Priority 5)
-- **Timetable & Schedule Management**: Full pagination, searching, and filtering of train schedules.
 - **7-Day Running Bitmask**: Native handling of weekly recurring schedules via standard railway 7-digit binary patterns (`1111111` for daily, `1111100` for weekdays, etc.).
-- **Operations & Movements Tracking**: Live delays, arrival/departure comparisons, and conflict checks.
+- **Live Movement Tracking**: Paginated, corridor- and date-filtered live train movements with actual/estimated passage times and delay status.
+- **Resilient Live Search**: Case- and punctuation-insensitive matching across train number/name, section, service date, delay, status, and timetable times.
 
 ### 3. 🏗️ Infrastructure Asset Management (`/assets`)
 - **Multi-Department Categorization**:
@@ -85,6 +85,7 @@ frontend/
 │   │   ├── assets.ts           # Asset CRUD actions
 │   │   ├── blocks.ts           # Block window allocation actions
 │   │   ├── maintenance.ts      # Maintenance task & plan actions
+│   │   ├── train-movements.ts  # Live train movement queries
 │   │   ├── schedules.ts        # Train schedule actions
 │   │   ├── sections.ts         # Section query actions
 │   │   └── trains.ts           # Train fleet actions
@@ -204,6 +205,22 @@ Key Enums Covered:
 - **Plan Lifecycle**: `DRAFT` ➔ `PENDING_APPROVAL` ➔ `APPROVED` ➔ `IN_PROGRESS` ➔ `COMPLETED`
 - **Train Categories**: `VB`, `SHATABDI`, `RAJDHANI`, `EXPRESS`, `PASSENGER`, `FREIGHT`
 - **Running Days Pattern**: 7-character string (Monday–Sunday, e.g. `1111111`)
+
+### Live train movements
+
+The `/trains` page uses the paginated movement endpoint:
+
+```text
+GET /railways/train-movements/?date=2026-09-21&from=NDLS&to=MTJ&page=1&page_size=10
+```
+
+- `date` is controlled by the service-date picker and is limited to yesterday through today.
+- `from`, `to`, `page`, and `page_size` are preserved when moving between pages.
+- The selected page size is sent to the backend; pagination is therefore calculated against the date-filtered result set.
+- `delay_minutes: 0` displays as on time, while `null` displays as “Live status unavailable”.
+- Actual times are displayed when available, otherwise the estimated times are used; scheduled times remain in their own timetable column.
+
+Live movement results are cached client-side with TanStack Query for one hour per unique date, corridor, page, page size, and search mode. The page’s **Refresh** button can still explicitly request current data.
 
 ---
 

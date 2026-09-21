@@ -42,6 +42,8 @@ export interface TrackedTrainMovement {
 }
 
 export interface TrackedTrainOperation {
+  estimated_exit_time: string | Date | null | undefined;
+  estimated_entry_time: string | Date | null | undefined;
   train_number: string;
   train_name: string;
   train_type: string;
