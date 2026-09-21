@@ -1717,7 +1717,7 @@ export default function MaintenancePage() {
                                 <span>{corridorName}</span>
                               </div>
                             </td>
-                           
+
                             <td className="py-3.5 px-4 text-center">
                               {matchingBw ? (
                                 (() => {
@@ -1746,10 +1746,10 @@ export default function MaintenancePage() {
                                 </div>
                               )}
                             </td>
-                            
-                         
 
-                             {/* Criticality Score / Index */}
+
+
+                            {/* Criticality Score / Index */}
                             <td className="py-3.5 px-4 text-center">
                               <div className="inline-flex items-center justify-center">
                                 {(() => {
@@ -1760,9 +1760,9 @@ export default function MaintenancePage() {
                                       ? "bg-red-600"
                                       : score >= 6
                                         ? "bg-orange-500"
-                                      : score >= 4
-                                        ? "bg-amber-500"
-                                        : "bg-emerald-500";
+                                        : score >= 4
+                                          ? "bg-amber-500"
+                                          : "bg-emerald-500";
 
                                   return (
                                     <span
@@ -1785,28 +1785,50 @@ export default function MaintenancePage() {
                               </span>
                             </td>
                             <td className="py-3.5 px-4 text-center">
-                              <div className="relative flex items-center justify-end gap-1.5 max-w-[130px] mx-auto">
+                              <div className="relative flex items-center justify-end gap-1.5 max-w-[160px] mx-auto">
 
-                                {/* Dedicated AI Recommendation Icon Button on Row (only when block window is created and task is active) */}
-                                {effectiveStatKey !== MaintenanceStatus.COMPLETED && effectiveStatKey !== MaintenanceStatus.CANCELLED && task.task_status !== MaintenanceStatus.COMPLETED && task.task_status !== MaintenanceStatus.CANCELLED && Boolean(matchingBw) && (
-                                  <button
-                                    onClick={() => handleToggleAiRecommendation(task)}
-                                    className={`p-2 rounded-lg border shadow-xs transition-all cursor-pointer flex items-center gap-1 text-xs font-bold ${expandedAiTaskId === task.id
+                                {/* AI Bot - OUTSIDE dropdown */}
+                                {effectiveStatKey !== MaintenanceStatus.COMPLETED &&
+                                  effectiveStatKey !== MaintenanceStatus.CANCELLED &&
+                                  task.task_status !== MaintenanceStatus.COMPLETED &&
+                                  task.task_status !== MaintenanceStatus.CANCELLED &&
+                                  Boolean(matchingBw) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleAiRecommendation(task)}
+                                      className={`p-2 rounded-lg border shadow-xs transition-all cursor-pointer ${expandedAiTaskId === task.id
                                         ? "bg-brand-primary text-white border-brand-primary shadow-sm"
                                         : "bg-brand-blue-light/50 hover:bg-brand-blue-light border-brand-primary/30 text-brand-primary"
-                                      }`}
-                                    title="AI Recommended Slot"
-                                  >
-                                    <Bot className={`w-4 h-4 ${expandedAiTaskId === task.id ? "text-white" : "text-brand-primary fill-brand-primary/20"}`} />
-                                    
-                                  </button>
-                                )}
+                                        }`}
+                                      title="AI Recommended Slot"
+                                      aria-label="AI Recommended Slot"
+                                    >
+                                      <Bot
+                                        className={`w-4 h-4 ${expandedAiTaskId === task.id
+                                          ? "text-white"
+                                          : "text-brand-primary"
+                                          }`}
+                                      />
+                                    </button>
+                                  )}
+
+                                   {/* View Details - OUTSIDE dropdown */}
+                                <button
+                                  type="button"
+                                  onClick={() => setInspectingTask(task)}
+                                  className="p-2 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-black shadow-xs transition-colors cursor-pointer"
+                                  title="View Details"
+                                  aria-label="View Details"
+                                >
+                                  <Eye className="w-4 h-4 text-black" />
+                                </button>
 
                                 {/* Actions Dropdown */}
                                 <DropdownMenu>
                                   <DropdownMenuTrigger
                                     className="p-2 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-black shadow-xs transition-colors cursor-pointer outline-none focus:ring-2 focus:ring-brand-primary/20"
                                     title="Actions"
+                                    aria-label="Actions"
                                   >
                                     <MoreVertical className="w-4 h-4" />
                                   </DropdownMenuTrigger>
@@ -1816,57 +1838,50 @@ export default function MaintenancePage() {
                                     sideOffset={6}
                                     className="w-56 bg-brand-surface border-brand-border text-brand-secondary shadow-xl rounded-xl p-1.5 z-50"
                                   >
-                                    <DropdownMenuItem
-                                      onClick={() => setInspectingTask(task)}
-                                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary cursor-pointer focus:bg-brand-tertiary focus:text-brand-secondary"
-                                    >
-                                      <Eye className="w-4 h-4" />
-                                      <span>View Details</span>
-                                    </DropdownMenuItem>
 
-                                    {effectiveStatKey !== MaintenanceStatus.COMPLETED && effectiveStatKey !== MaintenanceStatus.CANCELLED && task.task_status !== MaintenanceStatus.COMPLETED && task.task_status !== MaintenanceStatus.CANCELLED && (
-                                      <>
-                                        <DropdownMenuItem
-                                          onClick={() => handleMarkAsCompleted(task)}
-                                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-emerald-50 text-sm font-semibold text-emerald-700 cursor-pointer focus:bg-emerald-50 focus:text-emerald-700"
-                                        >
-                                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                                          <span>Mark as Completed</span>
-                                        </DropdownMenuItem>
+                                    {/* Complete Task */}
+                                    {effectiveStatKey !== MaintenanceStatus.COMPLETED &&
+                                      effectiveStatKey !== MaintenanceStatus.CANCELLED &&
+                                      task.task_status !== MaintenanceStatus.COMPLETED &&
+                                      task.task_status !== MaintenanceStatus.CANCELLED && (
+                                        <>
+                                          <DropdownMenuItem
+                                            onClick={() => handleMarkAsCompleted(task)}
+                                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-emerald-50 text-sm font-semibold text-emerald-700 cursor-pointer focus:bg-emerald-50 focus:text-emerald-700"
+                                          >
+                                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                            <span>Complete Task</span>
+                                          </DropdownMenuItem>
 
-                                        <DropdownMenuItem
-                                          onClick={() => handleMarkAsCancelled(task)}
-                                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-100 text-sm font-semibold text-slate-700 cursor-pointer focus:bg-slate-100 focus:text-slate-700"
-                                        >
-                                          <XCircle className="w-4 h-4 text-slate-600" />
-                                          <span>Mark as Cancelled</span>
-                                        </DropdownMenuItem>
+                                          {/* Cancel Task */}
+                                          <DropdownMenuItem
+                                            onClick={() => handleMarkAsCancelled(task)}
+                                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-100 text-sm font-semibold text-slate-700 cursor-pointer focus:bg-slate-100 focus:text-slate-700"
+                                          >
+                                            <XCircle className="w-4 h-4 text-slate-600" />
+                                            <span>Cancel Task</span>
+                                          </DropdownMenuItem>
 
-                                        <DropdownMenuItem
-                                          onClick={() => handleOpenEditModal(task)}
-                                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary cursor-pointer focus:bg-brand-tertiary focus:text-brand-secondary"
-                                        >
-                                          <Edit2 className="w-4 h-4 text-brand-primary" />
-                                          <span>Edit Task</span>
-                                        </DropdownMenuItem>
+                                          {/* Edit Task */}
+                                          <DropdownMenuItem
+                                            onClick={() => handleOpenEditModal(task)}
+                                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary cursor-pointer focus:bg-brand-tertiary focus:text-brand-secondary"
+                                          >
+                                            <Edit2 className="w-4 h-4 text-brand-primary" />
+                                            <span>Edit Task</span>
+                                          </DropdownMenuItem>
 
-                                        <DropdownMenuItem
-                                          onClick={() => handleOpenBlockWindowModal(task, matchingBw)}
-                                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary cursor-pointer focus:bg-brand-tertiary focus:text-brand-secondary"
-                                        >
-                                          <Calendar className="w-4 h-4 text-brand-primary" />
-                                          <span>Block Window</span>
-                                        </DropdownMenuItem>
+                                          {/* Block Window */}
+                                          <DropdownMenuItem
+                                            onClick={() => handleOpenBlockWindowModal(task, matchingBw)}
+                                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary cursor-pointer focus:bg-brand-tertiary focus:text-brand-secondary"
+                                          >
+                                            <Calendar className="w-4 h-4 text-brand-primary" />
+                                            <span>Block Window</span>
+                                          </DropdownMenuItem>
+                                        </>
+                                      )}
 
-                                        <DropdownMenuItem
-                                          onClick={() => setDeletingTask(task)}
-                                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-red-50 text-sm font-semibold text-red-600 cursor-pointer focus:bg-red-50 focus:text-red-600"
-                                        >
-                                          <Trash2 className="w-4 h-4" />
-                                          <span>Delete Task</span>
-                                        </DropdownMenuItem>
-                                      </>
-                                    )}
                                   </DropdownMenuContent>
                                 </DropdownMenu>
 
@@ -2361,8 +2376,8 @@ export default function MaintenancePage() {
                           if (conflictError) setConflictError(null);
                         }}
                         className={`w-full px-3 py-2 pr-20 rounded-xl bg-brand-tertiary border text-brand-secondary text-xs font-mono font-semibold focus:outline-hidden cursor-pointer transition-colors ${conflictStartError
-                            ? "border-red-400 bg-red-50/40 focus:border-red-500"
-                            : "border-brand-border focus:border-brand-primary"
+                          ? "border-red-400 bg-red-50/40 focus:border-red-500"
+                          : "border-brand-border focus:border-brand-primary"
                           }`}
                       />
                       <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 bg-brand-tertiary">
@@ -2425,8 +2440,8 @@ export default function MaintenancePage() {
                           if (conflictError) setConflictError(null);
                         }}
                         className={`w-full px-3 py-2 pr-20 rounded-xl bg-brand-tertiary border text-brand-secondary text-xs font-mono font-semibold focus:outline-hidden cursor-pointer transition-colors ${conflictEndError
-                            ? "border-red-400 bg-red-50/40 focus:border-red-500"
-                            : "border-brand-border focus:border-brand-primary"
+                          ? "border-red-400 bg-red-50/40 focus:border-red-500"
+                          : "border-brand-border focus:border-brand-primary"
                           }`}
                       />
                       <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 bg-brand-tertiary">
@@ -2793,10 +2808,10 @@ export default function MaintenancePage() {
                                 <div className="pt-2 border-t border-emerald-200/70 flex items-center justify-between gap-2">
                                   <div className="flex items-center gap-2">
                                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${scorePercent >= 70
-                                        ? "bg-red-50 text-red-700 border-red-200"
-                                        : scorePercent >= 40
-                                          ? "bg-amber-50 text-amber-800 border-amber-200"
-                                          : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                      ? "bg-red-50 text-red-700 border-red-200"
+                                      : scorePercent >= 40
+                                        ? "bg-amber-50 text-amber-800 border-amber-200"
+                                        : "bg-emerald-50 text-emerald-800 border-emerald-200"
                                       }`}>
                                       Risk Factor: {scorePercent}%
                                     </span>
@@ -2813,10 +2828,10 @@ export default function MaintenancePage() {
                                     <div className="w-full bg-emerald-200/80 rounded-full h-1.5 overflow-hidden">
                                       <div
                                         className={`h-1.5 rounded-full ${scorePercent >= 70
-                                            ? "bg-red-500"
-                                            : scorePercent >= 40
-                                              ? "bg-amber-500"
-                                              : "bg-emerald-600"
+                                          ? "bg-red-500"
+                                          : scorePercent >= 40
+                                            ? "bg-amber-500"
+                                            : "bg-emerald-600"
                                           }`}
                                         style={{ width: `${scorePercent}%` }}
                                       />
