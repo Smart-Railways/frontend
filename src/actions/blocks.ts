@@ -111,9 +111,10 @@ export async function getFeasibleWindows(
 export async function getFeasibleWindowsLegacy(
   data: FeasibleWindowsInput
 ): Promise<ApiResponse<FeasibleWindowsResponse>> {
+  const legacyData = data as FeasibleWindowsInput & { date?: string };
   const payload = {
     task_id: data.task_id,
-    date: (data as any).date,
+    date: legacyData.date,
     block_window_id: data.block_window_id ?? data.block_id,
   };
   return safeApiCall(() =>
@@ -129,7 +130,7 @@ export async function getBlockRecommendation(
   blockWindowId: number | string,
   taskId?: string
 ): Promise<ApiResponse<BlockRecommendationResponse>> {
-  const params: Record<string, any> = { block_window_id: blockWindowId };
+  const params: Record<string, string | number> = { block_window_id: blockWindowId };
   if (taskId) params.task_id = taskId;
   return safeApiCall(() =>
     api.get<BlockRecommendationResponse>(
@@ -140,8 +141,7 @@ export async function getBlockRecommendation(
 }
 
 /**
- * Phase 3C: 1-Click Auto-Apply endpoint.
- * Unified endpoint: POST /railways/block-windows/recommendation/ with apply: true
+ * Applies the backend-selected recommendation for an existing block window.
  */
 export async function applyBlockRecommendation(
   blockWindowId: number | string,
@@ -149,9 +149,8 @@ export async function applyBlockRecommendation(
 ): Promise<ApiResponse<{ block_window: BlockWindow }>> {
   return safeApiCall(() =>
     api.post<{ block_window: BlockWindow }>(
-      "block-windows/recommendation",
+      `block-windows/${blockWindowId}/recommendation`,
       {
-        block_window_id: blockWindowId,
         task_id: taskId,
         apply: true,
       }
@@ -173,8 +172,8 @@ export interface UnifiedRecommendationInput {
 
 export async function getUnifiedRecommendation(
   data: UnifiedRecommendationInput
-): Promise<ApiResponse<any>> {
-  return safeApiCall(() =>
+): Promise<ApiResponse<unknown>> {
+  return safeApiCall<unknown>(() =>
     api.post("block-windows/recommendation", data)
   );
 }

@@ -1,15 +1,9 @@
 "use client";
 
-import React from "react";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Sparkles,
-  ArrowRight,
-  RefreshCw,
-  Cpu,
-} from "lucide-react";
-import { useBlockRecommendation, useUpdateBlockWindow } from "@/hooks";
+import { useState } from "react";
+import { AlertTriangle, CheckCircle2, Cpu, RefreshCw, Sparkles, X } from "lucide-react";
+import { useApplyBlockRecommendation, useBlockRecommendation, useUpdateBlockWindow } from "@/hooks";
+import { FeasibleWindowSlot } from "@/types";
 
 interface Props {
   blockWindowId: number;
@@ -17,187 +11,82 @@ interface Props {
   onSlotUpdated?: () => void;
 }
 
-// Format timestamp string safely to HH:MM (handles null/undefined/various formats)
-function formatTimeHHMM(dtStr?: string | null): string {
-  if (!dtStr) return "--:--";
-  if (dtStr.length >= 16) return dtStr.slice(11, 16);
-  if (dtStr.includes(" ")) return dtStr.split(" ")[1]?.slice(0, 5) || dtStr;
-  if (dtStr.includes("T")) return dtStr.split("T")[1]?.slice(0, 5) || dtStr;
-  return dtStr;
+function time(value?: string | null) {
+  return value?.match(/[T ](\d{2}:\d{2})/)?.[1] ?? value?.match(/^(\d{2}:\d{2})/)?.[1] ?? "--:--";
 }
 
-/**
- * Decision-score badge colour follows guide §6:
- *   0.75–1.00 → Crimson (critical priority)
- *   0.40–0.74 → Amber  (recommended)
- *   0.00–0.39 → Emerald (routine)
- */
-function ScoreBadge({ score }: { score: number }) {
-  const pct = Math.round(score * 100);
-  let cls = "";
-  let label = "";
-  if (score >= 0.75) {
-    cls = "bg-red-100 text-red-700 border-red-200";
-    label = "Critical Priority";
-  } else if (score >= 0.4) {
-    cls = "bg-amber-100 text-amber-700 border-amber-200";
-    label = "Recommended Window";
-  } else {
-    cls = "bg-emerald-100 text-emerald-700 border-emerald-200";
-    label = "Routine Maintenance";
-  }
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold ${cls}`}
-    >
-      <Cpu className="w-3 h-3" />
-      AI Score {pct}% · {label}
-    </span>
-  );
+function score(score?: number | null) {
+  const percent = Math.round((score ?? 0) * 100);
+  if (percent >= 75) return { percent, label: "High suitability", tone: "bg-emerald-50 text-emerald-700 border-emerald-200" };
+  if (percent >= 40) return { percent, label: "Moderate suitability", tone: "bg-amber-50 text-amber-700 border-amber-200" };
+  return { percent, label: "Low suitability", tone: "bg-red-50 text-red-700 border-red-200" };
 }
 
-export function AIBlockRecommendationBanner({
-  blockWindowId,
-  taskId,
-  onSlotUpdated,
-}: Props) {
-  const { data: recommendation, isLoading, error } = useBlockRecommendation(blockWindowId, taskId);
-  const updateMutation = useUpdateBlockWindow();
+function algorithm(value?: string | null) {
+  if (value === "Embedded Railway-AI CP-SAT" || value === "CP-SAT Constraint Solver") return "AI optimized";
+  if (value === "Database Timestamp Gap") return "Schedule-based fallback";
+  return value || "Recommendation engine";
+}
 
-  const handleAccept = async () => {
-    if (!recommendation?.suggested_put_payload) return;
+function SlotDetails({ slot }: { slot: FeasibleWindowSlot }) {
+  const value = score(slot.decision_score);
+  return <><p className="font-mono font-bold text-brand-secondary">{time(slot.start)} – {time(slot.end)} · {slot.duration_minutes} min</p><div className="mt-1 flex flex-wrap items-center gap-2"><span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${value.tone}`}><Cpu className="h-3 w-3" />{value.percent}% · {value.label}</span><span className="text-[10px] text-brand-muted">{algorithm(slot.algorithm)}</span></div></>;
+}
+
+export function AIBlockRecommendationBanner({ blockWindowId, taskId, onSlotUpdated }: Props) {
+  const recommendation = useBlockRecommendation(blockWindowId, taskId);
+  const apply = useApplyBlockRecommendation();
+  const update = useUpdateBlockWindow();
+  const [selected, setSelected] = useState<FeasibleWindowSlot | null>(null);
+  const [applyBackendChoice, setApplyBackendChoice] = useState(false);
+
+  const openConfirm = (slot: FeasibleWindowSlot, useBackendChoice: boolean) => {
+    setSelected(slot);
+    setApplyBackendChoice(useBackendChoice);
+  };
+
+  const confirm = async () => {
+    const data = recommendation.data;
+    if (!selected || !data) return;
     try {
-      await updateMutation.mutateAsync({
-        id: blockWindowId,
-        data: recommendation.suggested_put_payload,
-      });
+      if (applyBackendChoice) {
+        await apply.mutateAsync({ blockWindowId, taskId });
+      } else {
+        await update.mutateAsync({
+          id: blockWindowId,
+          data: { section: data.section.id, task_id: taskId, start_time: selected.start, end_time: selected.end, status: "RESERVED" },
+        });
+      }
+      setSelected(null);
+      await recommendation.refetch();
       onSlotUpdated?.();
     } catch {
-      // error surfaced via updateMutation.isError
+      // The mutation error is rendered in the confirmation modal.
     }
   };
 
-  // ── Loading ──────────────────────────────────────────────────
-  if (isLoading) {
-    return (
-      <div className="p-3.5 bg-brand-tertiary border border-brand-border rounded-xl flex items-center gap-2.5 animate-pulse text-brand-muted text-xs">
-        <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
-        <span>🤖 Analysing corridor traffic via CP-SAT constraint solver…</span>
-      </div>
-    );
-  }
+  if (recommendation.isLoading) return <div className="animate-pulse rounded-xl border border-brand-border bg-brand-tertiary p-4 text-xs text-brand-muted"><RefreshCw className="mr-2 inline h-4 w-4 animate-spin" />Loading block recommendation…</div>;
+  if (recommendation.isError || !recommendation.data) return <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-red-800"><p>{recommendation.error instanceof Error ? recommendation.error.message : "Could not load the recommendation."}</p><button onClick={() => recommendation.refetch()} className="mt-2 font-bold underline cursor-pointer">Retry</button></div>;
 
-  // ── Error / no data ──────────────────────────────────────────
-  if (error || !recommendation) return null;
+  const data = recommendation.data;
+  const recommended = data.recommended_slot;
+  const alternatives = (data.windows ?? []).filter((slot) => slot.start !== recommended?.start || slot.end !== recommended?.end);
+  const isUpdating = apply.isPending || update.isPending;
+  const mutationError = apply.error instanceof Error ? apply.error.message : update.error instanceof Error ? update.error.message : null;
 
-  const { current_slot, has_better_slot, recommendation_reason, recommended_slot } = recommendation;
+  return <div className="space-y-3 rounded-xl border border-brand-border bg-brand-surface p-4 text-xs shadow-sm">
+    <div className="flex items-start justify-between gap-3"><div><p className="font-extrabold text-brand-secondary">Block recommendation</p><p className="mt-0.5 text-brand-muted">{data.section.name} · {data.section.source_code} → {data.section.destination_code}</p></div><button onClick={() => recommendation.refetch()} className="rounded-lg p-1 text-brand-muted hover:bg-brand-tertiary cursor-pointer" title="Refresh recommendation"><RefreshCw className="h-4 w-4" /></button></div>
 
-  // ── All-clear: no better slot ────────────────────────────────
-  if (!has_better_slot) {
-    return (
-      <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3">
-        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-        <div>
-          <p className="text-xs font-semibold text-emerald-800">Optimal Slot Confirmed</p>
-          <p className="text-[11px] text-emerald-700 mt-0.5 leading-snug">{recommendation_reason}</p>
-        </div>
-      </div>
-    );
-  }
+    <section className={`rounded-xl border p-3 ${data.current_slot.has_conflict ? "border-red-200 bg-red-50" : "border-emerald-200 bg-emerald-50"}`}>
+      <p className={`font-bold ${data.current_slot.has_conflict ? "text-red-800" : "text-emerald-800"}`}>{data.current_slot.has_conflict ? <AlertTriangle className="mr-1 inline h-4 w-4" /> : <CheckCircle2 className="mr-1 inline h-4 w-4" />}{data.current_slot.has_conflict ? `Train conflict detected (${data.current_slot.conflict_count})` : "Conflict free"}</p>
+      <p className="mt-1 font-mono text-brand-secondary">Current: {time(data.current_slot.start_time)} – {time(data.current_slot.end_time)} · {data.current_slot.duration_minutes} min</p>
+      {data.current_slot.has_conflict && data.current_slot.conflicts.length > 0 && <p className="mt-1 text-red-700">Conflicting trains: {data.current_slot.conflicts.map((train) => train.train_number).join(", ")}</p>}
+    </section>
 
-  // ── Conflict or sub-optimal: show recommendation ─────────────
-  const hasConflict = current_slot.has_conflict;
+    {data.has_better_slot && recommended ? <section className="rounded-xl border border-brand-primary/25 bg-brand-blue-light/30 p-3"><p className="font-extrabold text-brand-primary"><Sparkles className="mr-1 inline h-3.5 w-3.5" />AI recommended</p><div className="mt-2"><SlotDetails slot={recommended} /></div><p className="mt-2 leading-relaxed text-brand-secondary">{recommended.recommendation_reason || data.recommendation_reason}</p><button onClick={() => openConfirm(recommended, true)} className="mt-3 rounded-lg bg-brand-primary px-3 py-2 font-bold text-white cursor-pointer">Apply recommendation</button></section> : <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 font-bold text-emerald-800">Current block window is already optimal.</section>}
 
-  return (
-    <div
-      className={`animate-fade-in-up smooth-card p-4 rounded-xl border space-y-3 ${
-        hasConflict
-          ? "bg-red-50 border-red-200"
-          : "bg-amber-50 border-amber-200"
-      }`}
-    >
+    <section><p className="mb-2 font-bold text-brand-secondary">Alternative windows</p>{alternatives.length === 0 ? <p className="rounded-xl border border-brand-border bg-brand-tertiary p-3 text-brand-muted">No alternative windows are available.</p> : <div className="space-y-2">{alternatives.map((slot, index) => <button key={`${slot.start}-${slot.end}-${index}`} onClick={() => openConfirm(slot, false)} className="w-full rounded-xl border border-brand-border p-3 text-left hover:border-brand-primary/50 hover:bg-brand-tertiary cursor-pointer"><SlotDetails slot={slot} /></button>)}</div>}</section>
 
-      {/* Reason text */}
-      <p className={`text-xs leading-snug ${hasConflict ? "text-red-800" : "text-amber-800"}`}>
-        {recommendation_reason}
-      </p>
-
-      {/* Conflicting trains list */}
-      {hasConflict && current_slot.conflicts.length > 0 && (
-        <div className="flex flex-col gap-1">
-          {current_slot.conflicts.map((c) => (
-            <div
-              key={c.train_number}
-              className="flex items-center gap-1.5 text-[11px] text-red-700 bg-red-100/60 border border-red-200 rounded-lg px-2.5 py-1"
-            >
-              <span className="font-bold">🚄 {c.train_number}</span>
-              <span className="text-red-600 truncate">{c.train_name}</span>
-              <span className="ml-auto font-mono text-red-500 shrink-0">
-                {formatTimeHHMM(c.entry_time)} – {formatTimeHHMM(c.exit_time)}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Slot comparison */}
-      {recommended_slot && (
-        <div className="grid grid-cols-2 gap-3 pt-3 border-t border-brand-border">
-          <div>
-            <span className="text-[10px] font-semibold text-brand-muted block mb-0.5">
-              Current Slot
-            </span>
-            <span className="font-mono text-xs text-brand-secondary font-semibold">
-              {formatTimeHHMM(current_slot.start_time)} – {formatTimeHHMM(current_slot.end_time)}
-            </span>
-          </div>
-          <div>
-            <span className="text-[10px] font-semibold text-emerald-600 block mb-0.5">
-              <Sparkles className="w-3 h-3 inline mr-0.5" />
-              AI Recommended
-            </span>
-            <span className="font-mono text-xs text-emerald-700 font-bold">
-              {formatTimeHHMM(recommended_slot.start)} – {formatTimeHHMM(recommended_slot.end)}
-            </span>
-            <span className="text-[10px] text-brand-muted ml-1.5">
-              ({recommended_slot.duration_minutes} min)
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Accept button */}
-      {recommendation.suggested_put_payload && (
-        <div className="flex justify-end pt-1">
-          <button
-            onClick={handleAccept}
-            disabled={updateMutation.isPending}
-            className="smooth-btn flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-sm"
-          >
-            {updateMutation.isPending ? (
-              <>
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                <span>Updating Slot…</span>
-              </>
-            ) : (
-              <>
-                <ArrowRight className="w-3.5 h-3.5" />
-                <span>Accept AI Slot</span>
-              </>
-            )}
-          </button>
-        </div>
-      )}
-
-      {/* Mutation error */}
-      {updateMutation.isError && (
-        <p className="text-[11px] text-red-600 mt-1">
-          {updateMutation.error instanceof Error
-            ? updateMutation.error.message
-            : "Failed to update slot"}
-        </p>
-      )}
-    </div>
-  );
+    {selected && <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 p-4"><div className="w-full max-w-md rounded-2xl bg-brand-surface p-5 shadow-2xl"><div className="flex items-start justify-between gap-3"><div><h3 className="font-extrabold text-brand-secondary">Confirm block-window change</h3><p className="mt-1 text-xs text-brand-muted">Review the selected maintenance window before applying it.</p></div><button onClick={() => setSelected(null)} disabled={isUpdating} className="text-brand-muted cursor-pointer"><X className="h-5 w-5" /></button></div><div className="mt-4 rounded-xl bg-brand-tertiary p-3"><SlotDetails slot={selected} /></div>{mutationError && <p className="mt-3 text-xs text-red-600">{mutationError}</p>}<div className="mt-5 flex justify-end gap-2"><button onClick={() => setSelected(null)} disabled={isUpdating} className="rounded-lg border border-brand-border px-3 py-2 font-bold text-brand-secondary cursor-pointer">Cancel</button><button onClick={confirm} disabled={isUpdating} className="rounded-lg bg-brand-primary px-3 py-2 font-bold text-white disabled:opacity-60 cursor-pointer">{isUpdating ? "Applying…" : "Confirm and apply"}</button></div></div></div>}
+  </div>;
 }

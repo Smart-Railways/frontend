@@ -109,6 +109,7 @@ export interface FeasibleWindowSlot {
   /** Guaranteed non-null from the new API (0.0 – 1.0) */
   decision_score: number;
   algorithm: "CP-SAT Constraint Solver" | "Database Timestamp Gap" | string;
+  recommendation_reason?: string | null;
 }
 
 export interface FeasibleWindowsResponse {
@@ -143,6 +144,7 @@ export interface BlockRecommendationResponse {
   has_better_slot: boolean;
   recommendation_reason: string;
   recommended_slot: FeasibleWindowSlot | null;
+  windows: FeasibleWindowSlot[];
   suggested_put_payload: BlockWindowPutPayload | null;
   put_url: string;
 }

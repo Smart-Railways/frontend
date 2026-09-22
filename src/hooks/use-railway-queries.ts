@@ -59,6 +59,15 @@ export const TIMETABLE_STALE_TIME = 30 * 60 * 1000;
 export const TIMETABLE_GC_TIME = 60 * 60 * 1000;
 export const LIVE_MOVEMENTS_STALE_TIME = 60 * 60 * 1000;
 
+function logAiRecommendationApi(
+  endpoint: string,
+  request: unknown,
+  response: unknown
+) {
+  if (process.env.NODE_ENV !== "development") return;
+  console.info(`[AI recommendation] ${endpoint}`, { request, response });
+}
+
 // ==========================================
 // Sections Queries
 // ==========================================
@@ -426,6 +435,7 @@ export function useFeasibleWindows() {
     mutationFn: async (data: FeasibleWindowsRequest) => {
       const res = await getFeasibleWindows(data);
       if (!res.success) throw new Error(res.error || "Failed to calculate feasible windows");
+      logAiRecommendationApi("POST /block-windows/recommendation/", data, res.data);
       return res.data;
     },
   });
@@ -449,6 +459,11 @@ export function useBlockRecommendation(
       if (!blockWindowId) return null;
       const res = await getBlockRecommendation(blockWindowId, taskId);
       if (!res.success) throw new Error(res.error || `Failed to fetch recommendation for block #${blockWindowId}`);
+      logAiRecommendationApi(
+        "GET /block-windows/recommendation/",
+        { block_window_id: blockWindowId, task_id: taskId },
+        res.data
+      );
       return res.data ?? null;
     },
     enabled: !!blockWindowId,
@@ -471,6 +486,7 @@ export function useUpdateBlockWindow() {
     }) => {
       const res = await updateBlockWindowFull(id, data);
       if (!res.success) throw new Error(res.error || `Failed to update block window #${id}`);
+      logAiRecommendationApi(`PUT /block-windows/${id}/`, data, res.data);
       return res.data;
     },
     onSuccess: (_, variables) => {
@@ -495,6 +511,11 @@ export function useApplyBlockRecommendation() {
     }) => {
       const res = await applyBlockRecommendation(blockWindowId, taskId);
       if (!res.success) throw new Error(res.error || `Failed to apply recommendation for block #${blockWindowId}`);
+      logAiRecommendationApi(
+        `POST /block-windows/${blockWindowId}/recommendation/`,
+        { task_id: taskId, apply: true },
+        res.data
+      );
       return res.data?.block_window;
     },
     onSuccess: (_, variables) => {
