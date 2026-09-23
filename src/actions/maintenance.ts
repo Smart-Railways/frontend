@@ -5,11 +5,84 @@ import {
   MaintenanceTask,
   CreateMaintenanceTaskInput,
   UpdateMaintenanceTaskInput,
+  MaintenanceChecklistItem,
+  MaintenanceLog,
   ApiResponse,
+  PaginationParams,
+  PaginatedResponse,
 } from "@/types";
 
+const DEFAULT_PAGE = 1;
+const DEFAULT_PAGE_SIZE = 10;
+
+export async function getPaginatedMaintenanceTasks(
+  params: PaginationParams = {}
+): Promise<ApiResponse<PaginatedResponse<MaintenanceTask>>> {
+  const page = params.page ?? DEFAULT_PAGE;
+  const pageSize = params.page_size ?? DEFAULT_PAGE_SIZE;
+  const response = await safeApiCall<MaintenanceTask[] | PaginatedResponse<MaintenanceTask>>(
+    () =>
+      api.get<MaintenanceTask[] | PaginatedResponse<MaintenanceTask>>("maintenance-tasks", {
+        params: { page, page_size: pageSize },
+      })
+  );
+
+  if (!response.success) {
+    return {
+      success: false,
+      error: response.error,
+      status: response.status,
+      message: response.message,
+    };
+  }
+
+  const payload = response.data;
+  return {
+    success: true,
+    data: Array.isArray(payload)
+      ? { count: payload.length, next: null, previous: null, results: payload }
+      : payload ?? { count: 0, next: null, previous: null, results: [] },
+  };
+}
+
 export async function getMaintenanceTasks(): Promise<ApiResponse<MaintenanceTask[]>> {
-  return safeApiCall(() => api.get<MaintenanceTask[]>("maintenance-tasks"));
+  // Map and notification overlays need the full operational picture rather than
+  // only the first table page.
+  const response = await getPaginatedMaintenanceTasks({ page: 1, page_size: 100 });
+  if (!response.success) {
+    return {
+      success: false,
+      error: response.error,
+      status: response.status,
+      message: response.message,
+    };
+  }
+  return { success: true, data: response.data?.results ?? [] };
+}
+
+export async function startMaintenanceTask(
+  id: number | string,
+  checklist: MaintenanceChecklistItem[]
+): Promise<ApiResponse<MaintenanceTask>> {
+  return safeApiCall(() => api.post<MaintenanceTask>(`maintenance-tasks/${id}/start`, { checklist }));
+}
+
+export async function completeMaintenanceTask(
+  id: number | string,
+  remark: string
+): Promise<ApiResponse<MaintenanceTask>> {
+  return safeApiCall(() => api.post<MaintenanceTask>(`maintenance-tasks/${id}/complete`, { remark }));
+}
+
+export async function cancelMaintenanceTask(
+  id: number | string,
+  remark: string
+): Promise<ApiResponse<MaintenanceTask>> {
+  return safeApiCall(() => api.post<MaintenanceTask>(`maintenance-tasks/${id}/cancel`, { remark }));
+}
+
+export async function getMaintenanceLogs(taskId: number | string): Promise<ApiResponse<MaintenanceLog[]>> {
+  return safeApiCall(() => api.get<MaintenanceLog[]>("maintenance-logs", { params: { task_id: taskId } }));
 }
 
 export async function getMaintenanceTaskById(

@@ -28,6 +28,8 @@ import {
   Info,
   MapPin,
   Bot,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -46,7 +48,7 @@ import {
 import { MaintenancePageSkeleton, MaintenanceTasksTableSkeleton } from "./skeletons";
 import { checkBlockConflict } from "@/actions/blocks";
 import {
-  useMaintenanceTasks,
+  usePaginatedMaintenanceTasks,
   useAssets,
   useRailwaySections,
   useBlockWindows,
@@ -58,6 +60,10 @@ import {
   useCreateMaintenanceTask,
   useUpdateMaintenanceTask,
   useDeleteMaintenanceTask,
+  useMaintenanceLogs,
+  useStartMaintenanceTask,
+  useCompleteMaintenanceTask,
+  useCancelMaintenanceTask,
 } from "@/hooks";
 import {
   MaintenanceTask,
@@ -76,6 +82,7 @@ import {
 } from "@/enums";
 import { getDateBounds, validateDate } from "@/lib/date-schemas";
 import { AIBlockRecommendationBanner } from "@/components/dashboard/ai-block-recommendation-banner";
+import { Checkbox } from "@/components/ui/checkbox";
 
 // Urgency metadata & styling (Light brand tokens)
 const URGENCY_CONFIG: Record<
@@ -123,6 +130,11 @@ const STATUS_CONFIG: Record<
     badge: "bg-blue-600 border-blue-700 text-white",
     icon: Clock,
   },
+  [MaintenanceStatus.ACTIVE]: {
+    label: MAINTENANCE_STATUS_LABELS[MaintenanceStatus.ACTIVE],
+    badge: "bg-violet-600 border-violet-700 text-white",
+    icon: Wrench,
+  },
   [MaintenanceStatus.COMPLETED]: {
     label: MAINTENANCE_STATUS_LABELS[MaintenanceStatus.COMPLETED],
     badge: "bg-emerald-600 border-emerald-700 text-white",
@@ -154,6 +166,32 @@ function formatDate(dateStr?: string | null): string {
   } catch {
     return dateStr;
   }
+}
+
+function formatIstDateTime(value?: string | null): string {
+  if (!value) return "—";
+  const date = new Date(value.replace(" ", "T"));
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
+function todayInIst(): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const part = (type: string) => parts.find((value) => value.type === type)?.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
 }
 
 // Helper: Format feasible window start/end timestamps into readable date & 24h time
@@ -371,12 +409,22 @@ function toDateTimeLocal(value: string): string {
 
 export default function MaintenancePage() {
   const [activeNavTab, setActiveNavTab] = useState<string>("maintenance");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // TanStack Query Hooks
-  const { data: tasks = [], isLoading: loadingTasks, isRefetching: refetchingTasks, refetch: refetchTasks } = useMaintenanceTasks();
+  const {
+    data: tasksPage,
+    isLoading: loadingTasks,
+    isFetching: fetchingTasks,
+    isRefetching: refetchingTasks,
+    refetch: refetchTasks,
+  } = usePaginatedMaintenanceTasks({ page: currentPage, page_size: pageSize });
+  const tasks = tasksPage?.results ?? [];
+  const totalPages = Math.max(1, Math.ceil((tasksPage?.count ?? 0) / pageSize));
   const { data: assets = [], isLoading: loadingAssets, refetch: refetchAssets } = useAssets();
   const { data: sections = [] } = useRailwaySections();
-  const { data: blockWindows = [], isLoading: loadingBlockWindows, refetch: refetchBlockWindows } = useBlockWindows();
+  const { data: blockWindows = [], isLoading: loadingBlockWindows } = useBlockWindows();
 
   // Gate: show full-page skeleton until every first-load fetch resolves
   const isPageLoading = loadingTasks || loadingAssets || loadingBlockWindows;
@@ -390,6 +438,9 @@ export default function MaintenancePage() {
   const createBlockWindowMutation = useCreateBlockWindow();
   const updateBlockWindowMutation = useUpdateBlockWindow();
   const patchMaintenanceTaskMutation = usePatchMaintenanceTask();
+  const startMaintenanceMutation = useStartMaintenanceTask();
+  const completeMaintenanceMutation = useCompleteMaintenanceTask();
+  const cancelMaintenanceMutation = useCancelMaintenanceTask();
   const [schedulingSlot, setSchedulingSlot] = useState<string | null>(null);
   const [scheduledSuccessMsg, setScheduledSuccessMsg] = useState<string | null>(null);
   /** Tracks the block window ID created by the feasible windows flow for Phase 3 AI banner */
@@ -428,6 +479,16 @@ export default function MaintenancePage() {
   const [editingTask, setEditingTask] = useState<MaintenanceTask | null>(null);
   const [deletingTask, setDeletingTask] = useState<MaintenanceTask | null>(null);
   const [inspectingTask, setInspectingTask] = useState<MaintenanceTask | null>(null);
+  const maintenanceLogsQuery = useMaintenanceLogs(inspectingTask?.id);
+  const [lifecycleTask, setLifecycleTask] = useState<MaintenanceTask | null>(null);
+  const [lifecycleMode, setLifecycleMode] = useState<"start" | "complete" | "cancel" | null>(null);
+  const [lifecycleRemark, setLifecycleRemark] = useState("");
+  const [lifecycleError, setLifecycleError] = useState<string | null>(null);
+  const [startChecklist, setStartChecklist] = useState([
+    { item: "PPE checked", completed: false },
+    { item: "Work permit approved", completed: false },
+    { item: "Section isolated", completed: false },
+  ]);
   const startDateTimeRef = useRef<HTMLInputElement>(null);
   const endDateTimeRef = useRef<HTMLInputElement>(null);
 
@@ -479,7 +540,7 @@ export default function MaintenancePage() {
     date: string;
   }>({
     task_id: "",
-    date: new Date().toISOString().split("T")[0], // default to today (YYYY-MM-DD)
+    date: todayInIst(), // default to today in the backend's scheduling timezone
   });
   const [feasibleResult, setFeasibleResult] = useState<FeasibleWindowsResponse | null>(null);
   const [feasibleError, setFeasibleError] = useState<string | null>(null);
@@ -634,6 +695,7 @@ export default function MaintenancePage() {
           onSuccess: (updated) => {
             setIsFormModalOpen(false);
             setEditingTask(null);
+            setExpandedAiTaskId(null);
             showToast("success", `Maintenance task "${updated?.task_code || editingTask.task_code}" updated successfully.`);
           },
           onError: (err) => {
@@ -645,6 +707,7 @@ export default function MaintenancePage() {
       createTaskMutation.mutate(formData, {
         onSuccess: (created) => {
           setIsFormModalOpen(false);
+          setExpandedAiTaskId(null);
           showToast("success", `Maintenance task "${created?.task_code || formData.task_code}" created successfully.`);
         },
         onError: (err) => {
@@ -662,6 +725,7 @@ export default function MaintenancePage() {
       onSuccess: () => {
         showToast("success", `Task "${deletingTask.task_code}" deleted successfully.`);
         setDeletingTask(null);
+        setExpandedAiTaskId(null);
       },
       onError: (err) => {
         showToast("error", err instanceof Error ? err.message : "Failed to delete task.");
@@ -669,58 +733,54 @@ export default function MaintenancePage() {
     });
   };
 
-  // Mark Task as Completed Action (PUT request to update status)
-  const handleMarkAsCompleted = (task: MaintenanceTask) => {
-    updateTaskMutation.mutate(
-      {
-        id: task.id,
-        data: {
-          task_code: task.task_code,
-          asset: task.asset,
-          details: task.details || "",
-          risk_rating: task.risk_rating,
-          urgency: task.urgency,
-          deadline: task.deadline ? task.deadline.substring(0, 10) : new Date().toISOString().split("T")[0],
-          estimated_duration: task.estimated_duration,
-          task_status: MaintenanceStatus.COMPLETED,
-        },
-      },
-      {
-        onSuccess: () => {
-          showToast("success", `Maintenance task "${task.task_code}" marked as Completed.`);
-        },
-        onError: (err) => {
-          showToast("error", err instanceof Error ? err.message : "Failed to mark task as completed.");
-        },
-      }
-    );
+  const openLifecycleModal = (task: MaintenanceTask, mode: "start" | "complete" | "cancel") => {
+    setLifecycleTask(task);
+    setLifecycleMode(mode);
+    setLifecycleRemark("");
+    setLifecycleError(null);
+    if (mode === "start") setStartChecklist([
+      { item: "PPE checked", completed: false },
+      { item: "Work permit approved", completed: false },
+      { item: "Section isolated", completed: false },
+    ]);
   };
 
-  // Mark Task as Cancelled Action (PUT request to update status)
-  const handleMarkAsCancelled = (task: MaintenanceTask) => {
-    updateTaskMutation.mutate(
-      {
-        id: task.id,
-        data: {
-          task_code: task.task_code,
-          asset: task.asset,
-          details: task.details || "",
-          risk_rating: task.risk_rating,
-          urgency: task.urgency,
-          deadline: task.deadline ? task.deadline.substring(0, 10) : new Date().toISOString().split("T")[0],
-          estimated_duration: task.estimated_duration,
-          task_status: MaintenanceStatus.CANCELLED,
-        },
-      },
-      {
-        onSuccess: () => {
-          showToast("success", `Maintenance task "${task.task_code}" marked as Cancelled.`);
-        },
-        onError: (err) => {
-          showToast("error", err instanceof Error ? err.message : "Failed to mark task as cancelled.");
-        },
-      }
-    );
+  const handleLifecycleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!lifecycleTask || !lifecycleMode) return;
+    setLifecycleError(null);
+    if (lifecycleMode === "start" && !startChecklist.every((item) => item.completed)) {
+      showToast("error", "Complete every safety checklist item before starting.");
+      return;
+    }
+    if (lifecycleMode !== "start" && !lifecycleRemark.trim()) {
+      showToast("error", "A non-blank remark is required.");
+      return;
+    }
+    try {
+      const updated = lifecycleMode === "start"
+        ? await startMaintenanceMutation.mutateAsync({ id: lifecycleTask.id, checklist: startChecklist })
+        : lifecycleMode === "complete"
+          ? await completeMaintenanceMutation.mutateAsync({ id: lifecycleTask.id, remark: lifecycleRemark.trim() })
+          : await cancelMaintenanceMutation.mutateAsync({ id: lifecycleTask.id, remark: lifecycleRemark.trim() });
+      // Keep an already-open detail view current, but never open a second dialog
+      // after an action initiated from the table menu.
+      if (updated && inspectingTask?.id === lifecycleTask.id) setInspectingTask(updated);
+      setExpandedAiTaskId(null);
+      // Lifecycle mutation hooks invalidate the task, block, and audit-log queries.
+      // Avoid a second network request by not manually refetching them here.
+      showToast("success", `Maintenance task ${lifecycleMode === "start" ? "started" : lifecycleMode === "complete" ? "completed" : "cancelled"}.`);
+      setLifecycleTask(null);
+      setLifecycleMode(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Maintenance action failed. Please refresh and try again.";
+      const friendlyMessage = /not found/i.test(message)
+        ? "This task no longer exists in the backend. Refresh the task list before trying another action."
+        : message;
+      setLifecycleError(friendlyMessage);
+      showToast("error", friendlyMessage);
+      await refetchTasks();
+    }
   };
 
   // Conflict Modal Handlers
@@ -860,7 +920,7 @@ export default function MaintenancePage() {
 
     setFeasibleForm({
       task_id: targetTaskId,
-      date: new Date().toISOString().split("T")[0], // default to today
+      date: todayInIst(), // default to today in the backend's scheduling timezone
     });
     setIsFeasibleModalOpen(true);
   };
@@ -968,6 +1028,7 @@ export default function MaintenancePage() {
           },
         });
         const msg = `Block Window #${editingBlockWindow.id} updated successfully!`;
+        setExpandedAiTaskId(null);
         setBlockWindowSuccessMsg(msg);
         showToast("success", msg);
         setTimeout(() => {
@@ -991,6 +1052,7 @@ export default function MaintenancePage() {
         }
 
         showToast("success", `Block Window ${createdBlock?.id ? `#${createdBlock.id} ` : ""}created successfully!`);
+        setExpandedAiTaskId(null);
         setIsBlockWindowModalOpen(false);
         setBlockWindowStep("FORM");
       }
@@ -1027,6 +1089,10 @@ export default function MaintenancePage() {
       setFeasibleError("Please select a target date.");
       return;
     }
+    if (feasibleForm.date < todayInIst()) {
+      setFeasibleError("Past dates cannot be scheduled.");
+      return;
+    }
 
     feasibleWindowsMutation.mutate(
       {
@@ -1038,7 +1104,8 @@ export default function MaintenancePage() {
           setFeasibleResult(data ?? null);
         },
         onError: (err) => {
-          setFeasibleError(err instanceof Error ? err.message : "Failed to calculate feasible windows");
+          const message = err instanceof Error ? err.message : "Failed to calculate feasible windows";
+          setFeasibleError(/past|expired/i.test(message) ? "Past dates cannot be scheduled." : message);
         },
       }
     );
@@ -1096,8 +1163,8 @@ export default function MaintenancePage() {
   };
 
   // Toggle Inline AI Recommendation per Row
-  const handleToggleAiRecommendation = (task: MaintenanceTask) => {
-    if (expandedAiTaskId === task.id) {
+  const handleToggleAiRecommendation = (task: MaintenanceTask, forceRefresh = false) => {
+    if (expandedAiTaskId === task.id && !forceRefresh) {
       setExpandedAiTaskId(null);
       return;
     }
@@ -1135,9 +1202,9 @@ export default function MaintenancePage() {
       ? matchingBw.start_time.substring(0, 10)
       : task.deadline
         ? task.deadline.substring(0, 10)
-        : new Date().toISOString().split("T")[0];
+        : todayInIst();
 
-    if (!aiRecommendationsMap[task.id]) {
+    if (!aiRecommendationsMap[task.id] || forceRefresh) {
       setLoadingAiTaskId(task.id);
 
       const requestPayload: FeasibleWindowsRequest = matchingBw
@@ -1270,11 +1337,7 @@ export default function MaintenancePage() {
         return next;
       });
 
-      // Refetch live tasks and block windows immediately
-      await Promise.all([
-        refetchTasks(),
-        refetchBlockWindows(),
-      ]);
+      // The create/update and status mutations already invalidate the task and block queries.
 
       const timeInfo = formatWindowSlot(slot.start, slot.end);
       const msg = `AI Recommended Slot Accepted! Block Reserved for ${timeInfo.date} (${timeInfo.time}). Task ${task.task_code} marked as SCHEDULED.`;
@@ -1341,7 +1404,7 @@ export default function MaintenancePage() {
 
   // Metric Summary
   const stats = useMemo(() => {
-    const total = tasks.length;
+    const total = tasksPage?.count ?? 0;
     const pendingCount = tasks.filter((t) => t.task_status === MaintenanceStatus.PENDING).length;
     const scheduledCount = tasks.filter((t) => t.task_status === MaintenanceStatus.SCHEDULED).length;
     const completedCount = tasks.filter((t) => t.task_status === MaintenanceStatus.COMPLETED).length;
@@ -1358,7 +1421,7 @@ export default function MaintenancePage() {
       criticalCount,
       totalMinutes,
     };
-  }, [tasks]);
+  }, [tasks, tasksPage?.count]);
 
   const isSaving = createTaskMutation.isPending || updateTaskMutation.isPending;
   const isDeleting = deleteTaskMutation.isPending;
@@ -1563,6 +1626,9 @@ export default function MaintenancePage() {
                     <SelectItem value={MaintenanceStatus.SCHEDULED} className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">
                       {MAINTENANCE_STATUS_LABELS[MaintenanceStatus.SCHEDULED]}
                     </SelectItem>
+                    <SelectItem value={MaintenanceStatus.ACTIVE} className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">
+                      {MAINTENANCE_STATUS_LABELS[MaintenanceStatus.ACTIVE]}
+                    </SelectItem>
                     <SelectItem value={MaintenanceStatus.COMPLETED} className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">
                       {MAINTENANCE_STATUS_LABELS[MaintenanceStatus.COMPLETED]}
                     </SelectItem>
@@ -1612,7 +1678,10 @@ export default function MaintenancePage() {
 
               <div className="flex items-center gap-2 overflow-x-auto scrollbar-none w-full sm:w-auto shrink-0 pb-1 sm:pb-0">
                 <button
-                  onClick={() => refetchTasks()}
+                  onClick={() => {
+                    setExpandedAiTaskId(null);
+                    refetchTasks();
+                  }}
                   disabled={refetchingTasks}
                   className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-brand-secondary text-xs font-bold shadow-xs transition-all cursor-pointer shrink-0 whitespace-nowrap disabled:opacity-50"
                   title="Refresh maintenance tasks"
@@ -1697,8 +1766,9 @@ export default function MaintenancePage() {
                       const hasAllocatedWindow = Boolean(matchingBw);
                       const effectiveStatKey = (statKey === MaintenanceStatus.COMPLETED || statKey === MaintenanceStatus.CANCELLED)
                         ? statKey
-                        : (hasAllocatedWindow ? MaintenanceStatus.SCHEDULED : statKey);
+                        : (statKey === MaintenanceStatus.PENDING && hasAllocatedWindow ? MaintenanceStatus.SCHEDULED : statKey);
                       const effectiveStat = STATUS_CONFIG[effectiveStatKey] || stat;
+                      const isActiveMaintenance = effectiveStatKey === MaintenanceStatus.ACTIVE;
 
                       return (
                         <React.Fragment key={task.id}>
@@ -1733,6 +1803,8 @@ export default function MaintenancePage() {
                                     </div>
                                   );
                                 })()
+                              ) : isActiveMaintenance ? (
+                                <span className="text-brand-muted">—</span>
                               ) : (
                                 <div className="inline-flex flex-col items-center gap-1.5">
 
@@ -1790,6 +1862,7 @@ export default function MaintenancePage() {
                                 {/* AI Bot - OUTSIDE dropdown */}
                                 {effectiveStatKey !== MaintenanceStatus.COMPLETED &&
                                   effectiveStatKey !== MaintenanceStatus.CANCELLED &&
+                                  !isActiveMaintenance &&
                                   task.task_status !== MaintenanceStatus.COMPLETED &&
                                   task.task_status !== MaintenanceStatus.CANCELLED &&
                                   Boolean(matchingBw) && (
@@ -1813,25 +1886,29 @@ export default function MaintenancePage() {
                                   )}
 
                                    {/* View Details - OUTSIDE dropdown */}
-                                <button
-                                  type="button"
-                                  onClick={() => setInspectingTask(task)}
-                                  className="p-2 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-black shadow-xs transition-colors cursor-pointer"
-                                  title="View Details"
-                                  aria-label="View Details"
-                                >
-                                  <Eye className="w-4 h-4 text-black" />
-                                </button>
-
-                                {/* Actions Dropdown */}
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger
-                                    className="p-2 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-black shadow-xs transition-colors cursor-pointer outline-none focus:ring-2 focus:ring-brand-primary/20"
-                                    title="Actions"
-                                    aria-label="Actions"
+                                {!isActiveMaintenance && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setInspectingTask(task)}
+                                    className="p-2 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-black shadow-xs transition-colors cursor-pointer"
+                                    title="View Details"
+                                    aria-label="View Details"
                                   >
-                                    <MoreVertical className="w-4 h-4" />
-                                  </DropdownMenuTrigger>
+                                    <Eye className="w-4 h-4 text-black" />
+                                  </button>
+                                )}
+
+                                {/* Terminal tasks have no available actions. */}
+                                {effectiveStatKey !== MaintenanceStatus.COMPLETED &&
+                                  effectiveStatKey !== MaintenanceStatus.CANCELLED && (
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger
+                                        className="p-2 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-black shadow-xs transition-colors cursor-pointer outline-none focus:ring-2 focus:ring-brand-primary/20"
+                                        title="Actions"
+                                        aria-label="Actions"
+                                      >
+                                        <MoreVertical className="w-4 h-4" />
+                                      </DropdownMenuTrigger>
 
                                   <DropdownMenuContent
                                     align="end"
@@ -1839,51 +1916,58 @@ export default function MaintenancePage() {
                                     className="w-56 bg-brand-surface border-brand-border text-brand-secondary shadow-xl rounded-xl p-1.5 z-50"
                                   >
 
-                                    {/* Complete Task */}
-                                    {effectiveStatKey !== MaintenanceStatus.COMPLETED &&
-                                      effectiveStatKey !== MaintenanceStatus.CANCELLED &&
-                                      task.task_status !== MaintenanceStatus.COMPLETED &&
-                                      task.task_status !== MaintenanceStatus.CANCELLED && (
-                                        <>
+                                    <>
+                                          {effectiveStatKey === MaintenanceStatus.SCHEDULED && (
+                                            <DropdownMenuItem
+                                              onClick={() => openLifecycleModal(task, "start")}
+                                              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-violet-50 text-sm font-semibold text-violet-700 cursor-pointer focus:bg-violet-50 focus:text-violet-700"
+                                            >
+                                              <Wrench className="w-4 h-4 text-violet-600" />
+                                              <span>Start Maintenance</span>
+                                            </DropdownMenuItem>
+                                          )}
+
+                                          {(effectiveStatKey === MaintenanceStatus.ACTIVE ||
+                                            (effectiveStatKey === MaintenanceStatus.DELAYED && Boolean(task.started_at))) && (
                                           <DropdownMenuItem
-                                            onClick={() => handleMarkAsCompleted(task)}
+                                            onClick={() => openLifecycleModal(task, "complete")}
                                             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-emerald-50 text-sm font-semibold text-emerald-700 cursor-pointer focus:bg-emerald-50 focus:text-emerald-700"
                                           >
                                             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                                             <span>Complete Task</span>
                                           </DropdownMenuItem>
+                                          )}
 
-                                          {/* Cancel Task */}
                                           <DropdownMenuItem
-                                            onClick={() => handleMarkAsCancelled(task)}
+                                            onClick={() => openLifecycleModal(task, "cancel")}
                                             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-100 text-sm font-semibold text-slate-700 cursor-pointer focus:bg-slate-100 focus:text-slate-700"
                                           >
                                             <XCircle className="w-4 h-4 text-slate-600" />
                                             <span>Cancel Task</span>
                                           </DropdownMenuItem>
 
-                                          {/* Edit Task */}
-                                          <DropdownMenuItem
-                                            onClick={() => handleOpenEditModal(task)}
-                                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary cursor-pointer focus:bg-brand-tertiary focus:text-brand-secondary"
-                                          >
-                                            <Edit2 className="w-4 h-4 text-brand-primary" />
-                                            <span>Edit Task</span>
-                                          </DropdownMenuItem>
+                                          {!isActiveMaintenance && <>
+                                            <DropdownMenuItem
+                                              onClick={() => handleOpenEditModal(task)}
+                                              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary cursor-pointer focus:bg-brand-tertiary focus:text-brand-secondary"
+                                            >
+                                              <Edit2 className="w-4 h-4 text-brand-primary" />
+                                              <span>Edit Task</span>
+                                            </DropdownMenuItem>
 
-                                          {/* Block Window */}
-                                          <DropdownMenuItem
-                                            onClick={() => handleOpenBlockWindowModal(task, matchingBw)}
-                                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary cursor-pointer focus:bg-brand-tertiary focus:text-brand-secondary"
-                                          >
-                                            <Calendar className="w-4 h-4 text-brand-primary" />
-                                            <span>Block Window</span>
-                                          </DropdownMenuItem>
-                                        </>
-                                      )}
+                                            <DropdownMenuItem
+                                              onClick={() => handleOpenBlockWindowModal(task, matchingBw)}
+                                              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary cursor-pointer focus:bg-brand-tertiary focus:text-brand-secondary"
+                                            >
+                                              <Calendar className="w-4 h-4 text-brand-primary" />
+                                              <span>Block Window</span>
+                                            </DropdownMenuItem>
+                                          </>}
+                                    </>
 
                                   </DropdownMenuContent>
-                                </DropdownMenu>
+                                    </DropdownMenu>
+                                  )}
 
                               </div>
                             </td>
@@ -1907,7 +1991,16 @@ export default function MaintenancePage() {
                                         <span>Live AI Monitoring</span>
                                         <span className="text-[10px] font-normal text-brand-muted">· auto-refreshes every 60 s</span>
                                       </div>
-
+                                      <button
+                                        type="button"
+                                        onClick={() => handleToggleAiRecommendation(task, true)}
+                                        disabled={loadingAiTaskId === task.id}
+                                        className="inline-flex items-center gap-1.5 rounded-lg border border-brand-border bg-brand-surface px-2.5 py-1.5 text-[11px] font-bold text-brand-primary transition-colors hover:bg-brand-blue-light disabled:cursor-not-allowed disabled:opacity-50"
+                                        title="Refresh AI slot recommendation"
+                                      >
+                                        <RefreshCw className={`h-3.5 w-3.5 ${loadingAiTaskId === task.id ? "animate-spin" : ""}`} />
+                                        Refresh
+                                      </button>
                                     </div>
 
                                     {/* Reason Description */}
@@ -1982,6 +2075,61 @@ export default function MaintenancePage() {
                     })}
                   </tbody>
                 </table>
+              </div>
+            )}
+            {tasksPage && tasksPage.count > 0 && (
+              <div className="flex flex-col gap-3 border-t border-brand-border px-4 py-3 text-xs sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3 text-brand-muted">
+                  <span className="font-medium">
+                    Showing <strong className="text-brand-secondary">{(currentPage - 1) * pageSize + 1}</strong> to{" "}
+                    <strong className="text-brand-secondary">{Math.min(currentPage * pageSize, tasksPage.count)}</strong> of{" "}
+                    <strong className="text-brand-secondary">{tasksPage.count}</strong> maintenance tasks
+                  </span>
+                  <label className="flex items-center gap-2 border-l border-brand-border pl-3">
+                    Rows:
+                    <select
+                      value={pageSize}
+                      onChange={(event) => {
+                        setPageSize(Number(event.target.value));
+                        setCurrentPage(1);
+                      }}
+                      className="rounded-lg border border-brand-border bg-brand-surface px-2.5 py-1.5 font-bold text-brand-secondary outline-none"
+                    >
+                      <option value={5}>5</option>
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                    disabled={!tasksPage.previous || fetchingTasks}
+                    className="rounded-lg border border-brand-border p-2 text-brand-secondary transition-colors hover:bg-brand-tertiary disabled:cursor-not-allowed disabled:opacity-40"
+                    aria-label="Previous page"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  {Array.from({ length: totalPages }).map((_, index) => {
+                    const page = index + 1;
+                    if (page === 1 || page === totalPages || (page >= currentPage - 1 && page <= currentPage + 1)) {
+                      return <button key={page} type="button" onClick={() => setCurrentPage(page)} className={`h-8 min-w-8 rounded-lg px-2 font-bold transition-colors ${currentPage === page ? "bg-brand-primary text-white" : "border border-brand-border text-brand-secondary hover:bg-brand-tertiary"}`}>{page}</button>;
+                    }
+                    if (page === currentPage - 2 || page === currentPage + 2) return <span key={page} className="px-0.5 text-brand-muted">…</span>;
+                    return null;
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((page) => page + 1)}
+                    disabled={!tasksPage.next || fetchingTasks}
+                    className="rounded-lg border border-brand-border p-2 text-brand-secondary transition-colors hover:bg-brand-tertiary disabled:cursor-not-allowed disabled:opacity-40"
+                    aria-label="Next page"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             )}
           </section>
@@ -2170,7 +2318,7 @@ export default function MaintenancePage() {
       {/* MODAL 2: Inspect Task Details */}
       {inspectingTask && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-brand-surface border border-brand-border rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+          <div className="bg-brand-surface border border-brand-border rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-brand-border">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-brand-secondary/10 text-black flex items-center justify-center">
@@ -2245,8 +2393,20 @@ export default function MaintenancePage() {
 
 
               return (
-                <div >
-
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-brand-border bg-brand-tertiary p-3 text-xs">
+                    <p className="font-bold text-brand-secondary">Execution evidence</p>
+                    {inspectingTask.started_at && <p className="mt-1 text-brand-secondary">Started: {formatIstDateTime(inspectingTask.started_at)} IST</p>}
+                    {inspectingTask.completion_remark && <p className="mt-1 text-brand-secondary">Completion{inspectingTask.completed_at ? ` (${formatIstDateTime(inspectingTask.completed_at)} IST)` : ""}: {inspectingTask.completion_remark}</p>}
+                    {inspectingTask.cancellation_remark && <p className="mt-1 text-brand-secondary">Cancellation{inspectingTask.cancelled_at ? ` (${formatIstDateTime(inspectingTask.cancelled_at)} IST)` : ""}: {inspectingTask.cancellation_remark}</p>}
+                    {inspectingTask.is_delayed && <p className="mt-1 font-bold text-rose-700">Deadline warning: task is delayed.</p>}
+                    {inspectingTask.checklist && inspectingTask.checklist.length > 0 && <details className="mt-2 text-brand-secondary"><summary className="cursor-pointer font-semibold">Start checklist</summary><ul className="mt-1 list-disc pl-4">{inspectingTask.checklist.map((item, index) => <li key={`${item.item}-${index}`}>{item.item}: {item.completed ? "completed" : "not completed"}</li>)}</ul></details>}
+                    {inspectingTask.block_window && <p className="mt-2 text-brand-secondary">Block window: {inspectingTask.block_window.section_name || `Section #${inspectingTask.block_window.section}`} · {formatIstDateTime(inspectingTask.block_window.start_time)} – {formatIstDateTime(inspectingTask.block_window.end_time)} IST</p>}
+                  </div>
+                  <div className="rounded-xl border border-brand-border bg-brand-surface p-3 text-xs">
+                    <p className="font-bold text-brand-secondary">Maintenance audit log</p>
+                    {maintenanceLogsQuery.isLoading ? <p className="mt-2 text-brand-muted">Loading audit history…</p> : maintenanceLogsQuery.isError ? <button onClick={() => maintenanceLogsQuery.refetch()} className="mt-2 font-bold text-brand-primary underline cursor-pointer">Retry loading logs</button> : maintenanceLogsQuery.data?.length ? <ol className="mt-3 space-y-3 border-l border-brand-border pl-3">{maintenanceLogsQuery.data.map((log) => <li key={log.id} className="relative"><span className="absolute -left-[17px] top-1 h-2 w-2 rounded-full bg-brand-primary" /><p className="font-semibold text-brand-secondary">{log.event} · {log.status}</p><p className="text-brand-muted">{formatIstDateTime(log.logged_at)} IST</p>{log.remark && <p className="mt-1 text-brand-secondary">{log.remark}</p>}{log.details?.checklist && <details className="mt-1"><summary className="cursor-pointer text-brand-primary">Checklist evidence</summary><ul className="list-disc pl-4 text-brand-secondary">{log.details.checklist.map((item, index) => <li key={`${item.item}-${index}`}>{item.item}: {item.completed ? "completed" : "not completed"}</li>)}</ul></details>}</li>)}</ol> : <p className="mt-2 text-brand-muted">No audit events have been recorded.</p>}
+                  </div>
                 </div>
               );
             })()}
@@ -2263,10 +2423,21 @@ export default function MaintenancePage() {
         </div>
       )}
 
+      {lifecycleTask && lifecycleMode && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <form onSubmit={handleLifecycleSubmit} className="w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto space-y-4 rounded-2xl border border-brand-border bg-brand-surface p-6 shadow-2xl">
+            <div><h3 className="text-base font-extrabold text-brand-secondary">{lifecycleMode === "start" ? "Start maintenance" : lifecycleMode === "complete" ? "Complete maintenance" : "Cancel maintenance"}</h3><p className="mt-1 text-xs text-brand-muted">{lifecycleTask.task_code}</p></div>
+            {lifecycleMode === "start" ? <div className="space-y-3">{startChecklist.map((entry, index) => <label key={entry.item} className="flex items-center gap-3 rounded-xl border border-brand-border p-3 text-sm font-semibold text-brand-secondary"><Checkbox checked={entry.completed} onCheckedChange={(checked) => setStartChecklist((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, completed: checked === true } : item))} />{entry.item}</label>)}</div> : <textarea value={lifecycleRemark} onChange={(event) => setLifecycleRemark(event.target.value)} required placeholder={lifecycleMode === "complete" ? "Describe the completed work and restoration." : "Give the cancellation reason."} className="min-h-28 w-full rounded-xl border border-brand-border bg-brand-tertiary p-3 text-sm text-brand-secondary outline-none focus:border-brand-primary" />}
+            {lifecycleError && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-700">{lifecycleError}</div>}
+            <div className="flex justify-end gap-2"><button type="button" onClick={() => { setLifecycleTask(null); setLifecycleMode(null); setLifecycleError(null); }} className="rounded-lg border border-brand-border px-3 py-2 text-xs font-bold text-brand-secondary cursor-pointer">Back</button><button type="submit" disabled={startMaintenanceMutation.isPending || completeMaintenanceMutation.isPending || cancelMaintenanceMutation.isPending || (lifecycleMode === "start" && !startChecklist.every((item) => item.completed))} className="rounded-lg bg-brand-primary px-3 py-2 text-xs font-bold text-white disabled:opacity-50 cursor-pointer">{startMaintenanceMutation.isPending || completeMaintenanceMutation.isPending || cancelMaintenanceMutation.isPending ? "Saving…" : "Confirm"}</button></div>
+          </form>
+        </div>
+      )}
+
       {/* MODAL 3: Delete Confirmation */}
       {deletingTask && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-brand-surface border border-brand-border rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+          <div className="bg-brand-surface border border-brand-border rounded-2xl max-w-md w-full max-h-[calc(100dvh-2rem)] overflow-y-auto p-6 shadow-2xl space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center flex-shrink-0">
                 <AlertTriangle className="w-5 h-5" />
@@ -2653,7 +2824,7 @@ export default function MaintenancePage() {
                     <input
                       type="date"
                       value={feasibleForm.date}
-                      min={new Date().toISOString().split("T")[0]}
+                      min={todayInIst()}
                       max={getDateBounds("block-windows").max}
                       onChange={(e) => {
                         setFeasibleForm((prev) => ({ ...prev, date: e.target.value }));

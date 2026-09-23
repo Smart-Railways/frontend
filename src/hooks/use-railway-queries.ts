@@ -5,11 +5,13 @@ import {
   getRailwaySections,
   getRailwaySectionById,
   getAssets,
+  getPaginatedAssets,
   getAssetById,
   createAsset,
   updateAsset,
   deleteAsset,
   getMaintenanceTasks,
+  getPaginatedMaintenanceTasks,
   getMaintenanceTaskById,
   createMaintenanceTask,
   updateMaintenanceTask,
@@ -32,6 +34,10 @@ import {
   applyBlockRecommendation,
   getBlockWindowByTaskId,
   updateBlockWindowByTaskId,
+  startMaintenanceTask,
+  completeMaintenanceTask,
+  cancelMaintenanceTask,
+  getMaintenanceLogs,
 } from "@/actions";
 import {
   CreateAssetInput,
@@ -46,8 +52,10 @@ import {
   CreateBlockWindowInput,
   FeasibleWindowsRequest,
   BlockWindowPutPayload,
+  MaintenanceChecklistItem,
   GetTrainOperationsParams,
   GetTrainMovementsParams,
+  PaginationParams,
 } from "@/types";
 
 // ==========================================
@@ -113,6 +121,17 @@ export function useAssets() {
       const res = await getAssets();
       if (!res.success) throw new Error(res.error || "Failed to fetch assets");
       return res.data ?? [];
+    },
+  });
+}
+
+export function usePaginatedAssets(params: PaginationParams) {
+  return useQuery({
+    queryKey: ["assets", "paginated", params],
+    queryFn: async () => {
+      const res = await getPaginatedAssets(params);
+      if (!res.success) throw new Error(res.error || "Failed to fetch assets");
+      return res.data ?? { count: 0, next: null, previous: null, results: [] };
     },
   });
 }
@@ -185,6 +204,21 @@ export function useMaintenanceTasks() {
       if (!res.success) throw new Error(res.error || "Failed to fetch maintenance tasks");
       return res.data ?? [];
     },
+    // Mutations explicitly invalidate this query. Avoid a duplicate request when
+    // focus returns to the table after a dialog closes.
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function usePaginatedMaintenanceTasks(params: PaginationParams) {
+  return useQuery({
+    queryKey: ["maintenance-tasks", "paginated", params],
+    queryFn: async () => {
+      const res = await getPaginatedMaintenanceTasks(params);
+      if (!res.success) throw new Error(res.error || "Failed to fetch maintenance tasks");
+      return res.data ?? { count: 0, next: null, previous: null, results: [] };
+    },
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -373,6 +407,7 @@ export function useBlockWindows() {
       if (!res.success) throw new Error(res.error || "Failed to fetch block windows");
       return res.data ?? [];
     },
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -416,6 +451,61 @@ export function usePatchMaintenanceTask() {
       queryClient.invalidateQueries({ queryKey: ["maintenance-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["maintenance-tasks", variables.id] });
     },
+  });
+}
+
+function invalidateMaintenanceTask(queryClient: ReturnType<typeof useQueryClient>, id: number | string) {
+  queryClient.invalidateQueries({ queryKey: ["maintenance-tasks"] });
+  queryClient.invalidateQueries({ queryKey: ["maintenance-tasks", id] });
+  queryClient.invalidateQueries({ queryKey: ["maintenance-logs", id] });
+}
+
+export function useMaintenanceLogs(taskId?: number | string | null) {
+  return useQuery({
+    queryKey: ["maintenance-logs", taskId],
+    queryFn: async () => {
+      if (!taskId) return [];
+      const res = await getMaintenanceLogs(taskId);
+      if (!res.success) throw new Error(res.error || "Failed to fetch maintenance audit logs");
+      return res.data ?? [];
+    },
+    enabled: Boolean(taskId),
+  });
+}
+
+export function useStartMaintenanceTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, checklist }: { id: number | string; checklist: MaintenanceChecklistItem[] }) => {
+      const res = await startMaintenanceTask(id, checklist);
+      if (!res.success) throw new Error(res.error || "Failed to start maintenance");
+      return res.data;
+    },
+    onSuccess: (_, { id }) => invalidateMaintenanceTask(queryClient, id),
+  });
+}
+
+export function useCompleteMaintenanceTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, remark }: { id: number | string; remark: string }) => {
+      const res = await completeMaintenanceTask(id, remark);
+      if (!res.success) throw new Error(res.error || "Failed to complete maintenance");
+      return res.data;
+    },
+    onSuccess: (_, { id }) => invalidateMaintenanceTask(queryClient, id),
+  });
+}
+
+export function useCancelMaintenanceTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, remark }: { id: number | string; remark: string }) => {
+      const res = await cancelMaintenanceTask(id, remark);
+      if (!res.success) throw new Error(res.error || "Failed to cancel maintenance");
+      return res.data;
+    },
+    onSuccess: (_, { id }) => invalidateMaintenanceTask(queryClient, id),
   });
 }
 

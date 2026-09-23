@@ -15,6 +15,17 @@ function time(value?: string | null) {
   return value?.match(/[T ](\d{2}:\d{2})/)?.[1] ?? value?.match(/^(\d{2}:\d{2})/)?.[1] ?? "--:--";
 }
 
+function dateLabel(value?: string | null) {
+  const match = value?.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return value || "—";
+  return new Intl.DateTimeFormat("en-IN", {
+    timeZone: "UTC",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))));
+}
+
 function score(score?: number | null) {
   const percent = Math.round((score ?? 0) * 100);
   if (percent >= 75) return { percent, label: "High suitability", tone: "bg-emerald-50 text-emerald-700 border-emerald-200" };
@@ -82,6 +93,8 @@ export function AIBlockRecommendationBanner({ blockWindowId, taskId, onSlotUpdat
       <p className="mt-1 font-mono text-brand-secondary">Current: {time(data.current_slot.start_time)} – {time(data.current_slot.end_time)} · {data.current_slot.duration_minutes} min</p>
       {data.current_slot.has_conflict && data.current_slot.conflicts.length > 0 && <p className="mt-1 text-red-700">Conflicting trains: {data.current_slot.conflicts.map((train) => train.train_number).join(", ")}</p>}
     </section>
+
+    {data.rescheduled_due_to_delay && <section className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-900"><p className="font-extrabold"><AlertTriangle className="mr-1 inline h-4 w-4" />Deadline missed — recovery slot selected.</p><p className="mt-1">Missed deadline: <span className="font-semibold">{dateLabel(data.original_date)}</span></p><p className="mt-1">Recovery date: <span className="font-semibold">{dateLabel(data.date)}</span></p>{recommended && <div className="mt-2 border-t border-amber-200 pt-2"><p className="mb-1 font-bold">New proposed slot</p><SlotDetails slot={recommended} /></div>}</section>}
 
     {data.has_better_slot && recommended ? <section className="rounded-xl border border-brand-primary/25 bg-brand-blue-light/30 p-3"><p className="font-extrabold text-brand-primary"><Sparkles className="mr-1 inline h-3.5 w-3.5" />AI recommended</p><div className="mt-2"><SlotDetails slot={recommended} /></div><p className="mt-2 leading-relaxed text-brand-secondary">{recommended.recommendation_reason || data.recommendation_reason}</p><button onClick={() => openConfirm(recommended, true)} className="mt-3 rounded-lg bg-brand-primary px-3 py-2 font-bold text-white cursor-pointer">Apply recommendation</button></section> : <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 font-bold text-emerald-800">Current block window is already optimal.</section>}
 

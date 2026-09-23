@@ -29,10 +29,8 @@ import {
   getStationById,
   getStationByName,
 } from "@/data/india-railway-network";
-import {
-  MOCK_MAINTENANCE_TASKS,
-  MOCK_SECTIONS,
-} from "@/app/constant/test";
+import { useMaintenanceTasks, useRailwaySections } from "@/hooks/use-railway-queries";
+import type { MaintenanceTask } from "@/types";
 
 interface IndiaLeafletMapProps {
   sourceId: string;
@@ -211,10 +209,8 @@ export function IndiaLeafletMap({
   onSelectStation,
 }: IndiaLeafletMapProps) {
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
-
-  // Use mock data instead of backend API responses
-  const maintenanceTasks = MOCK_MAINTENANCE_TASKS;
-  const sections = MOCK_SECTIONS;
+  const { data: maintenanceTasks = [] } = useMaintenanceTasks();
+  const { data: sections = [] } = useRailwaySections();
 
   // Compute active railway route for the selected corridor
   const activeRoute = useMemo(() => {
@@ -243,14 +239,14 @@ export function IndiaLeafletMap({
     const result: Array<{
       key: string;
       sectionName: string;
-      tasks: typeof maintenanceTasks;
+      tasks: MaintenanceTask[];
       fromStation: RailwayStation;
       toStation: RailwayStation;
       coordinates: [number, number][];
       maintenanceStatus: "ACTIVE" | "SCHEDULED";
     }> = [];
 
-    const taskMap = new Map<string, typeof maintenanceTasks>();
+    const taskMap = new Map<string, MaintenanceTask[]>();
 
     maintenance.forEach((task) => {
       const name = (task.section_name || "").toLowerCase().trim();
@@ -367,7 +363,7 @@ export function IndiaLeafletMap({
       toStation: RailwayStation;
       coordinates: [number, number][];
       hasMaintenance: boolean;
-      maintenanceTasks: typeof maintenanceTasks;
+      maintenanceTasks: MaintenanceTask[];
       sectionName?: string;
       maintenanceStatus?: "ACTIVE" | "SCHEDULED";
     }> = [];

@@ -144,6 +144,12 @@ export interface BlockRecommendationResponse {
   has_better_slot: boolean;
   recommendation_reason: string;
   recommended_slot: FeasibleWindowSlot | null;
+  /** Present when the backend selected a recovery slot after a missed deadline. */
+  rescheduled_due_to_delay?: boolean;
+  /** Original missed maintenance deadline (YYYY-MM-DD). */
+  original_date?: string | null;
+  /** Recovery date selected by the recommendation engine (YYYY-MM-DD). */
+  date?: string | null;
   windows: FeasibleWindowSlot[];
   suggested_put_payload: BlockWindowPutPayload | null;
   put_url: string;

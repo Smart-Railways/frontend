@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useMemo } from "react";
 import Link from "next/link";
 import {
   Bell,
@@ -16,7 +16,6 @@ import {
   RefreshCw,
   Sparkles,
   Zap,
-  Brain,
 } from "lucide-react";
 import { useMaintenanceTasks, useBlockWindows, useAssets } from "@/hooks";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -36,8 +35,7 @@ export interface RailwayNotification {
   scheduledWindow?: string;
   currentSlot?: string | null;
   currentSlotDate?: string | null;
-  aiRecommendedSlot?: string | null;
-  status?: "SCHEDULED" | "PENDING" | "IN_PROGRESS" | "COMPLETED";
+  status?: "ACTIVE";
   durationMinutes?: number;
   scheduledDate?: string;
 }
@@ -80,9 +78,7 @@ function extractStationIds(text: string): { sourceId?: string; targetId?: string
 }
 
 export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) {
-  const [filter, setFilter] = useState<"all" | "critical" | "high">("all");
-
-  // Dynamically fetch strictly REAL pending/active maintenance tasks from backend API
+  // The home alert panel is an execution monitor: show work that is underway only.
   const { data: apiMaintenanceTasks = [], isLoading: loadingTasks, refetch, isRefetching } = useMaintenanceTasks();
   const { data: blockWindows = [], isLoading: loadingBlocks } = useBlockWindows();
   const { data: assets = [] } = useAssets();
@@ -91,10 +87,8 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
 
   const allNotifications = useMemo<RailwayNotification[]>(() => {
     return apiMaintenanceTasks
-      .filter((task) => task.task_status?.toUpperCase() === "SCHEDULED") // Only show scheduled tasks on dashboard
+      .filter((task) => task.task_status?.toUpperCase() === "ACTIVE")
       .map((task) => {
-        const isUrgent = task.urgency === "CRITICAL" || task.urgency === "HIGH";
-        const isScheduled = task.task_status === "SCHEDULED";
         const textForCorridor = `${task.section_name || ""} ${task.asset_name || ""} ${task.details || ""}`;
         const { sourceId, targetId } = extractStationIds(textForCorridor);
 
@@ -140,8 +134,6 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
         }
 
         const duration = task.estimated_duration || 90;
-        const aiSlotDisplay = `00:00 – ${String(Math.floor(duration / 60)).padStart(2, "0")}:${String(duration % 60).padStart(2, "0")} (${duration} min)`;
-
         return {
           id: `api-task-${task.id}`,
           rawTaskId: task.id,
@@ -153,32 +145,16 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
           corridorOrStation: corridorDisplay,
           stationId: targetId || (sourceId !== "ndls" ? sourceId : undefined),
           taskCode: taskCodeDisplay,
-          scheduledWindow: isScheduled ? "Approved Block Window" : "Awaiting Track Block",
+          scheduledWindow: "Maintenance in progress",
           currentSlot,
           currentSlotDate,
-          aiRecommendedSlot: aiSlotDisplay,
-          status: (task.task_status as "SCHEDULED" | "PENDING" | "IN_PROGRESS" | "COMPLETED") || "PENDING",
+          status: "ACTIVE",
           durationMinutes: duration,
           scheduledDate: task.deadline ? task.deadline.substring(0, 10) : "Scheduled",
           isRead: false,
         };
       });
   }, [apiMaintenanceTasks, blockWindows, assets]);
-
-  const filteredNotifications = allNotifications.filter((n) => {
-    if (filter === "all") return true;
-    if (filter === "critical") return n.severity === "critical";
-    if (filter === "high") return n.severity === "high";
-    return true;
-  });
-
-  const criticalCount = allNotifications.filter(
-    (n) => n.severity === "critical"
-  ).length;
-
-  const highCount = allNotifications.filter(
-    (n) => n.severity === "high"
-  ).length;
 
   const handleCardClick = (notif: RailwayNotification) => {
     const { sourceId, targetId } = extractStationIds(
@@ -207,7 +183,7 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
               </span>
             </div>
             <span className="text-[11px] text-brand-muted font-medium block">
-              Real-Time Pending Maintenance & Work Orders
+              Live Active Maintenance
             </span>
           </div>
         </div>
@@ -222,29 +198,6 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
             <RefreshCw className={`w-3.5 h-3.5 transition-transform ${isRefetching ? "animate-spin text-brand-primary" : ""}`} />
           </button>
         </div>
-      </div>
-
-      {/* Filter Tabs */}
-      <div className="p-3 border-b border-brand-border flex items-center gap-1.5 overflow-x-auto no-scrollbar bg-brand-surface/30 shrink-0">
-        {(
-          [
-            { id: "all", label: `All (${allNotifications.length})` },
-            { id: "critical", label: `Critical (${criticalCount})` },
-            { id: "high", label: `High (${highCount})` },
-          ] as const
-        ).map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setFilter(tab.id as typeof filter)}
-            className={`smooth-btn px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer active:scale-95 ${
-              filter === tab.id
-                ? "bg-brand-primary text-white shadow-xs scale-100"
-                : "text-brand-muted hover:text-brand-secondary hover:bg-brand-surface"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
       </div>
 
       {/* Notifications List */}
@@ -284,16 +237,16 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
               </div>
             ))}
           </div>
-        ) : filteredNotifications.length === 0 ? (
+        ) : allNotifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-center p-4">
             <CheckCircle2 className="w-8 h-8 text-emerald-500 mb-2 opacity-80" />
-            <span className="text-xs font-bold text-brand-secondary">No Pending Maintenance Alerts</span>
+            <span className="text-xs font-bold text-brand-secondary">No Active Maintenance</span>
             <p className="text-[11px] text-brand-muted mt-1">
-              All railway corridors are operating under clear signals with no pending work orders.
+              No maintenance work is currently in progress on the monitored corridors.
             </p>
           </div>
         ) : (
-          filteredNotifications.map((notif, idx) => {
+          allNotifications.map((notif, idx) => {
             return (
               <div
                 key={notif.id}
@@ -353,18 +306,6 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
                         {notif.durationMinutes} mins
                       </span>
                     ) : null}
-                  </div>
-
-                  {/* AI Slot Quick Action Banner */}
-                  <div className="p-2.5 rounded-lg bg-brand-blue-light/50 border border-brand-primary/30 flex items-center justify-between gap-2">
-                    <div>
-                      <span className="text-[9px] font-bold uppercase text-brand-primary flex items-center gap-1 tracking-wider">
-                        <Brain className="w-3 h-3 text-brand-primary fill-brand-primary/20" /> AI RECOMMENDED SLOT
-                      </span>
-                      <span className="font-mono text-xs font-bold text-brand-primary block mt-0.5">
-                        {notif.aiRecommendedSlot}
-                      </span>
-                    </div>
                   </div>
 
                   {/* Status & View Order */}

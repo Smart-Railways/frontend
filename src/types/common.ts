@@ -13,6 +13,11 @@ export interface PaginatedResponse<T> {
   results: T[];
 }
 
+export interface PaginationParams {
+  page?: number;
+  page_size?: number;
+}
+
 export interface ApiErrorDetail {
   detail?: string;
   error?: string;

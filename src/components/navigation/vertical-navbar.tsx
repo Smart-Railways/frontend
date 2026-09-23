@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Train,
   Building2,
+  History,
   Wrench,
   Menu,
   X,
@@ -66,6 +67,8 @@ export function VerticalNavbar({
     activeTab ||
     (pathname === "/maintenance"
       ? "maintenance"
+      : pathname === "/audit-history"
+      ? "audit-history"
       : pathname === "/assets"
       ? "assets"
       : pathname === "/trains"
@@ -98,6 +101,12 @@ export function VerticalNavbar({
       label: "Maintenance",
       icon: Wrench,
       href: "/maintenance",
+    },
+    {
+      id: "audit-history",
+      label: "Audit History",
+      icon: History,
+      href: "/audit-history",
     },
   ];
 

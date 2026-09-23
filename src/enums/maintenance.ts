@@ -38,6 +38,7 @@ export const MAINTENANCE_PRIORITY_DESCRIPTIONS: Record<MaintenancePriority, stri
 export enum MaintenanceStatus {
   PENDING = "PENDING",
   SCHEDULED = "SCHEDULED",
+  ACTIVE = "ACTIVE",
   COMPLETED = "COMPLETED",
   CANCELLED = "CANCELLED",
   DELAYED = "DELAYED",
@@ -46,6 +47,7 @@ export enum MaintenanceStatus {
 export const MAINTENANCE_STATUS_LABELS: Record<MaintenanceStatus, string> = {
   [MaintenanceStatus.PENDING]: "Block Window Needed",
   [MaintenanceStatus.SCHEDULED]: "Scheduled",
+  [MaintenanceStatus.ACTIVE]: "Active",
   [MaintenanceStatus.COMPLETED]: "Completed",
   [MaintenanceStatus.CANCELLED]: "Cancelled",
   [MaintenanceStatus.DELAYED]: "Delayed",
@@ -54,6 +56,7 @@ export const MAINTENANCE_STATUS_LABELS: Record<MaintenanceStatus, string> = {
 export const MAINTENANCE_STATUS_DESCRIPTIONS: Record<MaintenanceStatus, string> = {
   [MaintenanceStatus.PENDING]: "Maintenance task created, awaiting block window allocation",
   [MaintenanceStatus.SCHEDULED]: "Block window or maintenance plan has been allocated / approved",
+  [MaintenanceStatus.ACTIVE]: "Maintenance work is currently in progress",
   [MaintenanceStatus.COMPLETED]: "Maintenance work has finished successfully",
   [MaintenanceStatus.CANCELLED]: "Task has been dismissed or superseded",
   [MaintenanceStatus.DELAYED]: "Maintenance task execution or block window has been delayed",

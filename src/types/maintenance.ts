@@ -27,7 +27,29 @@ export interface MaintenanceTask {
   block_window?: LinkedBlockWindow | null;
   block_window_date?: string | null;
   is_delayed?: boolean;
+  checklist?: MaintenanceChecklistItem[];
+  started_at?: string | null;
+  completion_remark?: string | null;
+  completed_at?: string | null;
+  cancellation_remark?: string | null;
+  cancelled_at?: string | null;
   logged_at?: string;
+}
+
+export interface MaintenanceChecklistItem {
+  item: string;
+  completed: boolean;
+}
+
+export interface MaintenanceLog {
+  id: number;
+  task?: number;
+  task_code?: string;
+  logged_at: string;
+  event: string;
+  status: string;
+  remark?: string | null;
+  details?: { checklist?: MaintenanceChecklistItem[]; [key: string]: unknown };
 }
 
 export interface CreateMaintenanceTaskInput {

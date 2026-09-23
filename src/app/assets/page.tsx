@@ -19,6 +19,8 @@ import {
   CheckCircle2,
   XCircle,
   Filter,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -29,7 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  useAssets,
+  usePaginatedAssets,
   useRailwaySections,
   useCreateAsset,
   useUpdateAsset,
@@ -124,13 +126,18 @@ function formatDate(dateStr?: string | null): string {
 
 export default function AssetsPage() {
   const [activeNavTab, setActiveNavTab] = useState<string>("assets");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const {
-    data: assets = [],
+    data: assetsPage,
     isLoading: loadingAssets,
+    isFetching: fetchingAssets,
     isRefetching: refetchingAssets,
     refetch: refetchAssets,
-  } = useAssets();
+  } = usePaginatedAssets({ page: currentPage, page_size: pageSize });
+  const assets = assetsPage?.results ?? [];
+  const totalPages = Math.max(1, Math.ceil((assetsPage?.count ?? 0) / pageSize));
 
   const {
     data: sections = [],
@@ -253,13 +260,13 @@ export default function AssetsPage() {
 
   const stats = useMemo(() => {
     return {
-      total: assets.length,
+      total: assetsPage?.count ?? 0,
       criticalRiskCount: assets.filter((a) => a.risk_level >= 7).length,
       sntCount: assets.filter((a) => a.division === AssetDepartment.SNT).length,
       engCount: assets.filter((a) => a.division === AssetDepartment.ENGINEERING).length,
       tractionCount: assets.filter((a) => a.division === AssetDepartment.TRACTION).length,
     };
-  }, [assets]);
+  }, [assets, assetsPage?.count]);
 
   const isSaving = createAssetMutation.isPending || updateAssetMutation.isPending;
   const isDeleting = deleteAssetMutation.isPending;
@@ -631,6 +638,61 @@ export default function AssetsPage() {
                     })}
                   </tbody>
                 </table>
+              </div>
+            )}
+            {assetsPage && assetsPage.count > 0 && (
+              <div className="flex flex-col gap-3 border-t border-brand-border px-4 py-3 text-xs sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3 text-brand-muted">
+                  <span className="font-medium">
+                    Showing <strong className="text-brand-secondary">{(currentPage - 1) * pageSize + 1}</strong> to{" "}
+                    <strong className="text-brand-secondary">{Math.min(currentPage * pageSize, assetsPage.count)}</strong> of{" "}
+                    <strong className="text-brand-secondary">{assetsPage.count}</strong> assets
+                  </span>
+                  <label className="flex items-center gap-2 border-l border-brand-border pl-3">
+                    Rows:
+                    <select
+                      value={pageSize}
+                      onChange={(event) => {
+                        setPageSize(Number(event.target.value));
+                        setCurrentPage(1);
+                      }}
+                      className="rounded-lg border border-brand-border bg-brand-surface px-2.5 py-1.5 font-bold text-brand-secondary outline-none"
+                    >
+                      <option value={5}>5</option>
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                    disabled={!assetsPage.previous || fetchingAssets}
+                    className="rounded-lg border border-brand-border p-2 text-brand-secondary transition-colors hover:bg-brand-tertiary disabled:cursor-not-allowed disabled:opacity-40"
+                    aria-label="Previous page"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  {Array.from({ length: totalPages }).map((_, index) => {
+                    const page = index + 1;
+                    if (page === 1 || page === totalPages || (page >= currentPage - 1 && page <= currentPage + 1)) {
+                      return <button key={page} type="button" onClick={() => setCurrentPage(page)} className={`h-8 min-w-8 rounded-lg px-2 font-bold transition-colors ${currentPage === page ? "bg-brand-primary text-white" : "border border-brand-border text-brand-secondary hover:bg-brand-tertiary"}`}>{page}</button>;
+                    }
+                    if (page === currentPage - 2 || page === currentPage + 2) return <span key={page} className="px-0.5 text-brand-muted">…</span>;
+                    return null;
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((page) => page + 1)}
+                    disabled={!assetsPage.next || fetchingAssets}
+                    className="rounded-lg border border-brand-border p-2 text-brand-secondary transition-colors hover:bg-brand-tertiary disabled:cursor-not-allowed disabled:opacity-40"
+                    aria-label="Next page"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             )}
           </section>
