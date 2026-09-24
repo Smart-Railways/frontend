@@ -46,33 +46,13 @@ function createStationIcon(
   isOnRoute: boolean,
   maintenanceStatus?: "ACTIVE" | "SCHEDULED"
 ) {
-  // Origin Station: START badge with Royal Blue dot
+  // Origin station: green dot with station label.
   if (isSource) {
     return L.divIcon({
       className: "custom-leaflet-marker",
       html: `
         <div class="relative flex flex-col items-center -translate-x-1/2 -translate-y-1/2 select-none">
-          <div class="flex items-center justify-center px-2 py-0.5 rounded-md bg-[#2563EB] text-white text-[10px] font-extrabold tracking-wider shadow-sm">
-            START
-          </div>
-          <div class="w-3.5 h-3.5 rounded-full bg-[#2563EB] border-2 border-white shadow-md my-0.5"></div>
-          <span class="px-2 py-0.5 rounded-md bg-[#FFFDF9] border border-[#E7E2D8] text-[#171A1F] text-[10px] font-extrabold whitespace-nowrap shadow-xs">
-            ${station.name} (${station.code})
-          </span>
-        </div>
-      `,
-      iconSize: [80, 50],
-      iconAnchor: [40, 25],
-    });
-  }
-
-  // Destination Station: Royal Blue dot with station card
-  if (isTarget) {
-    return L.divIcon({
-      className: "custom-leaflet-marker",
-      html: `
-        <div class="relative flex flex-col items-center -translate-x-1/2 -translate-y-1/2 select-none">
-          <div class="w-3.5 h-3.5 rounded-full bg-[#2563EB] border-2 border-white shadow-md mb-0.5"></div>
+          <div class="w-3.5 h-3.5 rounded-full bg-[#16A34A] border-2 border-white shadow-md mb-0.5"></div>
           <span class="px-2 py-0.5 rounded-md bg-[#FFFDF9] border border-[#E7E2D8] text-[#171A1F] text-[10px] font-extrabold whitespace-nowrap shadow-xs">
             ${station.name} (${station.code})
           </span>
@@ -83,12 +63,29 @@ function createStationIcon(
     });
   }
 
-  // Maintenance station: ACTIVE = red, SCHEDULED = amber
+  // Destination station: green dot with station label.
+  if (isTarget) {
+    return L.divIcon({
+      className: "custom-leaflet-marker",
+      html: `
+        <div class="relative flex flex-col items-center -translate-x-1/2 -translate-y-1/2 select-none">
+          <div class="w-3.5 h-3.5 rounded-full bg-[#16A34A] border-2 border-white shadow-md mb-0.5"></div>
+          <span class="px-2 py-0.5 rounded-md bg-[#FFFDF9] border border-[#E7E2D8] text-[#171A1F] text-[10px] font-extrabold whitespace-nowrap shadow-xs">
+            ${station.name} (${station.code})
+          </span>
+        </div>
+      `,
+      iconSize: [80, 36],
+      iconAnchor: [40, 18],
+    });
+  }
+
+  // Maintenance station: ACTIVE = amber, SCHEDULED = blue
   if (maintenanceStatus) {
     const isActive = maintenanceStatus === "ACTIVE";
-    const color = isActive ? "#DC2626" : "#F59E0B";
-    const bg = isActive ? "#FEF2F2" : "#FFFBEB";
-    const border = isActive ? "#FCA5A5" : "#FCD34D";
+    const color = isActive ? "#F59E0B" : "#2563EB";
+    const bg = isActive ? "#FFFBEB" : "#EFF6FF";
+    const border = isActive ? "#FCD34D" : "#BFDBFE";
 
     return L.divIcon({
       className: "custom-leaflet-marker",
@@ -107,13 +104,13 @@ function createStationIcon(
     });
   }
 
-  // Intermediate Corridor Stations: Royal Blue dot with clean label
+  // Intermediate normal corridor stations: green dot with clean label.
   if (isOnRoute) {
     return L.divIcon({
       className: "custom-leaflet-marker",
       html: `
         <div class="relative flex flex-col items-center -translate-x-1/2 -translate-y-1/2 group select-none">
-          <div class="w-3 h-3 rounded-full bg-[#2563EB] border-2 border-white shadow-sm"></div>
+          <div class="w-3 h-3 rounded-full bg-[#16A34A] border-2 border-white shadow-sm"></div>
           <span class="mt-1 px-1.5 py-0.5 rounded bg-[#FFFDF9] border border-[#E7E2D8] text-[9px] font-extrabold text-[#171A1F] whitespace-nowrap shadow-xs">
             ${station.name}
           </span>
@@ -124,11 +121,11 @@ function createStationIcon(
     });
   }
 
-  // Other Stations: Subtle Blue dot
+  // Other Stations: subtle green dot.
   return L.divIcon({
     className: "custom-leaflet-marker",
     html: `
-      <div class="w-2.5 h-2.5 rounded-full bg-[#2563EB]/40 border border-white -translate-x-1/2 -translate-y-1/2 select-none"></div>
+      <div class="w-2.5 h-2.5 rounded-full bg-[#16A34A]/40 border border-white -translate-x-1/2 -translate-y-1/2 select-none"></div>
     `,
     iconSize: [10, 10],
     iconAnchor: [5, 5],
@@ -487,16 +484,16 @@ export function IndiaLeafletMap({
         className="absolute bottom-4 left-4 z-10 flex items-center gap-4 px-3 py-1.5 rounded-xl bg-brand-surface/95 backdrop-blur-md border border-brand-border shadow-sm text-[11px] font-bold text-brand-secondary pointer-events-auto"
       >
         <div className="flex items-center gap-1.5">
-          <span className="w-4 h-1 rounded bg-[#2563EB]"></span>
+          <span className="w-4 h-1 rounded bg-[#16A34A]"></span>
           <span>Normal</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-4 h-1.5 rounded bg-[#DC2626]"></span>
-          <span className="text-[#DC2626] font-extrabold">Active Maintenance</span>
+          <span className="w-4 h-1.5 rounded bg-[#2563EB]"></span>
+          <span className="text-[#2563EB] font-extrabold">Scheduled Maintenance</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="w-4 h-1.5 rounded bg-[#F59E0B]"></span>
-          <span className="text-[#F59E0B] font-extrabold">Scheduled Maintenance</span>
+          <span className="text-[#F59E0B] font-extrabold">Active Maintenance</span>
         </div>
       </div>
 
@@ -532,8 +529,8 @@ export function IndiaLeafletMap({
         {routeSegments.map((segment, idx) => {
           if (segment.hasMaintenance) {
             const isActive = segment.maintenanceStatus === "ACTIVE";
-            const mainColor = isActive ? "#DC2626" : "#F59E0B";
-            const overlayColor = isActive ? "#FCA5A5" : "#FCD34D";
+            const mainColor = isActive ? "#F59E0B" : "#2563EB";
+            const overlayColor = isActive ? "#FCD34D" : "#93C5FD";
             const label = isActive
               ? "ACTIVE MAINTENANCE"
               : "SCHEDULED MAINTENANCE";
@@ -584,8 +581,8 @@ export function IndiaLeafletMap({
                           key={task.id}
                           className="p-2 rounded-lg text-xs space-y-1"
                           style={{
-                            backgroundColor: isActive ? "#FEF2F2" : "#FFFBEB",
-                            border: `1px solid ${isActive ? "#FECACA" : "#FDE68A"}`,
+                            backgroundColor: isActive ? "#FFFBEB" : "#EFF6FF",
+                            border: `1px solid ${isActive ? "#FDE68A" : "#BFDBFE"}`,
                           }}
                         >
                           <div className="flex items-center justify-between">
@@ -595,8 +592,8 @@ export function IndiaLeafletMap({
                             <span
                               className="px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase"
                               style={{
-                                backgroundColor: isActive ? "#FECACA" : "#FDE68A",
-                                color: isActive ? "#991B1B" : "#92400E",
+                                backgroundColor: isActive ? "#FDE68A" : "#BFDBFE",
+                                color: isActive ? "#92400E" : "#1D4ED8",
                               }}
                             >
                               {task.task_status}
@@ -617,13 +614,13 @@ export function IndiaLeafletMap({
             );
           }
 
-          // Normal route remains blue.
+          // Normal route is green.
           return (
             <React.Fragment key={`seg-normal-${idx}`}>
               <Polyline
                 positions={segment.coordinates}
                 pathOptions={{
-                  color: "#2563EB",
+                  color: "#16A34A",
                   weight: 4,
                   opacity: 0.95,
                   lineCap: "round",
@@ -633,7 +630,7 @@ export function IndiaLeafletMap({
               <Polyline
                 positions={segment.coordinates}
                 pathOptions={{
-                  color: "#DBEAFE",
+                  color: "#BBF7D0",
                   weight: 2,
                   opacity: 0.9,
                   dashArray: "5, 10",
@@ -656,8 +653,8 @@ export function IndiaLeafletMap({
           )
           .map((sec) => {
             const isActive = sec.maintenanceStatus === "ACTIVE";
-            const mainColor = isActive ? "#DC2626" : "#F59E0B";
-            const overlayColor = isActive ? "#FCA5A5" : "#FCD34D";
+            const mainColor = isActive ? "#F59E0B" : "#2563EB";
+            const overlayColor = isActive ? "#FCD34D" : "#93C5FD";
             const label = isActive ? "ACTIVE MAINTENANCE" : "SCHEDULED MAINTENANCE";
 
             return (
@@ -700,8 +697,8 @@ export function IndiaLeafletMap({
                           key={task.id}
                           className="p-2 rounded-lg text-xs space-y-1"
                           style={{
-                            backgroundColor: isActive ? "#FEF2F2" : "#FFFBEB",
-                            border: `1px solid ${isActive ? "#FECACA" : "#FDE68A"}`,
+                            backgroundColor: isActive ? "#FFFBEB" : "#EFF6FF",
+                            border: `1px solid ${isActive ? "#FDE68A" : "#BFDBFE"}`,
                           }}
                         >
                           <div className="flex items-center justify-between">
@@ -709,8 +706,8 @@ export function IndiaLeafletMap({
                             <span
                               className="px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase"
                               style={{
-                                backgroundColor: isActive ? "#FECACA" : "#FDE68A",
-                                color: isActive ? "#991B1B" : "#92400E",
+                                backgroundColor: isActive ? "#FDE68A" : "#BFDBFE",
+                                color: isActive ? "#92400E" : "#1D4ED8",
                               }}
                             >
                               {task.task_status}
@@ -787,14 +784,14 @@ export function IndiaLeafletMap({
                     <div
                       className="mt-1 p-1 rounded text-[10px] font-bold border flex items-center gap-1"
                       style={{
-                        backgroundColor: maintenanceStatus === "ACTIVE" ? "#FEF2F2" : "#FFFBEB",
-                        color: maintenanceStatus === "ACTIVE" ? "#991B1B" : "#92400E",
-                        borderColor: maintenanceStatus === "ACTIVE" ? "#FECACA" : "#FDE68A",
+                        backgroundColor: maintenanceStatus === "ACTIVE" ? "#FFFBEB" : "#EFF6FF",
+                        color: maintenanceStatus === "ACTIVE" ? "#92400E" : "#1D4ED8",
+                        borderColor: maintenanceStatus === "ACTIVE" ? "#FDE68A" : "#BFDBFE",
                       }}
                     >
                       <AlertTriangle
                         className="w-3 h-3"
-                        style={{ color: maintenanceStatus === "ACTIVE" ? "#DC2626" : "#F59E0B" }}
+                        style={{ color: maintenanceStatus === "ACTIVE" ? "#F59E0B" : "#2563EB" }}
                       />
                       <span>
                         {maintenanceStatus === "ACTIVE"

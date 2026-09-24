@@ -15,8 +15,11 @@ export interface TrainTypeTheme {
 export function getTrainTypeTheme(trainType?: string, trainName?: string): TrainTypeTheme {
   const t = (trainType || "").toUpperCase();
   const n = (trainName || "").toUpperCase();
+  // Live feeds occasionally abbreviate or misspell Rajdhani (for example,
+  // "RAJDHNI" or "RJDHNI"). Keep its visual identity consistent.
+  const isRajdhani = /\bR(?:A)?J(?:D)?H(?:A)?N(?:I)?\b/.test(n);
 
-  if (t.includes(TrainType.RAJDHANI) || n.includes(TrainType.RAJDHANI)) {
+  if (t.includes(TrainType.RAJDHANI) || n.includes(TrainType.RAJDHANI) || isRajdhani) {
     return {
       typeKey: TrainType.RAJDHANI,
       displayName: `${TRAIN_TYPE_LABELS[TrainType.RAJDHANI]} Express`,
@@ -53,13 +56,13 @@ export function getTrainTypeTheme(trainType?: string, trainName?: string): Train
     return {
       typeKey: "TEJAS",
       displayName: "Tejas Express",
-      badge: "bg-sky-50 text-sky-700 border-sky-200 font-bold",
-      accentBg: "bg-sky-600",
-      textColor: "text-sky-700",
-      lineColor: "bg-sky-600",
-      borderColor: "border-r-4 border-r-sky-600",
-      lightBg: "bg-sky-50/50",
-      iconColor: "text-sky-600",
+      badge: "bg-yellow-50 text-yellow-800 border-yellow-200 font-bold",
+      accentBg: "bg-yellow-400",
+      textColor: "text-yellow-800",
+      lineColor: "bg-yellow-500",
+      borderColor: "border-r-4 border-r-yellow-500",
+      lightBg: "bg-yellow-50/50",
+      iconColor: "text-yellow-600",
     };
   }
 

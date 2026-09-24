@@ -34,7 +34,7 @@ export interface RailwayCorridorPreset {
   backendSectionId?: number;
 }
 
-// Strictly the 11 designated Corridor Cities
+// Stations available across the configured operational corridors.
 export const STATIONS: RailwayStation[] = [
   { id: "ndls", code: "NDLS", name: "NEW DELHI", city: "New Delhi", state: "Delhi", zone: "NR", lat: 28.6143, lng: 77.2197, platforms: 16, isHub: true, isCapital: true },
   { id: "mtj", code: "MTJ", name: "MATHURA", city: "Mathura", state: "Uttar Pradesh", zone: "NCR", lat: 27.4924, lng: 77.6737, platforms: 8, isHub: true },
@@ -47,9 +47,16 @@ export const STATIONS: RailwayStation[] = [
   { id: "brc", code: "BRC", name: "VADODARA", city: "Vadodara", state: "Gujarat", zone: "WR", lat: 22.3072, lng: 73.1812, platforms: 7, isHub: true },
   { id: "st", code: "ST", name: "SURAT", city: "Surat", state: "Gujarat", zone: "WR", lat: 21.1702, lng: 72.8311, platforms: 6, isHub: true },
   { id: "mmct", code: "MMCT", name: "MUMBAI", city: "Mumbai", state: "Maharashtra", zone: "WR", lat: 18.9696, lng: 72.8193, platforms: 18, isHub: true },
+  { id: "cnb", code: "CNB", name: "KANPUR CENTRAL", city: "Kanpur Central", state: "Uttar Pradesh", zone: "NCR", lat: 26.4499, lng: 80.3319, platforms: 10, isHub: true },
+  { id: "pryj", code: "PRYJ", name: "PRAYAGRAJ", city: "Prayagraj", state: "Uttar Pradesh", zone: "NCR", lat: 25.4358, lng: 81.8463, platforms: 10, isHub: true },
+  { id: "ddu", code: "DDU", name: "PT. DEEN DAYAL UPADHYAYA", city: "Pt. Deen Dayal Upadhyaya", state: "Uttar Pradesh", zone: "ECR", lat: 25.2819, lng: 83.1197, platforms: 8, isHub: true },
+  { id: "gaya", code: "GAYA", name: "GAYA", city: "Gaya", state: "Bihar", zone: "ECR", lat: 24.7955, lng: 84.9994, platforms: 9, isHub: true },
+  { id: "dhn", code: "DHN", name: "DHANBAD", city: "Dhanbad", state: "Jharkhand", zone: "ECR", lat: 23.7957, lng: 86.4304, platforms: 8, isHub: true },
+  { id: "asn", code: "ASN", name: "ASANSOL", city: "Asansol", state: "West Bengal", zone: "ER", lat: 23.6739, lng: 86.9524, platforms: 7, isHub: true },
+  { id: "hwh", code: "HWH", name: "HOWRAH", city: "Howrah", state: "West Bengal", zone: "ER", lat: 22.5958, lng: 88.2636, platforms: 23, isHub: true },
 ];
 
-// Linear & Connected Railway Tracks between the 11 Cities
+// Linear and connected railway tracks across the configured corridors.
 export const TRACKS: RailwayTrack[] = [
   { id: "t-ndls-mtj", from: "ndls", to: "mtj", distanceKm: 140, electrified: true, tracks: "Quadruple", maxSpeedKmph: 160 },
   { id: "t-mtj-agc", from: "mtj", to: "agc", distanceKm: 54, electrified: true, tracks: "Triple", maxSpeedKmph: 160 },
@@ -62,9 +69,16 @@ export const TRACKS: RailwayTrack[] = [
   { id: "t-rtm-brc", from: "rtm", to: "brc", distanceKm: 260, electrified: true, tracks: "Double", maxSpeedKmph: 130 },
   { id: "t-brc-st", from: "brc", to: "st", distanceKm: 129, electrified: true, tracks: "Quadruple", maxSpeedKmph: 130 },
   { id: "t-st-mmct", from: "st", to: "mmct", distanceKm: 259, electrified: true, tracks: "Quadruple", maxSpeedKmph: 130 },
+  { id: "t-ndls-cnb", from: "ndls", to: "cnb", distanceKm: 440, electrified: true, tracks: "Double", maxSpeedKmph: 130 },
+  { id: "t-cnb-pryj", from: "cnb", to: "pryj", distanceKm: 194, electrified: true, tracks: "Double", maxSpeedKmph: 130 },
+  { id: "t-pryj-ddu", from: "pryj", to: "ddu", distanceKm: 152, electrified: true, tracks: "Double", maxSpeedKmph: 130 },
+  { id: "t-ddu-gaya", from: "ddu", to: "gaya", distanceKm: 203, electrified: true, tracks: "Double", maxSpeedKmph: 110 },
+  { id: "t-gaya-dhn", from: "gaya", to: "dhn", distanceKm: 203, electrified: true, tracks: "Double", maxSpeedKmph: 110 },
+  { id: "t-dhn-asn", from: "dhn", to: "asn", distanceKm: 58, electrified: true, tracks: "Double", maxSpeedKmph: 110 },
+  { id: "t-asn-hwh", from: "asn", to: "hwh", distanceKm: 200, electrified: true, tracks: "Double", maxSpeedKmph: 130 },
 ];
 
-// Available Corridors formed by the 11 cities
+// Available corridors formed by the configured stations
 export const AVAILABLE_CORRIDORS: RailwayCorridorPreset[] = [
   {
     id: "corr-ndls-mmct",
@@ -193,6 +207,16 @@ export const AVAILABLE_CORRIDORS: RailwayCorridorPreset[] = [
     zone: "WCR / WR",
     tag: "Central-Western Route",
   },
+  {
+    id: "corr-ndls-hwh",
+    name: "New Delhi — Howrah Complete Corridor",
+    sourceId: "ndls",
+    targetId: "hwh",
+    distanceKm: 1450,
+    zone: "NCR / ECR / ER",
+    tag: "Eastern Trunk Corridor",
+    isBackendSection: true,
+  },
 ];
 
 export function getStationById(id: string): RailwayStation | undefined {
@@ -216,7 +240,7 @@ export function getStationByName(name: string): RailwayStation | undefined {
   );
 }
 
-// Graph-based shortest path route resolver across the 11 cities
+// Graph-based shortest path route resolver across the configured corridors.
 export function findRailwayRoute(sourceId: string, targetId: string): {
   stationIds: string[];
   totalDistanceKm: number;
