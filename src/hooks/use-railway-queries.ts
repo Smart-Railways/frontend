@@ -66,6 +66,10 @@ export const TIMETABLE_STALE_TIME = 30 * 60 * 1000;
 // 60 minutes garbage collection time retention
 export const TIMETABLE_GC_TIME = 60 * 60 * 1000;
 export const LIVE_MOVEMENTS_STALE_TIME = 60 * 60 * 1000;
+// Lifecycle mutations invalidate these keys, so five minutes keeps the audit UI
+// responsive without serving stale data after a real maintenance action.
+export const MAINTENANCE_AUDIT_STALE_TIME = 5 * 60 * 1000;
+export const MAINTENANCE_AUDIT_GC_TIME = 30 * 60 * 1000;
 
 function logAiRecommendationApi(
   endpoint: string,
@@ -204,9 +208,13 @@ export function useMaintenanceTasks() {
       if (!res.success) throw new Error(res.error || "Failed to fetch maintenance tasks");
       return res.data ?? [];
     },
-    // Mutations explicitly invalidate this query. Avoid a duplicate request when
-    // focus returns to the table after a dialog closes.
+    // Mutations explicitly invalidate this query. The explicit Refresh action
+    // handles manual updates, preventing calls on mount, focus, and reconnect.
+    staleTime: MAINTENANCE_AUDIT_STALE_TIME,
+    gcTime: MAINTENANCE_AUDIT_GC_TIME,
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 }
 
@@ -470,6 +478,11 @@ export function useMaintenanceLogs(taskId?: number | string | null) {
       return res.data ?? [];
     },
     enabled: Boolean(taskId),
+    staleTime: MAINTENANCE_AUDIT_STALE_TIME,
+    gcTime: MAINTENANCE_AUDIT_GC_TIME,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 }
 
