@@ -277,8 +277,9 @@ export function useApplyCombinedBlockRecommendation() {
       if (!res.data?.batch_id) throw new Error("The combined block was created without a batch ID");
       return res.data;
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["maintenance-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["maintenance-tasks", variables.task_id] });
       queryClient.invalidateQueries({ queryKey: ["blocks"] });
       queryClient.invalidateQueries({ queryKey: ["maintenance-batches", data.batch_id] });
     },

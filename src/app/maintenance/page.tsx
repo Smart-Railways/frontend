@@ -2357,6 +2357,12 @@ export default function MaintenancePage() {
                       const sharedBlockId =
                         task.shared_block_window_id ??
                         sharedBlockIdByTaskCode[task.task_code];
+                      const canCombineBlocks = Boolean(
+                        matchingBw &&
+                          ["RESERVED", "BLOCKED"].includes(
+                            String(matchingBw.status).toUpperCase(),
+                          ),
+                      );
 
                       return (
                         <React.Fragment key={task.id}>
@@ -2496,6 +2502,15 @@ export default function MaintenancePage() {
                                   >
                                     <Plus className="w-3 h-3" />
                                     <span>Add Block Window</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled
+                                    title="Schedule a block window before combining maintenance."
+                                    className="inline-flex items-center gap-1 rounded-lg border border-brand-border bg-brand-surface px-2.5 py-1 text-[11px] font-bold text-brand-muted opacity-70 cursor-not-allowed"
+                                  >
+                                    <Sparkles className="w-3 h-3" />
+                                    <span>Combine blocks</span>
                                   </button>
                                 </div>
                               )}
@@ -2762,8 +2777,10 @@ export default function MaintenancePage() {
                                                 )
                                               }
                                               disabled={
-                                                combinedRecommendationMutation.isPending
+                                                combinedRecommendationMutation.isPending ||
+                                                !canCombineBlocks
                                               }
+                                              title={canCombineBlocks ? "Find compatible scheduled block windows" : "Schedule a block window before combining maintenance."}
                                               className="flex items-center gap-2 rounded-xl border border-brand-primary bg-brand-primary px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
                                             >
                                               {combinedRecommendationMutation.isPending ? (
@@ -2774,7 +2791,7 @@ export default function MaintenancePage() {
                                               <span>
                                                 {combinedRecommendationMutation.isPending
                                                   ? "Finding shared slot…"
-                                                  : "Find Shared Slot"}
+                                                  : "Combine blocks"}
                                               </span>
                                             </button>
                                             <button
@@ -3227,7 +3244,7 @@ export default function MaintenancePage() {
                   Combined block recommendation
                 </h2>
                 <p className="mt-1 text-xs text-brand-muted">
-                  Eligible tasks in this corridor, due within {nearbyDays} day{nearbyDays === 1 ? "" : "s"}, are shown below.
+                  Nearby matching is based on scheduled block windows around the selected task, not task deadlines.
                 </p>
               </div>
               <button
@@ -3237,6 +3254,10 @@ export default function MaintenancePage() {
               >
                 ✕
               </button>
+            </div>
+            <div className="mt-4 grid gap-3 rounded-xl border border-brand-border bg-brand-tertiary p-3 text-xs sm:grid-cols-2">
+              <div><p className="font-bold text-brand-muted">Corridor / section</p><p className="mt-1 font-semibold text-brand-secondary">{combinedRecommendation.section.name}</p></div>
+              <div><p className="font-bold text-brand-muted">Anchor block window</p><p className="mt-1 font-semibold text-brand-secondary">{(() => { const anchor = tasks.find((task) => task.task_code === combinedRecommendationTaskId); return anchor?.block_window ? `${formatIstDateTime(anchor.block_window.start_time)} – ${formatIstDateTime(anchor.block_window.end_time)} IST` : "No scheduled block window"; })()}</p></div>
             </div>
             {hasSharedRecommendation(combinedRecommendation) ? (
               <>
@@ -3253,6 +3274,7 @@ export default function MaintenancePage() {
                     {formatIstDateTime(suggestedWindow.start_time)} –{" "}
                     {formatIstDateTime(suggestedWindow.end_time)} IST
                   </p>
+                  {combinedRecommendation.combined_duration_minutes && <p className="mt-2 text-xs text-gray-300">Combined work: {combinedRecommendation.combined_duration_minutes} minutes{combinedRecommendation.setup_buffer_minutes ? ` (includes ${combinedRecommendation.setup_buffer_minutes}-minute setup buffer)` : ""}</p>}
                 </div>
                   ) : null;
                 })()}
@@ -3280,9 +3302,9 @@ export default function MaintenancePage() {
               </>
             ) : (
               <div className="mt-4 rounded-xl border border-brand-border bg-brand-tertiary p-4 text-sm text-brand-secondary">
-                <h3 className="font-extrabold">No compatible maintenance tasks nearby</h3>
+                <h3 className="font-extrabold">{combinedRecommendation.reason_code === "NO_SCHEDULED_BLOCK_WINDOW" ? "Schedule a block window first" : "No compatible maintenance tasks nearby"}</h3>
                 <p className="mt-2 text-brand-muted">{combinedRecommendation.message || "No compatible nearby maintenance tasks were found."}</p>
-                <p className="mt-2 text-brand-muted">A shared block requires at least {combinedRecommendation.minimum_task_count ?? 2} eligible tasks on different assets in the same corridor section.</p>
+                <p className="mt-2 text-brand-muted">{combinedRecommendation.reason_code === "NO_SCHEDULED_BLOCK_WINDOW" ? "Schedule the anchor task’s block window before combining maintenance." : "No other scheduled asset block was found on this corridor within the selected range."}</p>
               </div>
             )}
             <div className="mt-6 flex justify-end gap-2 border-t border-brand-border pt-4">

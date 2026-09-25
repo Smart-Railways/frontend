@@ -81,11 +81,13 @@ export interface CombinedRecommendationTask {
 
 export interface CombinedBlockRecommendationResponse {
   combined_eligible: boolean;
-  reason_code?: "NO_NEARBY_COMPATIBLE_TASKS";
+  reason_code?: "NO_SCHEDULED_BLOCK_WINDOW" | "NO_NEARBY_COMPATIBLE_TASKS";
   message?: string;
   section: { id: number; name: string };
   minimum_task_count?: number;
   task_count: number;
+  combined_duration_minutes?: number;
+  setup_buffer_minutes?: number;
   tasks: CombinedRecommendationTask[];
   applied: boolean;
   batch_id: number | null;
