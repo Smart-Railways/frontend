@@ -76,13 +76,7 @@ export default function AuditHistoryPage() {
         <div className="mx-auto max-w-7xl">
           <header className="mb-8 flex flex-col gap-5 border-b border-brand-border pb-7 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <div className="mb-3 flex items-center gap-2 text-brand-primary">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-blue-light">
-                  <ClipboardList className="h-4 w-4" />
-                </span>
-                <span className="text-[11px] font-extrabold uppercase tracking-[0.18em]">Operations / Maintenance</span>
-              </div>
-              <h1 className="text-3xl font-black tracking-[-0.035em] text-brand-secondary sm:text-4xl">Audit history</h1>
+              <p className="text-xl font-bold font-black tracking-[-0.035em] text-brand-secondary sm:text-2xl">Audit history</p>
               <p className="mt-2 max-w-xl text-sm leading-6 text-brand-muted">A complete, time-stamped record of activity and evidence for every maintenance task.</p>
             </div>
             <LiveClock className="hidden sm:flex" />
@@ -98,7 +92,7 @@ export default function AuditHistoryPage() {
                 <p className="mt-0.5 text-xs text-brand-muted">Choose a maintenance task to view its event trail.</p>
               </div>
             </div>
-            <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-end sm:p-6">
+            <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-start sm:p-6">
               <div className="w-full sm:max-w-2xl">
                 <label htmlFor="audit-task" className="mb-2 block text-xs font-bold uppercase tracking-[0.08em] text-brand-muted">Maintenance task</label>
                 <Select value={selectedTaskId} onValueChange={(value) => setSelectedTaskId(value ?? "")} disabled={tasksQuery.isLoading || tasksQuery.isError}>
@@ -124,7 +118,7 @@ export default function AuditHistoryPage() {
                   if (selectedTaskId) logsQuery.refetch();
                 }}
                 disabled={tasksQuery.isFetching || logsQuery.isFetching}
-                className="h-11 border-brand-border bg-white px-4 text-brand-secondary shadow-sm"
+                className="h-11 shrink-0 border-brand-border bg-white px-4 text-brand-secondary shadow-sm sm:mt-[26px]"
               >
                 <RefreshCw className={`h-4 w-4 ${tasksQuery.isFetching || logsQuery.isFetching ? "animate-spin" : ""}`} />
                 Refresh

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useRef, useEffect } from "react";
+import Image from "next/image";
 import { VerticalNavbar } from "@/components/navigation/vertical-navbar";
 import { LiveClock } from "@/components/ui/live-clock";
 import {
@@ -27,7 +28,6 @@ import {
   Cpu,
   Info,
   MapPin,
-  Bot,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -45,6 +45,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { MaintenancePageSkeleton, MaintenanceTasksTableSkeleton } from "./skeletons";
 import { checkBlockConflict } from "@/actions/blocks";
 import {
@@ -132,7 +140,7 @@ const STATUS_CONFIG: Record<
   },
   [MaintenanceStatus.ACTIVE]: {
     label: MAINTENANCE_STATUS_LABELS[MaintenanceStatus.ACTIVE],
-    badge: "bg-violet-600 border-violet-700 text-white",
+    badge: "bg-amber-600 border-amber-600 text-white",
     icon: Wrench,
   },
   [MaintenanceStatus.COMPLETED]: {
@@ -147,7 +155,7 @@ const STATUS_CONFIG: Record<
   },
   [MaintenanceStatus.DELAYED]: {
     label: MAINTENANCE_STATUS_LABELS[MaintenanceStatus.DELAYED],
-    badge: "bg-rose-600 border-rose-700 text-white",
+    badge: "bg-red-700 border-rose-700 text-white",
     icon: Timer,
   },
 };
@@ -1727,15 +1735,67 @@ export default function MaintenancePage() {
                 <table className="w-full text-center text-xs">
                   <thead className="bg-brand-surface text-brand-muted font-semibold border-b border-brand-border text-[10px] lg:text-[12px]">
                     <tr>
-                      <th className="py-3 px-4 text-left font-semibold">Task Code</th>
+                      <th className="py-3 px-4 text-center font-semibold">
+                        <div className="flex items-center justify-center gap-1">
+                          <span>Criticality</span>
+                          <Popover>
+                            <PopoverTrigger
+                              aria-label="About Criticality"
+                              className="inline-flex h-4 w-4 items-center justify-center rounded-full text-brand-muted transition-colors hover:text-brand-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
+                            >
+                              <Info className="h-3.5 w-3.5" />
+                            </PopoverTrigger>
+                            <PopoverContent
+                              align="center"
+                              className="w-72 border border-brand-border bg-brand-surface p-3 text-left shadow-xl opacity-100"
+                            >
+                              <PopoverHeader>
+                                <PopoverTitle className="text-xs font-bold text-brand-secondary">
+                                  Criticality
+                                </PopoverTitle>
+                                <PopoverDescription className="text-[11px] leading-relaxed text-brand-muted">
+                                  This label shows the task's risk/severity level selected when the maintenance task is created or edited. It is not calculated from the table data.
+                                </PopoverDescription>
+                              </PopoverHeader>
+                              <p className="text-[11px] leading-relaxed text-brand-muted">
+                                Labels are based on the selected rating: Critical (8–10), High (6–7), Moderate (4–5), and Low (1–3).
+                              </p>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      </th>
+                      <th className="py-3 px-4 text-center font-semibold">Task Code</th>
                       <th className="py-3 px-4 text-center font-semibold">Target Asset</th>
                       <th className="py-3 px-4 text-center font-semibold">Corridor</th>
                       <th className="py-3 px-4 text-center font-semibold">
-                        <div className="flex items-center justify-center translate-x-[18px]">
+                        <div className="flex items-center justify-center gap-1">
                           <span>Block Window</span>
+                          <Popover>
+                            <PopoverTrigger
+                              aria-label="About Block Window"
+                              className="inline-flex h-4 w-4 items-center justify-center rounded-full text-brand-muted transition-colors hover:text-brand-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
+                            >
+                              <Info className="h-3.5 w-3.5" />
+                            </PopoverTrigger>
+                            <PopoverContent
+                              align="center"
+                              className="w-72 border border-brand-border bg-brand-surface p-3 text-left shadow-xl opacity-100"
+                            >
+                              <PopoverHeader>
+                                <PopoverTitle className="text-xs font-bold text-brand-secondary">
+                                  Block Window
+                                </PopoverTitle>
+                                <PopoverDescription className="text-[11px] leading-relaxed text-brand-muted">
+                                  This shows the reserved corridor time and date for the maintenance task. No train movement is scheduled during this period.
+                                </PopoverDescription>
+                              </PopoverHeader>
+                              <p className="text-[11px] leading-relaxed text-brand-muted">
+                                Select the AI logo beside the time to view an AI-recommended alternative slot when one is available.
+                              </p>
+                            </PopoverContent>
+                          </Popover>
                         </div>
                       </th>
-                      <th className="py-3 px-4 text-center font-semibold">Criticality Score</th>
                       <th className="py-3 px-4 text-center font-semibold">Status</th>
                       <th className="py-3 px-4 text-right font-semibold">Actions</th>
                     </tr>
@@ -1777,7 +1837,32 @@ export default function MaintenancePage() {
                       return (
                         <React.Fragment key={task.id}>
                           <tr className="hover:bg-brand-tertiary/60 transition-colors group">
-                            <td className="py-3.5 px-4 text-left font-semibold text-brand-primary text-xs lg:text-sm">
+                              {/* Criticality Score / Index */}
+                            <td className="py-3.5 px-4 text-center">
+                              <div className="inline-flex items-center justify-center">
+                                {(() => {
+                                  const score = task.risk_rating ?? 5;
+
+                                  const riskStyle =
+                                    score >= 8
+                                      ? { label: "Critical", className: "text-red-700" }
+                                      : score >= 6
+                                        ? { label: "High", className: "text-orange-700" }
+                                        : score >= 4
+                                          ? { label: "Moderate", className: "text-amber-700" }
+                                          : { label: "Low", className: "text-emerald-700" };
+
+                                  return (
+                                    <span
+                                      className={`text-[11px] font-extrabold ${riskStyle.className}`}
+                                    >
+                                      {riskStyle.label}
+                                    </span>
+                                  );
+                                })()}
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4 text-center font-semibold text-brand-primary text-xs lg:text-sm">
                               {task.task_code}
                             </td>
                             <td className="py-3.5 px-4 text-center">
@@ -1810,29 +1895,6 @@ export default function MaintenancePage() {
 
                                   return (
                                     <div className="inline-flex items-center justify-center gap-2.5 min-w-[170px]">
-                                      {/* AI Bot */}
-                                      <div className="w-9 flex-shrink-0 flex items-center justify-center">
-                                        {showAiBot && (
-                                          <button
-                                            type="button"
-                                            onClick={() => handleToggleAiRecommendation(task)}
-                                            className={`w-9 h-9 flex items-center justify-center rounded-lg border shadow-xs transition-all cursor-pointer ${expandedAiTaskId === task.id
-                                              ? "bg-brand-primary text-white border-brand-primary shadow-sm"
-                                              : "bg-brand-blue-light/50 hover:bg-brand-blue-light border-brand-primary/30 text-brand-primary"
-                                              }`}
-                                            title="AI Recommended Slot"
-                                            aria-label="AI Recommended Slot"
-                                          >
-                                            <Bot
-                                              className={`w-4 h-4 ${expandedAiTaskId === task.id
-                                                ? "text-white"
-                                                : "text-brand-primary"
-                                                }`}
-                                            />
-                                          </button>
-                                        )}
-                                      </div>
-
                                       {/* Timing + Date */}
                                       <div className="w-[105px] flex-shrink-0 flex flex-col items-center justify-center gap-0.5">
                                         <span className="font-mono text-xs text-brand-secondary font-bold whitespace-nowrap">
@@ -1841,6 +1903,33 @@ export default function MaintenancePage() {
                                         <span className="text-[10px] text-brand-muted font-medium whitespace-nowrap">
                                           {slotInfo.date}
                                         </span>
+                                      </div>
+
+                                      {/* AI Bot */}
+                                      <div className="w-9 flex-shrink-0 flex items-center justify-center">
+                                        {showAiBot && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleToggleAiRecommendation(task)}
+                                            className={`w-9 h-9 flex items-center justify-center rounded-lg border shadow-xs transition-all cursor-pointer ${expandedAiTaskId === task.id
+                                              ? "bg-gray-900 text-white border-gray-900 shadow-sm"
+                                              : "bg-gray-100 hover:bg-gray-200 border-gray-300 text-gray-900"
+                                              }`}
+                                            title="AI Recommended Slot"
+                                            aria-label="AI Recommended Slot"
+                                          >
+                                            <Image
+                                              src="/ai.svg"
+                                              alt="AI recommendation"
+                                              width={24}
+                                              height={24}
+                                              className={`h-16 w-16 object-contain ${expandedAiTaskId === task.id
+                                                ? "brightness-0 invert"
+                                                : ""
+                                                }`}
+                                            />
+                                          </button>
+                                        )}
                                       </div>
                                     </div>
                                   );
@@ -1861,35 +1950,7 @@ export default function MaintenancePage() {
                             </td>
 
 
-
-                            {/* Criticality Score / Index */}
-                            <td className="py-3.5 px-4 text-center">
-                              <div className="inline-flex items-center justify-center">
-                                {(() => {
-                                  const score = task.risk_rating ?? 5;
-
-                                  const riskColor =
-                                    score >= 8
-                                      ? "bg-red-600"
-                                      : score >= 6
-                                        ? "bg-orange-500"
-                                        : score >= 4
-                                          ? "bg-amber-500"
-                                          : "bg-emerald-500";
-
-                                  return (
-                                    <span
-                                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-bold text-white ${riskColor}`}
-                                    >
-                                      <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                                      <span>{score}/10</span>
-                                    </span>
-                                  );
-                                })()}
-                              </div>
-                            </td>
-
-                            {/* Status */}
+                           {/* Status */}
                             <td className="py-3.5 px-4 text-center">
                               <div className="flex items-center justify-center">
                                 <span
@@ -1919,27 +1980,17 @@ export default function MaintenancePage() {
                                     sideOffset={6}
                                     className="w-56 bg-brand-surface border-brand-border text-brand-secondary shadow-xl rounded-xl p-1.5 z-50"
                                   >
-                                    {/* View Details - always available */}
-                                    <DropdownMenuItem
-                                      onClick={() => setInspectingTask(task)}
-                                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary cursor-pointer focus:bg-brand-tertiary focus:text-brand-secondary"
-                                    >
-                                      <Eye className="w-4 h-4 text-black" />
-                                      <span>View Details</span>
-                                    </DropdownMenuItem>
-
-                                    {/* Start Maintenance */}
-                                    {effectiveStatKey === MaintenanceStatus.SCHEDULED && (
+                                     {effectiveStatKey === MaintenanceStatus.SCHEDULED && (
                                       <DropdownMenuItem
                                         onClick={() => openLifecycleModal(task, "start")}
-                                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-violet-50 text-sm font-semibold text-violet-700 cursor-pointer focus:bg-violet-50 focus:text-violet-700"
+                                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-amber-50 text-sm font-semibold text-amber-700 cursor-pointer focus:bg-amber-50 focus:text-amber-700"
                                       >
-                                        <Wrench className="w-4 h-4 text-violet-600" />
+                                        <Wrench className="w-4 h-4 text-amber-700" />
                                         <span>Start Maintenance</span>
                                       </DropdownMenuItem>
                                     )}
 
-                                    {/* Complete Task */}
+                                      {/* Complete Task */}
                                     {(effectiveStatKey === MaintenanceStatus.ACTIVE ||
                                       (effectiveStatKey === MaintenanceStatus.DELAYED && Boolean(task.started_at))) && (
                                         <DropdownMenuItem
@@ -1956,12 +2007,22 @@ export default function MaintenancePage() {
                                       effectiveStatKey !== MaintenanceStatus.CANCELLED && (
                                         <DropdownMenuItem
                                           onClick={() => openLifecycleModal(task, "cancel")}
-                                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-100 text-sm font-semibold text-slate-700 cursor-pointer focus:bg-slate-100 focus:text-slate-700"
+                                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-red-700 cursor-pointer"
                                         >
-                                          <XCircle className="w-4 h-4 text-slate-600" />
+                                          <XCircle className="w-4 h-4 text-red-700" />
                                           <span>Cancel Task</span>
                                         </DropdownMenuItem>
                                       )}
+
+                                    {/* View Details - always available */}
+                                    <DropdownMenuItem
+                                      onClick={() => setInspectingTask(task)}
+                                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary cursor-pointer focus:bg-brand-tertiary focus:text-brand-secondary"
+                                    >
+                                      <Eye className="w-4 h-4 text-black" />
+                                      <span>View Details</span>
+                                    </DropdownMenuItem>
+                                   
 
                                     {/* Edit Task + Block Window */}
                                     {!isActiveMaintenance &&
@@ -1972,7 +2033,7 @@ export default function MaintenancePage() {
                                             onClick={() => handleOpenEditModal(task)}
                                             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary cursor-pointer focus:bg-brand-tertiary focus:text-brand-secondary"
                                           >
-                                            <Edit2 className="w-4 h-4 text-brand-primary" />
+                                            <Edit2 className="w-4 h-4 text-brand-secondary" />
                                             <span>Edit Task</span>
                                           </DropdownMenuItem>
 
@@ -1980,7 +2041,7 @@ export default function MaintenancePage() {
                                             onClick={() => handleOpenBlockWindowModal(task, matchingBw)}
                                             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary cursor-pointer focus:bg-brand-tertiary focus:text-brand-secondary"
                                           >
-                                            <Calendar className="w-4 h-4 text-brand-primary" />
+                                            <Calendar className="w-4 h-4 text-brand-secondary" />
                                             <span>Block Window</span>
                                           </DropdownMenuItem>
                                         </>
@@ -1993,27 +2054,32 @@ export default function MaintenancePage() {
 
                           {/* Inline AI Recommendation Expanded Panel (Not in Dialogue) */}
                           {expandedAiTaskId === task.id && statKey !== MaintenanceStatus.PENDING && statKey !== MaintenanceStatus.COMPLETED && statKey !== MaintenanceStatus.CANCELLED && effectiveStatKey !== MaintenanceStatus.COMPLETED && effectiveStatKey !== MaintenanceStatus.CANCELLED && Boolean(matchingBw) && (
-                            <tr key={`ai-${task.id}`} className="bg-brand-blue-light/10 border-b border-brand-border">
+                            <tr key={`ai-${task.id}`} className="bg-gray-50 border-b border-gray-200">
                               <td colSpan={7} className="p-3.5">
                                 {loadingAiTaskId === task.id ? (
-                                  <div className="p-4 rounded-2xl bg-brand-surface border border-brand-primary/30 flex items-center justify-center gap-2 text-xs font-bold text-brand-secondary shadow-xs">
-                                    <RefreshCw className="w-4 h-4 text-brand-primary animate-spin" />
+                                  <div className="p-4 rounded-2xl bg-white border border-gray-300 flex items-center justify-center gap-2 text-xs font-bold text-gray-900 shadow-xs">
+                                    <RefreshCw className="w-4 h-4 text-gray-900 animate-spin" />
                                     <span>Evaluating AI Slot Optimisation...</span>
                                   </div>
                                 ) : (
-                                  <div className="p-4.5 rounded-2xl bg-brand-surface border border-brand-primary/30 text-left space-y-3.5 shadow-sm">
+                                  <div className="p-4.5 rounded-2xl bg-white border border-gray-300 text-left space-y-2 shadow-sm">
                                     {/* Header */}
-                                    <div className="flex items-center justify-between flex-wrap gap-2">
-                                      <div className="flex items-center gap-2 text-xs font-bold text-brand-secondary">
-                                        <Bot className="w-4 h-4 text-brand-primary fill-brand-primary/20" />
-                                        <span>Live AI Monitoring</span>
-                                        <span className="text-[10px] font-normal text-brand-muted">· auto-refreshes every 60 s</span>
+                                    <div className="flex items-center justify-between flex-wrap">
+                                      <div className="flex items-center text-xs font-bold text-brand-secondary">
+                                        <Image
+                                          src="/ai.svg"
+                                          alt=""
+                                          width={16}
+                                          height={16}
+                                          className="h-12 w-12 object-contain"
+                                        />
+                                        <span>Sanket AI</span>
                                       </div>
                                       <button
                                         type="button"
                                         onClick={() => handleToggleAiRecommendation(task, true)}
                                         disabled={loadingAiTaskId === task.id}
-                                        className="inline-flex items-center gap-1.5 rounded-lg border border-brand-border bg-brand-surface px-2.5 py-1.5 text-[11px] font-bold text-brand-primary transition-colors hover:bg-brand-blue-light disabled:cursor-not-allowed disabled:opacity-50"
+                                        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-[11px] font-bold text-gray-900 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
                                         title="Refresh AI slot recommendation"
                                       >
                                         <RefreshCw className={`h-3.5 w-3.5 ${loadingAiTaskId === task.id ? "animate-spin" : ""}`} />
@@ -2021,12 +2087,14 @@ export default function MaintenancePage() {
                                       </button>
                                     </div>
 
-                                    {/* Reason Description */}
+                                    {/* User-facing recommendation summary */}
                                     <p className="text-xs text-brand-secondary font-medium leading-relaxed">
-                                      {aiRecommendationsMap[task.id]?.reason}
+                                      {aiRecommendationsMap[task.id]?.recommended_slot
+                                        ? "Your current block window is conflict-free. An alternative scheduling option is available below for your review."
+                                        : "Your current block window is conflict-free. No alternative scheduling option is available at this time."}
                                     </p>
                                     {aiRecommendationsMap[task.id]?.recommended_slot ? (
-                                      <div className="pt-3 border-t border-brand-border flex items-center justify-between flex-wrap gap-4">
+                                      <div className="pt-3 border-t border-gray-200 flex items-center justify-between flex-wrap gap-4">
                                         {/* Slot Comparison */}
                                         <div className="flex items-center gap-6 text-xs">
                                           <div>
@@ -2044,10 +2112,10 @@ export default function MaintenancePage() {
                                           </div>
 
                                           <div>
-                                            <span className="text-[10px] font-bold uppercase text-brand-primary block mb-0.5 flex items-center gap-1">
-                                              <Sparkles className="w-3 h-3 text-brand-primary fill-brand-primary/20" /> AI Recommended
+                                            <span className="text-[10px] font-bold uppercase text-gray-900 block mb-0.5 flex items-center gap-1">
+                                           AI Recommended
                                             </span>
-                                            <span className="font-mono font-bold text-brand-primary text-sm">
+                                            <span className="font-mono font-bold text-gray-900 text-sm">
                                               {(() => {
                                                 const recSlot = aiRecommendationsMap[task.id]?.recommended_slot;
                                                 if (!recSlot) return null;
@@ -2063,7 +2131,7 @@ export default function MaintenancePage() {
                                           type="button"
                                           onClick={() => handleAcceptAiSlot(task, aiRecommendationsMap[task.id]?.recommended_slot)}
                                           disabled={schedulingSlot !== null}
-                                          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-primary hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-xs shadow-md shadow-brand-primary/20 transition-all cursor-pointer disabled:opacity-60"
+                                          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 active:bg-black text-white font-bold text-xs shadow-md shadow-gray-900/20 transition-all cursor-pointer disabled:opacity-60"
                                         >
                                           {schedulingSlot === aiRecommendationsMap[task.id]?.recommended_slot?.start ? (
                                             <>
@@ -2079,7 +2147,7 @@ export default function MaintenancePage() {
                                         </button>
                                       </div>
                                     ) : (
-                                      <div className="pt-2 border-t border-brand-border text-xs font-semibold text-brand-secondary">
+                                      <div className="pt-2 border-t border-gray-200 text-xs font-semibold text-brand-secondary">
                                         No conflict-free AI recommendation found for this corridor on the target date.
                                       </div>
                                     )}
@@ -2417,7 +2485,7 @@ export default function MaintenancePage() {
                     {inspectingTask.started_at && <p className="mt-1 text-brand-secondary">Started: {formatIstDateTime(inspectingTask.started_at)} IST</p>}
                     {inspectingTask.completion_remark && <p className="mt-1 text-brand-secondary">Completion{inspectingTask.completed_at ? ` (${formatIstDateTime(inspectingTask.completed_at)} IST)` : ""}: {inspectingTask.completion_remark}</p>}
                     {inspectingTask.cancellation_remark && <p className="mt-1 text-brand-secondary">Cancellation{inspectingTask.cancelled_at ? ` (${formatIstDateTime(inspectingTask.cancelled_at)} IST)` : ""}: {inspectingTask.cancellation_remark}</p>}
-                    {inspectingTask.is_delayed && <p className="mt-1 font-bold text-rose-700">Deadline warning: task is delayed.</p>}
+                    {inspectingTask.is_delayed && <p className="mt-1 font-bold text-red-700">Deadline warning: task is delayed.</p>}
                     {inspectingTask.checklist && inspectingTask.checklist.length > 0 && <details className="mt-2 text-brand-secondary"><summary className="cursor-pointer font-semibold">Start checklist</summary><ul className="mt-1 list-disc pl-4">{inspectingTask.checklist.map((item, index) => <li key={`${item.item}-${index}`}>{item.item}: {item.completed ? "completed" : "not completed"}</li>)}</ul></details>}
                     {inspectingTask.block_window && <p className="mt-2 text-brand-secondary">Block window: {inspectingTask.block_window.section_name || `Section #${inspectingTask.block_window.section}`} · {formatIstDateTime(inspectingTask.block_window.start_time)} – {formatIstDateTime(inspectingTask.block_window.end_time)} IST</p>}
                   </div>
@@ -2898,7 +2966,7 @@ export default function MaintenancePage() {
             {createdBlockWindowId && (
               <div className="space-y-2">
                 <div className="flex items-center gap-1.5 text-[11px] font-semibold text-brand-muted">
-                  <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+                
                   <span>Live AI Monitoring · auto-refreshes every 60 s</span>
                 </div>
                 <AIBlockRecommendationBanner
