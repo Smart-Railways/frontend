@@ -22,6 +22,8 @@ export interface BlockWindow {
   id: number;
   section: number;
   section_name?: string;
+  date?: string;
+  duration_minutes?: number;
   task?: number | null;
   task_code?: string | null;
   task_id?: string | null;

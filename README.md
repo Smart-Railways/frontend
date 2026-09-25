@@ -59,6 +59,18 @@ Sanket bridges real-time timetable operations, infrastructure condition monitori
   ```
 - **Corridor Conflict Prevention**: Automatically cross-references planned maintenance against scheduled trains and block windows to prevent traffic bottlenecks.
 
+#### Shared maintenance blocks
+
+The maintenance AI panel can group compatible nearby work into one shared, train-conflict-free block window:
+
+1. Choose a nearby-days range and select **Find Shared Slot**.
+2. The frontend sends `POST /railways/block-windows/combined-recommendation/` with `apply: false`.
+3. A shared slot is shown only when the backend returns `combined_eligible: true`, at least two tasks, and a `recommended_slot`.
+4. Select **Create shared block** to resend the same request with `apply: true`.
+5. The task list refreshes; linked rows show a **Shared block #ID** badge and offer **View Shared Block** from the Actions menu.
+
+Shared tasks reuse their normal `block_window` time display, cannot be edited individually, and hide further AI-slot recommendations. Lifecycle actions show a warning because the backend synchronizes the linked batch.
+
 ---
 
 ## 🛠️ Technology Stack
@@ -92,6 +104,8 @@ frontend/
 │   ├── app/                    # Next.js App Router
 │   │   ├── assets/             # Asset management page & skeletons
 │   │   ├── maintenance/        # Maintenance planning & approval cockpit
+│   │   ├── maintenance-batches/[batchId]/ # Shared-block batch detail route
+│   │   ├── maintenance-tasks/[taskId]/    # Maintenance task detail route
 │   │   ├── trains/             # Train operations & timetable page
 │   │   ├── globals.css         # Tailwind CSS v4 theme variables
 │   │   ├── layout.tsx          # Root layout & query client provider
@@ -221,6 +235,25 @@ GET /railways/train-movements/?date=2026-09-21&from=NDLS&to=MTJ&page=1&page_size
 - Actual times are displayed when available, otherwise the estimated times are used; scheduled times remain in their own timetable column.
 
 Live movement results are cached client-side with TanStack Query for one hour per unique date, corridor, page, page size, and search mode. The page’s **Refresh** button can still explicitly request current data.
+
+### Shared-block recommendation API
+
+```http
+POST /railways/block-windows/combined-recommendation/
+Content-Type: application/json
+```
+
+Preview request:
+
+```json
+{
+  "task_id": "TMS-784",
+  "nearby_days": 2,
+  "apply": false
+}
+```
+
+Create request uses the same payload with `"apply": true`. The frontend permits creation only for a valid preview (`combined_eligible`, at least two tasks, and a recommended slot). On success it refreshes maintenance-task and block-window queries.
 
 ---
 

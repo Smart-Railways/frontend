@@ -10,6 +10,9 @@ import {
   ApiResponse,
   PaginationParams,
   PaginatedResponse,
+  MaintenanceBatch,
+  CombinedBlockRecommendationInput,
+  CombinedBlockRecommendationResponse,
 } from "@/types";
 
 const DEFAULT_PAGE = 1;
@@ -89,6 +92,25 @@ export async function getMaintenanceTaskById(
   id: number | string
 ): Promise<ApiResponse<MaintenanceTask>> {
   return safeApiCall(() => api.get<MaintenanceTask>(`maintenance-tasks/${id}`));
+}
+
+/** Fetch the shared block window and all tasks linked to a maintenance batch. */
+export async function getMaintenanceBatchById(
+  id: number | string
+): Promise<ApiResponse<MaintenanceBatch>> {
+  return safeApiCall(() => api.get<MaintenanceBatch>(`maintenance-batches/${id}`));
+}
+
+/**
+ * Preview or apply a combined block-window recommendation. Passing `apply: true`
+ * creates the batch and schedules the eligible selected tasks.
+ */
+export async function getCombinedBlockRecommendation(
+  data: CombinedBlockRecommendationInput
+): Promise<ApiResponse<CombinedBlockRecommendationResponse>> {
+  return safeApiCall(() =>
+    api.post<CombinedBlockRecommendationResponse>("block-windows/combined-recommendation", data)
+  );
 }
 
 export async function createMaintenanceTask(

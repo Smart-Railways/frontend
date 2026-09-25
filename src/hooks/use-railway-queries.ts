@@ -38,6 +38,8 @@ import {
   completeMaintenanceTask,
   cancelMaintenanceTask,
   getMaintenanceLogs,
+  getMaintenanceBatchById,
+  getCombinedBlockRecommendation,
 } from "@/actions";
 import {
   CreateAssetInput,
@@ -56,6 +58,7 @@ import {
   GetTrainOperationsParams,
   GetTrainMovementsParams,
   PaginationParams,
+  CombinedBlockRecommendationInput,
 } from "@/types";
 
 // ==========================================
@@ -240,6 +243,60 @@ export function useMaintenanceTask(id?: number | string | null) {
       return res.data ?? null;
     },
     enabled: !!id,
+  });
+}
+
+export function useMaintenanceBatch(id?: number | string | null) {
+  return useQuery({
+    queryKey: ["maintenance-batches", id],
+    queryFn: async () => {
+      if (!id) return null;
+      const res = await getMaintenanceBatchById(id);
+      if (!res.success) throw new Error(res.error || `Failed to fetch maintenance batch #${id}`);
+      return res.data ?? null;
+    },
+    enabled: Boolean(id),
+    refetchOnWindowFocus: false,
+  });
+}
+
+/** Applies a reviewed combined recommendation and refreshes task/window views. */
+export function useApplyCombinedBlockRecommendation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: Omit<CombinedBlockRecommendationInput, "apply">) => {
+      const res = await getCombinedBlockRecommendation({ ...data, apply: true });
+      if (!res.success) {
+        const error = new Error(res.error || "Failed to create the combined maintenance block") as Error & { status?: number; proposal?: unknown };
+        error.status = res.status;
+        error.proposal = res.data;
+        if (res.status === 404) error.message = "The anchor maintenance task was not found.";
+        if (res.status === 409) error.message = res.error || "A shared block can no longer be created for these tasks.";
+        throw error;
+      }
+      if (!res.data?.batch_id) throw new Error("The combined block was created without a batch ID");
+      return res.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["maintenance-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["blocks"] });
+      queryClient.invalidateQueries({ queryKey: ["maintenance-batches", data.batch_id] });
+    },
+  });
+}
+
+/** Loads the reviewed combined-block proposal without changing any schedules. */
+export function useCombinedBlockRecommendation() {
+  return useMutation({
+    mutationFn: async (data: Omit<CombinedBlockRecommendationInput, "apply">) => {
+      const res = await getCombinedBlockRecommendation({ ...data, apply: false });
+      if (!res.success) {
+        if (res.status === 404) throw new Error("The anchor maintenance task was not found.");
+        if (res.status === 409) throw new Error("Active, completed, and cancelled maintenance tasks cannot be combined.");
+        throw new Error(res.error || "Failed to get a combined block recommendation");
+      }
+      return res.data;
+    },
   });
 }
 

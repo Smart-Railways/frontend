@@ -124,6 +124,7 @@ export async function safeApiCall<T>(
       success: false,
       error: formatted.message,
       status: formatted.status,
+      data: formatted.data as T | undefined,
     };
   }
 }

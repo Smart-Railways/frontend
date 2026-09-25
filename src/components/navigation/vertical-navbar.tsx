@@ -65,7 +65,7 @@ export function VerticalNavbar({
   // Determine active navigation item from current route
   const currentActiveTab =
     activeTab ||
-    (pathname === "/maintenance"
+    (pathname === "/maintenance" || pathname.startsWith("/maintenance-tasks")
       ? "maintenance"
       : pathname === "/audit-history"
       ? "audit-history"

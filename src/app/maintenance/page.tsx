@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useMemo, useRef, useEffect } from "react";
-import Image from "next/image";
 import { VerticalNavbar } from "@/components/navigation/vertical-navbar";
 import { LiveClock } from "@/components/ui/live-clock";
 import {
@@ -53,7 +52,10 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { MaintenancePageSkeleton, MaintenanceTasksTableSkeleton } from "./skeletons";
+import {
+  MaintenancePageSkeleton,
+  MaintenanceTasksTableSkeleton,
+} from "./skeletons";
 import { checkBlockConflict } from "@/actions/blocks";
 import {
   usePaginatedMaintenanceTasks,
@@ -72,6 +74,9 @@ import {
   useStartMaintenanceTask,
   useCompleteMaintenanceTask,
   useCancelMaintenanceTask,
+  useApplyCombinedBlockRecommendation,
+  useCombinedBlockRecommendation,
+  useBlockWindow,
 } from "@/hooks";
 import {
   MaintenanceTask,
@@ -81,6 +86,7 @@ import {
   FeasibleWindowSlot,
   BlockWindow,
   FeasibleWindowsRequest,
+  CombinedBlockRecommendationResponse,
 } from "@/types";
 import {
   MaintenancePriority,
@@ -91,6 +97,8 @@ import {
 import { getDateBounds, validateDate } from "@/lib/date-schemas";
 import { AIBlockRecommendationBanner } from "@/components/dashboard/ai-block-recommendation-banner";
 import { Checkbox } from "@/components/ui/checkbox";
+import { AiLogo } from "@/components/ai-logo";
+import { Spinner } from "@/components/ui/spinner";
 
 // Urgency metadata & styling (Light brand tokens)
 const URGENCY_CONFIG: Record<
@@ -130,7 +138,7 @@ const STATUS_CONFIG: Record<
 > = {
   [MaintenanceStatus.PENDING]: {
     label: MAINTENANCE_STATUS_LABELS[MaintenanceStatus.PENDING],
-    badge: "bg-amber-500 border-amber-600 text-white",
+    badge: "bg-violet-600 border-violet-700 text-white",
     icon: AlertTriangle,
   },
   [MaintenanceStatus.SCHEDULED]: {
@@ -198,7 +206,8 @@ function todayInIst(): string {
     month: "2-digit",
     day: "2-digit",
   }).formatToParts(new Date());
-  const part = (type: string) => parts.find((value) => value.type === type)?.value;
+  const part = (type: string) =>
+    parts.find((value) => value.type === type)?.value;
   return `${part("year")}-${part("month")}-${part("day")}`;
 }
 
@@ -246,7 +255,14 @@ function formatWindowSlot(startStr: string, endStr: string) {
 }
 
 // Helper: Format block window timestamp strings into 24h format date & time
-function formatBlockWindowText(bw: { id: number; section?: number; section_name?: string; start_time: string; end_time: string; status?: string }) {
+function formatBlockWindowText(bw: {
+  id: number;
+  section?: number;
+  section_name?: string;
+  start_time: string;
+  end_time: string;
+  status?: string;
+}) {
   const format24 = (dtStr: string) => {
     if (!dtStr) return "";
     try {
@@ -291,7 +307,13 @@ function formatDateTimeLocal(date: Date): string {
 // Rolling 30-day maximum for maintenance date/time selection (inclusive of the 30th day up to 23:59).
 function getMaxMaintenanceDateTime(baseDate?: Date): string {
   const base = baseDate || new Date();
-  const maxDate = new Date(base.getFullYear(), base.getMonth(), base.getDate() + 30, 23, 59);
+  const maxDate = new Date(
+    base.getFullYear(),
+    base.getMonth(),
+    base.getDate() + 30,
+    23,
+    59,
+  );
   return formatDateTimeLocal(maxDate);
 }
 
@@ -302,11 +324,65 @@ function getMaxEndTimeForStart(startStr?: string): string {
     const clean = startStr.trim().replace(" ", "T");
     const sDate = new Date(clean);
     if (Number.isNaN(sDate.getTime())) return getMaxMaintenanceDateTime();
-    const nextDay = new Date(sDate.getFullYear(), sDate.getMonth(), sDate.getDate() + 1, 23, 59);
+    const nextDay = new Date(
+      sDate.getFullYear(),
+      sDate.getMonth(),
+      sDate.getDate() + 1,
+      23,
+      59,
+    );
     return formatDateTimeLocal(nextDay);
   } catch {
     return getMaxMaintenanceDateTime();
   }
+}
+
+function earlierDateTime(...values: string[]): string {
+  return values.reduce((earliest, value) => {
+    const earliestTime = new Date(earliest.replace("T", " ")).getTime();
+    const valueTime = new Date(value.replace("T", " ")).getTime();
+    return !Number.isNaN(valueTime) &&
+      (Number.isNaN(earliestTime) || valueTime < earliestTime)
+      ? value
+      : earliest;
+  });
+}
+
+/** The task deadline is inclusive through 23:59 on its due date. */
+function getBlockWindowDeadlineMax(task?: MaintenanceTask | null): string {
+  const schedulingMax = getMaxMaintenanceDateTime();
+  if (!task?.deadline) return schedulingMax;
+  const deadlineEnd = `${task.deadline.slice(0, 10)}T23:59`;
+  return earlierDateTime(schedulingMax, deadlineEnd);
+}
+
+function getBlockWindowEndMax(
+  startTime: string,
+  task?: MaintenanceTask | null,
+): string {
+  return earlierDateTime(
+    getMaxEndTimeForStart(startTime),
+    getBlockWindowDeadlineMax(task),
+  );
+}
+
+function getSuggestedCombinedWindow(
+  recommendation: CombinedBlockRecommendationResponse,
+) {
+  const slot = recommendation.recommended_slot;
+  return slot
+    ? { start_time: slot.start, end_time: slot.end }
+    : null;
+}
+
+function hasSharedRecommendation(
+  recommendation: CombinedBlockRecommendationResponse,
+) {
+  return (
+    recommendation.combined_eligible === true &&
+    recommendation.task_count >= 2 &&
+    recommendation.recommended_slot !== null
+  );
 }
 
 // Rolling minimum for maintenance start (current local time + 1 hour).
@@ -355,13 +431,20 @@ function toApiTimestamp(localStr: string): string {
 function validateMaintenanceTimes(
   startVal: string,
   endVal: string,
-  now: Date
+  now: Date,
 ): {
   startError: string | null;
   endError: string | null;
   generalError: string | null;
 } {
-  const maxDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 30, 23, 59, 59);
+  const maxDate = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + 30,
+    23,
+    59,
+    59,
+  );
   let startError: string | null = null;
   let endError: string | null = null;
 
@@ -373,9 +456,11 @@ function validateMaintenanceTimes(
       startError = "Invalid start date and time format.";
     } else if (sDate.getTime() < now.getTime() + 60 * 60 * 1000 - 45000) {
       // Grace buffer for picker interaction elapsed seconds
-      startError = "Start Maintenance cannot be earlier than 1 hour from current time.";
+      startError =
+        "Start Maintenance cannot be earlier than 1 hour from current time.";
     } else if (sDate.getTime() > maxDate.getTime()) {
-      startError = "Start Maintenance cannot exceed the 30-day rolling window from today.";
+      startError =
+        "Start Maintenance cannot exceed the 30-day rolling window from today.";
     }
   }
 
@@ -388,10 +473,14 @@ function validateMaintenanceTimes(
     } else if (eDate.getTime() < now.getTime()) {
       endError = "End Maintenance cannot be in the past.";
     } else if (eDate.getTime() > maxDate.getTime()) {
-      endError = "End Maintenance cannot exceed the 30-day rolling window from today.";
+      endError =
+        "End Maintenance cannot exceed the 30-day rolling window from today.";
     } else if (startVal) {
       const sDate = new Date(startVal.replace(" ", "T"));
-      if (!Number.isNaN(sDate.getTime()) && eDate.getTime() <= sDate.getTime()) {
+      if (
+        !Number.isNaN(sDate.getTime()) &&
+        eDate.getTime() <= sDate.getTime()
+      ) {
         endError = "End Maintenance must always be after Start Maintenance.";
       }
     }
@@ -413,8 +502,6 @@ function toDateTimeLocal(value: string): string {
   return formatDateTimeLocal(date);
 }
 
-
-
 export default function MaintenancePage() {
   const [activeNavTab, setActiveNavTab] = useState<string>("maintenance");
   const [currentPage, setCurrentPage] = useState(1);
@@ -430,9 +517,14 @@ export default function MaintenancePage() {
   } = usePaginatedMaintenanceTasks({ page: currentPage, page_size: pageSize });
   const tasks = tasksPage?.results ?? [];
   const totalPages = Math.max(1, Math.ceil((tasksPage?.count ?? 0) / pageSize));
-  const { data: assets = [], isLoading: loadingAssets, refetch: refetchAssets } = useAssets();
+  const {
+    data: assets = [],
+    isLoading: loadingAssets,
+    refetch: refetchAssets,
+  } = useAssets();
   const { data: sections = [] } = useRailwaySections();
-  const { data: blockWindows = [], isLoading: loadingBlockWindows } = useBlockWindows();
+  const { data: blockWindows = [], isLoading: loadingBlockWindows } =
+    useBlockWindows();
 
   // Gate: show full-page skeleton until every first-load fetch resolves
   const isPageLoading = loadingTasks || loadingAssets || loadingBlockWindows;
@@ -449,10 +541,17 @@ export default function MaintenancePage() {
   const startMaintenanceMutation = useStartMaintenanceTask();
   const completeMaintenanceMutation = useCompleteMaintenanceTask();
   const cancelMaintenanceMutation = useCancelMaintenanceTask();
+  const applyCombinedRecommendationMutation =
+    useApplyCombinedBlockRecommendation();
+  const combinedRecommendationMutation = useCombinedBlockRecommendation();
   const [schedulingSlot, setSchedulingSlot] = useState<string | null>(null);
-  const [scheduledSuccessMsg, setScheduledSuccessMsg] = useState<string | null>(null);
+  const [scheduledSuccessMsg, setScheduledSuccessMsg] = useState<string | null>(
+    null,
+  );
   /** Tracks the block window ID created by the feasible windows flow for Phase 3 AI banner */
-  const [createdBlockWindowId, setCreatedBlockWindowId] = useState<number | null>(null);
+  const [createdBlockWindowId, setCreatedBlockWindowId] = useState<
+    number | null
+  >(null);
 
   // Inline Row AI Recommendation State
   const [expandedAiTaskId, setExpandedAiTaskId] = useState<number | null>(null);
@@ -470,26 +569,124 @@ export default function MaintenancePage() {
 
   // Filters & State
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [selectedCorridorFilter, setSelectedCorridorFilter] = useState<string>("ALL");
-  const [selectedUrgencyFilter, setSelectedUrgencyFilter] = useState<string>("ALL");
-  const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>("ALL");
+  const [selectedCorridorFilter, setSelectedCorridorFilter] =
+    useState<string>("ALL");
+  const [selectedUrgencyFilter, setSelectedUrgencyFilter] =
+    useState<string>("ALL");
+  const [selectedStatusFilter, setSelectedStatusFilter] =
+    useState<string>("ALL");
   const [selectedAssetFilter, setSelectedAssetFilter] = useState<string>("ALL");
   const [viewMode, setViewMode] = useState<"table">("table");
-  const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [toastMessage, setToastMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+  const [combinedRecommendation, setCombinedRecommendation] =
+    useState<CombinedBlockRecommendationResponse | null>(null);
+  const [combinedRecommendationTaskId, setCombinedRecommendationTaskId] =
+    useState<string | null>(null);
+  const [nearbyDays, setNearbyDays] = useState(2);
+  const [sharedBlockIdByTaskCode, setSharedBlockIdByTaskCode] = useState<
+    Record<string, number>
+  >({});
+  const [viewingSharedBlockId, setViewingSharedBlockId] = useState<
+    number | null
+  >(null);
+  const sharedBlockQuery = useBlockWindow(viewingSharedBlockId);
 
   const showToast = (type: "success" | "error", text: string) => {
     setToastMessage({ type, text });
     setTimeout(() => setToastMessage(null), 4000);
   };
 
+  const handleApplyCombinedRecommendation = async (taskId: string) => {
+    if (!combinedRecommendation || !hasSharedRecommendation(combinedRecommendation)) {
+      return;
+    }
+    try {
+      const result = await applyCombinedRecommendationMutation.mutateAsync({
+        task_id: taskId,
+        nearby_days: nearbyDays,
+      });
+      const count = result.task_count;
+      const proposedTasks = combinedRecommendation.tasks;
+      const affectedTaskCodes = new Set([
+        taskId,
+        ...proposedTasks.map((task) => task.task_id),
+      ]);
+      const sharedBlockId = result.block_window?.id;
+      setSharedBlockIdByTaskCode((current) => {
+        const next = { ...current };
+        if (sharedBlockId)
+          affectedTaskCodes.forEach((code) => {
+            next[code] = sharedBlockId;
+          });
+        return next;
+      });
+      setCombinedRecommendation(null);
+      showToast(
+        "success",
+        `Shared block created for ${count} maintenance ${count === 1 ? "task" : "tasks"}. Open it from the task Actions menu.`,
+      );
+    } catch (error) {
+      const apiError = error as Error & {
+        status?: number;
+        proposal?: CombinedBlockRecommendationResponse;
+      };
+      if (apiError.status === 409 && apiError.proposal) {
+        setCombinedRecommendation(apiError.proposal);
+        showToast(
+          "error",
+          apiError.proposal.message ||
+            "A shared block can no longer be created for these tasks.",
+        );
+        return;
+      }
+      showToast(
+        "error",
+        error instanceof Error
+          ? error.message
+          : "Unable to create the combined maintenance block.",
+      );
+    }
+  };
+
+  const handleGetCombinedRecommendation = async (taskId: string) => {
+    try {
+      const recommendation = await combinedRecommendationMutation.mutateAsync({
+        task_id: taskId,
+        nearby_days: nearbyDays,
+      });
+      if (!recommendation)
+        throw new Error("No combined block recommendation was returned.");
+      setCombinedRecommendationTaskId(taskId);
+      setCombinedRecommendation(recommendation);
+    } catch (error) {
+      showToast(
+        "error",
+        error instanceof Error
+          ? error.message
+          : "Unable to get a combined block recommendation.",
+      );
+    }
+  };
+
   // Modal States
   const [isFormModalOpen, setIsFormModalOpen] = useState<boolean>(false);
   const [editingTask, setEditingTask] = useState<MaintenanceTask | null>(null);
-  const [deletingTask, setDeletingTask] = useState<MaintenanceTask | null>(null);
-  const [inspectingTask, setInspectingTask] = useState<MaintenanceTask | null>(null);
+  const [deletingTask, setDeletingTask] = useState<MaintenanceTask | null>(
+    null,
+  );
+  const [inspectingTask, setInspectingTask] = useState<MaintenanceTask | null>(
+    null,
+  );
   const maintenanceLogsQuery = useMaintenanceLogs(inspectingTask?.id);
-  const [lifecycleTask, setLifecycleTask] = useState<MaintenanceTask | null>(null);
-  const [lifecycleMode, setLifecycleMode] = useState<"start" | "complete" | "cancel" | null>(null);
+  const [lifecycleTask, setLifecycleTask] = useState<MaintenanceTask | null>(
+    null,
+  );
+  const [lifecycleMode, setLifecycleMode] = useState<
+    "start" | "complete" | "cancel" | null
+  >(null);
   const [lifecycleRemark, setLifecycleRemark] = useState("");
   const [lifecycleError, setLifecycleError] = useState<string | null>(null);
   const [startChecklist, setStartChecklist] = useState([
@@ -501,7 +698,8 @@ export default function MaintenancePage() {
   const endDateTimeRef = useRef<HTMLInputElement>(null);
 
   // Conflict Modal State
-  const [isConflictModalOpen, setIsConflictModalOpen] = useState<boolean>(false);
+  const [isConflictModalOpen, setIsConflictModalOpen] =
+    useState<boolean>(false);
   const [conflictForm, setConflictForm] = useState<{
     section: number;
     maintenance_start: string;
@@ -511,9 +709,12 @@ export default function MaintenancePage() {
     maintenance_start: "",
     maintenance_end: "",
   });
-  const [conflictResult, setConflictResult] = useState<ConflictCheckResponse | null>(null);
+  const [conflictResult, setConflictResult] =
+    useState<ConflictCheckResponse | null>(null);
   const [conflictError, setConflictError] = useState<string | null>(null);
-  const [conflictStartError, setConflictStartError] = useState<string | null>(null);
+  const [conflictStartError, setConflictStartError] = useState<string | null>(
+    null,
+  );
   const [conflictEndError, setConflictEndError] = useState<string | null>(null);
   const [currentNow, setCurrentNow] = useState<Date>(() => new Date());
 
@@ -526,23 +727,34 @@ export default function MaintenancePage() {
   }, []);
 
   // Rolling 30-day window dynamically calculated
-  const minStartDateTime = useMemo(() => getMinMaintenanceDateTime(currentNow), [currentNow]);
-  const maxMaintenanceDateTime = useMemo(() => getMaxMaintenanceDateTime(currentNow), [currentNow]);
+  const minStartDateTime = useMemo(
+    () => getMinMaintenanceDateTime(currentNow),
+    [currentNow],
+  );
+  const maxMaintenanceDateTime = useMemo(
+    () => getMaxMaintenanceDateTime(currentNow),
+    [currentNow],
+  );
 
   // End Maintenance minimum bound: must strictly be after Start Maintenance (and not in past)
   const minEndDateTime = useMemo(() => {
     if (conflictForm.maintenance_start) {
-      const parsedStart = new Date(conflictForm.maintenance_start.replace(" ", "T"));
+      const parsedStart = new Date(
+        conflictForm.maintenance_start.replace(" ", "T"),
+      );
       if (!Number.isNaN(parsedStart.getTime())) {
         const afterStart = new Date(parsedStart.getTime() + 60 * 1000);
-        return formatDateTimeLocal(afterStart > currentNow ? afterStart : currentNow);
+        return formatDateTimeLocal(
+          afterStart > currentNow ? afterStart : currentNow,
+        );
       }
     }
     return formatDateTimeLocal(new Date(currentNow.getTime() + 60 * 1000));
   }, [conflictForm.maintenance_start, currentNow]);
 
   // Feasible Windows Modal State
-  const [isFeasibleModalOpen, setIsFeasibleModalOpen] = useState<boolean>(false);
+  const [isFeasibleModalOpen, setIsFeasibleModalOpen] =
+    useState<boolean>(false);
   const [feasibleForm, setFeasibleForm] = useState<{
     task_id: string;
     date: string;
@@ -550,14 +762,20 @@ export default function MaintenancePage() {
     task_id: "",
     date: todayInIst(), // default to today in the backend's scheduling timezone
   });
-  const [feasibleResult, setFeasibleResult] = useState<FeasibleWindowsResponse | null>(null);
+  const [feasibleResult, setFeasibleResult] =
+    useState<FeasibleWindowsResponse | null>(null);
   const [feasibleError, setFeasibleError] = useState<string | null>(null);
 
   // Create / Update Block Window Modal State
-  const [isBlockWindowModalOpen, setIsBlockWindowModalOpen] = useState<boolean>(false);
-  const [blockWindowStep, setBlockWindowStep] = useState<"FORM" | "AI_RECOMMENDATION">("FORM");
-  const [selectedBlockTask, setSelectedBlockTask] = useState<MaintenanceTask | null>(null);
-  const [editingBlockWindow, setEditingBlockWindow] = useState<BlockWindow | null>(null);
+  const [isBlockWindowModalOpen, setIsBlockWindowModalOpen] =
+    useState<boolean>(false);
+  const [blockWindowStep, setBlockWindowStep] = useState<
+    "FORM" | "AI_RECOMMENDATION"
+  >("FORM");
+  const [selectedBlockTask, setSelectedBlockTask] =
+    useState<MaintenanceTask | null>(null);
+  const [editingBlockWindow, setEditingBlockWindow] =
+    useState<BlockWindow | null>(null);
   const [blockWindowForm, setBlockWindowForm] = useState<{
     section: number;
     start_time: string;
@@ -568,14 +786,20 @@ export default function MaintenancePage() {
     return {
       section: 1,
       start_time: formatDateTimeLocal(minStart),
-      end_time: formatDateTimeLocal(new Date(minStart.getTime() + 60 * 60 * 1000)),
+      end_time: formatDateTimeLocal(
+        new Date(minStart.getTime() + 60 * 60 * 1000),
+      ),
       status: "RESERVED",
     };
   });
   const [blockWindowError, setBlockWindowError] = useState<string | null>(null);
-  const [blockWindowSuccessMsg, setBlockWindowSuccessMsg] = useState<string | null>(null);
-  const [standardConflictResult, setStandardConflictResult] = useState<ConflictCheckResponse | null>(null);
-  const [conflictCheckLoading, setConflictCheckLoading] = useState<boolean>(false);
+  const [blockWindowSuccessMsg, setBlockWindowSuccessMsg] = useState<
+    string | null
+  >(null);
+  const [standardConflictResult, setStandardConflictResult] =
+    useState<ConflictCheckResponse | null>(null);
+  const [conflictCheckLoading, setConflictCheckLoading] =
+    useState<boolean>(false);
 
   // Live Standard Conflict Check inside Block Window form
   useEffect(() => {
@@ -583,7 +807,11 @@ export default function MaintenancePage() {
 
     let isCancelled = false;
     const timer = setTimeout(async () => {
-      if (!blockWindowForm.start_time || !blockWindowForm.end_time || !blockWindowForm.section) {
+      if (
+        !blockWindowForm.start_time ||
+        !blockWindowForm.end_time ||
+        !blockWindowForm.section
+      ) {
         setStandardConflictResult(null);
         setConflictCheckLoading(false);
         return;
@@ -659,7 +887,9 @@ export default function MaintenancePage() {
       details: "",
       risk_rating: 8,
       urgency: MaintenancePriority.HIGH,
-      deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+      deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split("T")[0],
       estimated_duration: 45,
       task_status: MaintenanceStatus.PENDING,
     });
@@ -675,7 +905,9 @@ export default function MaintenancePage() {
       details: task.details || "",
       risk_rating: task.risk_rating,
       urgency: task.urgency,
-      deadline: task.deadline ? task.deadline.substring(0, 10) : new Date().toISOString().split("T")[0],
+      deadline: task.deadline
+        ? task.deadline.substring(0, 10)
+        : new Date().toISOString().split("T")[0],
       estimated_duration: task.estimated_duration,
       task_status: task.task_status,
     });
@@ -704,22 +936,34 @@ export default function MaintenancePage() {
             setIsFormModalOpen(false);
             setEditingTask(null);
             setExpandedAiTaskId(null);
-            showToast("success", `Maintenance task "${updated?.task_code || editingTask.task_code}" updated successfully.`);
+            showToast(
+              "success",
+              `Maintenance task "${updated?.task_code || editingTask.task_code}" updated successfully.`,
+            );
           },
           onError: (err) => {
-            showToast("error", err instanceof Error ? err.message : "Failed to update task.");
+            showToast(
+              "error",
+              err instanceof Error ? err.message : "Failed to update task.",
+            );
           },
-        }
+        },
       );
     } else {
       createTaskMutation.mutate(formData, {
         onSuccess: (created) => {
           setIsFormModalOpen(false);
           setExpandedAiTaskId(null);
-          showToast("success", `Maintenance task "${created?.task_code || formData.task_code}" created successfully.`);
+          showToast(
+            "success",
+            `Maintenance task "${created?.task_code || formData.task_code}" created successfully.`,
+          );
         },
         onError: (err) => {
-          showToast("error", err instanceof Error ? err.message : "Failed to create task.");
+          showToast(
+            "error",
+            err instanceof Error ? err.message : "Failed to create task.",
+          );
         },
       });
     }
@@ -731,34 +975,50 @@ export default function MaintenancePage() {
 
     deleteTaskMutation.mutate(deletingTask.id, {
       onSuccess: () => {
-        showToast("success", `Task "${deletingTask.task_code}" deleted successfully.`);
+        showToast(
+          "success",
+          `Task "${deletingTask.task_code}" deleted successfully.`,
+        );
         setDeletingTask(null);
         setExpandedAiTaskId(null);
       },
       onError: (err) => {
-        showToast("error", err instanceof Error ? err.message : "Failed to delete task.");
+        showToast(
+          "error",
+          err instanceof Error ? err.message : "Failed to delete task.",
+        );
       },
     });
   };
 
-  const openLifecycleModal = (task: MaintenanceTask, mode: "start" | "complete" | "cancel") => {
+  const openLifecycleModal = (
+    task: MaintenanceTask,
+    mode: "start" | "complete" | "cancel",
+  ) => {
     setLifecycleTask(task);
     setLifecycleMode(mode);
     setLifecycleRemark("");
     setLifecycleError(null);
-    if (mode === "start") setStartChecklist([
-      { item: "PPE checked", completed: false },
-      { item: "Work permit approved", completed: false },
-      { item: "Section isolated", completed: false },
-    ]);
+    if (mode === "start")
+      setStartChecklist([
+        { item: "PPE checked", completed: false },
+        { item: "Work permit approved", completed: false },
+        { item: "Section isolated", completed: false },
+      ]);
   };
 
   const handleLifecycleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!lifecycleTask || !lifecycleMode) return;
     setLifecycleError(null);
-    if (lifecycleMode === "start" && !startChecklist.every((item) => item.completed)) {
-      showToast("error", "Complete every safety checklist item before starting.");
+    if (
+      lifecycleMode === "start" &&
+      !startChecklist.every((item) => item.completed)
+    ) {
+      showToast(
+        "error",
+        "Complete every safety checklist item before starting.",
+      );
       return;
     }
     if (lifecycleMode !== "start" && !lifecycleRemark.trim()) {
@@ -766,22 +1026,39 @@ export default function MaintenancePage() {
       return;
     }
     try {
-      const updated = lifecycleMode === "start"
-        ? await startMaintenanceMutation.mutateAsync({ id: lifecycleTask.id, checklist: startChecklist })
-        : lifecycleMode === "complete"
-          ? await completeMaintenanceMutation.mutateAsync({ id: lifecycleTask.id, remark: lifecycleRemark.trim() })
-          : await cancelMaintenanceMutation.mutateAsync({ id: lifecycleTask.id, remark: lifecycleRemark.trim() });
+      const updated =
+        lifecycleMode === "start"
+          ? await startMaintenanceMutation.mutateAsync({
+              id: lifecycleTask.id,
+              checklist: startChecklist,
+            })
+          : lifecycleMode === "complete"
+            ? await completeMaintenanceMutation.mutateAsync({
+                id: lifecycleTask.id,
+                remark: lifecycleRemark.trim(),
+              })
+            : await cancelMaintenanceMutation.mutateAsync({
+                id: lifecycleTask.id,
+                remark: lifecycleRemark.trim(),
+              });
       // Keep an already-open detail view current, but never open a second dialog
       // after an action initiated from the table menu.
-      if (updated && inspectingTask?.id === lifecycleTask.id) setInspectingTask(updated);
+      if (updated && inspectingTask?.id === lifecycleTask.id)
+        setInspectingTask(updated);
       setExpandedAiTaskId(null);
       // Lifecycle mutation hooks invalidate the task, block, and audit-log queries.
       // Avoid a second network request by not manually refetching them here.
-      showToast("success", `Maintenance task ${lifecycleMode === "start" ? "started" : lifecycleMode === "complete" ? "completed" : "cancelled"}.`);
+      showToast(
+        "success",
+        `Maintenance task ${lifecycleMode === "start" ? "started" : lifecycleMode === "complete" ? "completed" : "cancelled"}.`,
+      );
       setLifecycleTask(null);
       setLifecycleMode(null);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Maintenance action failed. Please refresh and try again.";
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Maintenance action failed. Please refresh and try again.";
       const friendlyMessage = /not found/i.test(message)
         ? "This task no longer exists in the backend. Refresh the task list before trying another action."
         : message;
@@ -809,44 +1086,51 @@ export default function MaintenancePage() {
     const sectionName =
       targetTask?.section_name || taskAsset?.section_name || "";
 
-    const maxDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 30, 23, 59, 59);
+    const maxDate = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() + 30,
+      23,
+      59,
+      59,
+    );
 
     // Select the nearest block window whose START is strictly now or in future and within 30 days
     const matchingWindow = targetTask
       ? blockWindows
-        .filter((bw) => {
-          if (
-            taskAsset?.section &&
-            Number(bw.section) === Number(taskAsset.section)
-          ) {
-            return true;
-          }
+          .filter((bw) => {
+            if (
+              taskAsset?.section &&
+              Number(bw.section) === Number(taskAsset.section)
+            ) {
+              return true;
+            }
 
-          return Boolean(
-            sectionName &&
-            bw.section_name &&
-            bw.section_name.trim().toLowerCase() ===
-            sectionName.trim().toLowerCase()
-          );
-        })
-        .filter((bw) => {
-          const startTime = new Date(bw.start_time);
-          const endTime = new Date(bw.end_time);
+            return Boolean(
+              sectionName &&
+                bw.section_name &&
+                bw.section_name.trim().toLowerCase() ===
+                  sectionName.trim().toLowerCase(),
+            );
+          })
+          .filter((bw) => {
+            const startTime = new Date(bw.start_time);
+            const endTime = new Date(bw.end_time);
 
-          // Only use a window that starts in the future, ends after start, and fits within 30-day window
-          return (
-            startTime >= now &&
-            startTime <= maxDate &&
-            endTime > startTime &&
-            endTime <= maxDate
-          );
-        })
-        .sort((a, b) => {
-          return (
-            new Date(a.start_time).getTime() -
-            new Date(b.start_time).getTime()
-          );
-        })[0]
+            // Only use a window that starts in the future, ends after start, and fits within 30-day window
+            return (
+              startTime >= now &&
+              startTime <= maxDate &&
+              endTime > startTime &&
+              endTime <= maxDate
+            );
+          })
+          .sort((a, b) => {
+            return (
+              new Date(a.start_time).getTime() -
+              new Date(b.start_time).getTime()
+            );
+          })[0]
       : null;
 
     // If there is no future block window, create a safe future fallback.
@@ -884,7 +1168,7 @@ export default function MaintenancePage() {
     const validation = validateMaintenanceTimes(
       conflictForm.maintenance_start,
       conflictForm.maintenance_end,
-      now
+      now,
     );
 
     setConflictStartError(validation.startError);
@@ -911,9 +1195,11 @@ export default function MaintenancePage() {
           setConflictResult(data ?? null);
         },
         onError: (err) => {
-          setConflictError(err instanceof Error ? err.message : "Failed to run conflict check");
+          setConflictError(
+            err instanceof Error ? err.message : "Failed to run conflict check",
+          );
         },
-      }
+      },
     );
   };
 
@@ -934,7 +1220,10 @@ export default function MaintenancePage() {
   };
 
   // Create / Update Block Window Modal Handlers
-  const handleOpenBlockWindowModal = (task: MaintenanceTask, bw?: BlockWindow) => {
+  const handleOpenBlockWindowModal = (
+    task: MaintenanceTask,
+    bw?: BlockWindow,
+  ) => {
     setSelectedBlockTask(task);
     setEditingBlockWindow(bw || null);
     setBlockWindowError(null);
@@ -944,24 +1233,37 @@ export default function MaintenancePage() {
     setStandardConflictResult(null);
 
     const taskAsset = assets.find((a) => a.id === task.asset);
-    const defaultSection = bw?.section || taskAsset?.section || sections[0]?.id || 1;
+    const defaultSection =
+      bw?.section || taskAsset?.section || sections[0]?.id || 1;
     const now = new Date();
     const minStart = new Date(now.getTime() + 60 * 60 * 1000);
     const minStartMs = minStart.getTime() - 60000;
     const durationMins = task.estimated_duration || 60;
 
     let initialStart = formatDateTimeLocal(minStart);
-    let initialEnd = formatDateTimeLocal(new Date(minStart.getTime() + durationMins * 60 * 1000));
+    let initialEnd = formatDateTimeLocal(
+      new Date(minStart.getTime() + durationMins * 60 * 1000),
+    );
 
     if (bw) {
-      const parsedStartMs = new Date(toApiTimestamp(toDatetimeLocalValue(bw.start_time))).getTime();
-      const parsedEndMs = new Date(toApiTimestamp(toDatetimeLocalValue(bw.end_time))).getTime();
+      const parsedStartMs = new Date(
+        toApiTimestamp(toDatetimeLocalValue(bw.start_time)),
+      ).getTime();
+      const parsedEndMs = new Date(
+        toApiTimestamp(toDatetimeLocalValue(bw.end_time)),
+      ).getTime();
 
-      const validStart = parsedStartMs < minStartMs ? formatDateTimeLocal(minStart) : toDatetimeLocalValue(bw.start_time);
+      const validStart =
+        parsedStartMs < minStartMs
+          ? formatDateTimeLocal(minStart)
+          : toDatetimeLocalValue(bw.start_time);
       const validStartMs = new Date(toApiTimestamp(validStart)).getTime();
-      const validEnd = parsedEndMs <= validStartMs
-        ? formatDateTimeLocal(new Date(validStartMs + durationMins * 60 * 1000))
-        : toDatetimeLocalValue(bw.end_time);
+      const validEnd =
+        parsedEndMs <= validStartMs
+          ? formatDateTimeLocal(
+              new Date(validStartMs + durationMins * 60 * 1000),
+            )
+          : toDatetimeLocalValue(bw.end_time);
 
       initialStart = validStart;
       initialEnd = validEnd;
@@ -993,9 +1295,16 @@ export default function MaintenancePage() {
     const endMs = new Date(endTimeApi).getTime();
     const minAllowedMs = Date.now() + 60 * 60 * 1000 - 2 * 60 * 1000;
     const maxMs = Date.now() + 30 * 24 * 60 * 60 * 1000;
+    const deadlineMs = selectedBlockTask?.deadline
+      ? new Date(
+          `${selectedBlockTask.deadline.slice(0, 10)}T23:59:59`,
+        ).getTime()
+      : Number.POSITIVE_INFINITY;
 
     if (startMs < minAllowedMs) {
-      setBlockWindowError("Start time cannot be earlier than 1 hour from current time.");
+      setBlockWindowError(
+        "Start time cannot be earlier than 1 hour from current time.",
+      );
       return;
     }
 
@@ -1005,19 +1314,34 @@ export default function MaintenancePage() {
     }
 
     if (startMs > maxMs) {
-      setBlockWindowError("Block window cannot be scheduled more than 30 days in advance.");
+      setBlockWindowError(
+        "Block window cannot be scheduled more than 30 days in advance.",
+      );
       return;
     }
 
     if (endMs > maxMs) {
-      setBlockWindowError("Block window end time cannot exceed the 30-day scheduling limit.");
+      setBlockWindowError(
+        "Block window end time cannot exceed the 30-day scheduling limit.",
+      );
+      return;
+    }
+
+    if (startMs > deadlineMs || endMs > deadlineMs) {
+      setBlockWindowError(
+        `The block window must end on or before the task deadline (${selectedBlockTask?.deadline}).`,
+      );
       return;
     }
 
     if (blockWindowForm.start_time) {
-      const maxAllowedEndMs = new Date(toApiTimestamp(getMaxEndTimeForStart(blockWindowForm.start_time))).getTime();
+      const maxAllowedEndMs = new Date(
+        toApiTimestamp(getMaxEndTimeForStart(blockWindowForm.start_time)),
+      ).getTime();
       if (endMs > maxAllowedEndMs) {
-        setBlockWindowError("End time date cannot exceed the next day from the selected start time.");
+        setBlockWindowError(
+          "End time date cannot exceed the next day from the selected start time.",
+        );
         return;
       }
     }
@@ -1029,7 +1353,9 @@ export default function MaintenancePage() {
           data: {
             section: Number(blockWindowForm.section),
             task: selectedBlockTask ? selectedBlockTask.id : undefined,
-            task_id: selectedBlockTask ? selectedBlockTask.task_code : undefined,
+            task_id: selectedBlockTask
+              ? selectedBlockTask.task_code
+              : undefined,
             start_time: startTimeApi,
             end_time: endTimeApi,
             status: "RESERVED",
@@ -1052,20 +1378,28 @@ export default function MaintenancePage() {
           status: "RESERVED",
         });
 
-        if (selectedBlockTask && selectedBlockTask.task_status !== MaintenanceStatus.SCHEDULED) {
+        if (
+          selectedBlockTask &&
+          selectedBlockTask.task_status !== MaintenanceStatus.SCHEDULED
+        ) {
           await patchMaintenanceTaskMutation.mutateAsync({
             id: selectedBlockTask.id,
             data: { task_status: "SCHEDULED" },
           });
         }
 
-        showToast("success", `Block Window ${createdBlock?.id ? `#${createdBlock.id} ` : ""}created successfully!`);
+        showToast(
+          "success",
+          `Block Window ${createdBlock?.id ? `#${createdBlock.id} ` : ""}created successfully!`,
+        );
         setExpandedAiTaskId(null);
         setIsBlockWindowModalOpen(false);
         setBlockWindowStep("FORM");
       }
     } catch (err) {
-      setBlockWindowError(err instanceof Error ? err.message : "Failed to save block window.");
+      setBlockWindowError(
+        err instanceof Error ? err.message : "Failed to save block window.",
+      );
     }
   };
 
@@ -1081,7 +1415,9 @@ export default function MaintenancePage() {
 
   // Section Name for display only (not used for filtering block windows)
   const selectedFeasibleSectionName =
-    selectedFeasibleTask?.section_name || selectedFeasibleTaskAsset?.section_name || "";
+    selectedFeasibleTask?.section_name ||
+    selectedFeasibleTaskAsset?.section_name ||
+    "";
 
   const handleRunFeasibleCheck = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1112,10 +1448,17 @@ export default function MaintenancePage() {
           setFeasibleResult(data ?? null);
         },
         onError: (err) => {
-          const message = err instanceof Error ? err.message : "Failed to calculate feasible windows";
-          setFeasibleError(/past|expired/i.test(message) ? "Past dates cannot be scheduled." : message);
+          const message =
+            err instanceof Error
+              ? err.message
+              : "Failed to calculate feasible windows";
+          setFeasibleError(
+            /past|expired/i.test(message)
+              ? "Past dates cannot be scheduled."
+              : message,
+          );
         },
-      }
+      },
     );
   };
 
@@ -1124,8 +1467,9 @@ export default function MaintenancePage() {
     if (!selectedFeasibleTask) return;
 
     // Use section ID from the AI response (most accurate); fall back to asset section
-    const secId = feasibleResult?.section?.id
-      ?? assets.find((a) => a.id === selectedFeasibleTask.asset)?.section;
+    const secId =
+      feasibleResult?.section?.id ??
+      assets.find((a) => a.id === selectedFeasibleTask.asset)?.section;
 
     if (!secId) {
       setFeasibleError("Could not determine railway section for this task.");
@@ -1164,14 +1508,21 @@ export default function MaintenancePage() {
       setScheduledSuccessMsg(msg);
       showToast("success", msg);
     } catch (err) {
-      setFeasibleError(err instanceof Error ? err.message : "Failed to reserve corridor block window.");
+      setFeasibleError(
+        err instanceof Error
+          ? err.message
+          : "Failed to reserve corridor block window.",
+      );
     } finally {
       setSchedulingSlot(null);
     }
   };
 
   // Toggle Inline AI Recommendation per Row
-  const handleToggleAiRecommendation = (task: MaintenanceTask, forceRefresh = false) => {
+  const handleToggleAiRecommendation = (
+    task: MaintenanceTask,
+    forceRefresh = false,
+  ) => {
     if (expandedAiTaskId === task.id && !forceRefresh) {
       setExpandedAiTaskId(null);
       return;
@@ -1184,24 +1535,27 @@ export default function MaintenancePage() {
     const secName = task.section_name || taskAsset?.section_name;
     const matchingBw = task.block_window
       ? {
-        id: task.block_window.id,
-        section: Number(task.block_window.section || secId || 1),
-        start_time: task.block_window.start_time,
-        end_time: task.block_window.end_time,
-        status: task.block_window.status || "RESERVED",
-      }
+          id: task.block_window.id,
+          section: Number(task.block_window.section || secId || 1),
+          start_time: task.block_window.start_time,
+          end_time: task.block_window.end_time,
+          status: task.block_window.status || "RESERVED",
+        }
       : blockWindows.find((bw) => {
-        if (bw.task && bw.task === task.id) return true;
-        if (bw.task_id && bw.task_id === task.task_code) return true;
-        if (bw.task_code && bw.task_code === task.task_code) return true;
-        return false;
-      });
+          if (bw.task && bw.task === task.id) return true;
+          if (bw.task_id && bw.task_id === task.task_code) return true;
+          if (bw.task_code && bw.task_code === task.task_code) return true;
+          return false;
+        });
 
     const currentSlotLabel = matchingBw
       ? (() => {
-        const info = formatWindowSlot(matchingBw.start_time, matchingBw.end_time);
-        return `${info.time} · ${info.date}`;
-      })()
+          const info = formatWindowSlot(
+            matchingBw.start_time,
+            matchingBw.end_time,
+          );
+          return `${info.time} · ${info.date}`;
+        })()
       : task.task_status === MaintenanceStatus.SCHEDULED
         ? "Allocated"
         : "Pending Allocation";
@@ -1217,74 +1571,71 @@ export default function MaintenancePage() {
 
       const requestPayload: FeasibleWindowsRequest = matchingBw
         ? {
-          block_window_id: matchingBw.id,
-          task_id: task.task_code,
-          date: targetDate,
-        }
+            block_window_id: matchingBw.id,
+            task_id: task.task_code,
+            date: targetDate,
+          }
         : {
-          task_id: task.task_code,
-          date: targetDate,
-        };
+            task_id: task.task_code,
+            date: targetDate,
+          };
 
-      feasibleWindowsMutation.mutate(
-        requestPayload,
-        {
-          onSuccess: (data: any) => {
-            setLoadingAiTaskId(null);
-            const best =
-              data?.recommended_slot ||
-              (data?.windows && data.windows.length > 0 ? data.windows[0] : null);
+      feasibleWindowsMutation.mutate(requestPayload, {
+        onSuccess: (data: any) => {
+          setLoadingAiTaskId(null);
+          const best =
+            data?.recommended_slot ||
+            (data?.windows && data.windows.length > 0 ? data.windows[0] : null);
 
-            if (best) {
-              const slotTime = formatWindowSlot(best.start, best.end);
-              const reason =
-                data?.recommendation_reason ||
-                `Zero train conflicts in current slot. However, AI identified an optimized slot at ${slotTime.time}`;
+          if (best) {
+            const slotTime = formatWindowSlot(best.start, best.end);
+            const reason =
+              data?.recommendation_reason ||
+              `Zero train conflicts in current slot. However, AI identified an optimized slot at ${slotTime.time}`;
 
-              setAiRecommendationsMap((prev) => ({
-                ...prev,
-                [task.id]: {
-                  current_slot: currentSlotLabel,
-                  recommended_slot: best,
-                  reason,
-                },
-              }));
-            } else {
-              setAiRecommendationsMap((prev) => ({
-                ...prev,
-                [task.id]: {
-                  current_slot: currentSlotLabel,
-                  recommended_slot: null,
-                  reason:
-                    data?.recommendation_reason ||
-                    "No conflict-free AI recommendation found for this corridor on the target date.",
-                },
-              }));
-            }
-          },
-          onError: (err) => {
-            setLoadingAiTaskId(null);
+            setAiRecommendationsMap((prev) => ({
+              ...prev,
+              [task.id]: {
+                current_slot: currentSlotLabel,
+                recommended_slot: best,
+                reason,
+              },
+            }));
+          } else {
             setAiRecommendationsMap((prev) => ({
               ...prev,
               [task.id]: {
                 current_slot: currentSlotLabel,
                 recommended_slot: null,
                 reason:
-                  err instanceof Error
-                    ? err.message
-                    : "Failed to evaluate AI recommendation for this corridor.",
+                  data?.recommendation_reason ||
+                  "No conflict-free AI recommendation found for this corridor on the target date.",
               },
             }));
-          },
-        }
-      );
+          }
+        },
+        onError: (err) => {
+          setLoadingAiTaskId(null);
+          setAiRecommendationsMap((prev) => ({
+            ...prev,
+            [task.id]: {
+              current_slot: currentSlotLabel,
+              recommended_slot: null,
+              reason:
+                err instanceof Error
+                  ? err.message
+                  : "Failed to evaluate AI recommendation for this corridor.",
+            },
+          }));
+        },
+      });
     }
   };
 
   // Accept Inline AI Slot
   const handleAcceptAiSlot = async (
     task: MaintenanceTask,
-    slot?: FeasibleWindowSlot | null
+    slot?: FeasibleWindowSlot | null,
   ) => {
     if (!slot) return;
     const taskAsset = assets.find((a) => a.id === task.asset);
@@ -1293,18 +1644,18 @@ export default function MaintenancePage() {
 
     const matchingBw = task.block_window
       ? {
-        id: task.block_window.id,
-        section: Number(task.block_window.section || secId || 1),
-        start_time: task.block_window.start_time,
-        end_time: task.block_window.end_time,
-        status: task.block_window.status || "RESERVED",
-      }
+          id: task.block_window.id,
+          section: Number(task.block_window.section || secId || 1),
+          start_time: task.block_window.start_time,
+          end_time: task.block_window.end_time,
+          status: task.block_window.status || "RESERVED",
+        }
       : blockWindows.find((bw) => {
-        if (bw.task && bw.task === task.id) return true;
-        if (bw.task_id && bw.task_id === task.task_code) return true;
-        if (bw.task_code && bw.task_code === task.task_code) return true;
-        return false;
-      });
+          if (bw.task && bw.task === task.id) return true;
+          if (bw.task_id && bw.task_id === task.task_code) return true;
+          if (bw.task_code && bw.task_code === task.task_code) return true;
+          return false;
+        });
 
     setSchedulingSlot(slot.start);
     try {
@@ -1352,7 +1703,10 @@ export default function MaintenancePage() {
       showToast("success", msg);
       setExpandedAiTaskId(null);
     } catch (err) {
-      showToast("error", err instanceof Error ? err.message : "Failed to accept AI slot.");
+      showToast(
+        "error",
+        err instanceof Error ? err.message : "Failed to accept AI slot.",
+      );
     } finally {
       setSchedulingSlot(null);
     }
@@ -1387,16 +1741,38 @@ export default function MaintenancePage() {
         const matchDetails = t.details?.toLowerCase().includes(q);
         const matchId = String(t.id).includes(q);
         const matchCorridor = corridorName?.toLowerCase().includes(q);
-        if (!matchCode && !matchAsset && !matchDetails && !matchId && !matchCorridor) return false;
+        if (
+          !matchCode &&
+          !matchAsset &&
+          !matchDetails &&
+          !matchId &&
+          !matchCorridor
+        )
+          return false;
       }
 
-      if (selectedCorridorFilter !== "ALL" && corridorName !== selectedCorridorFilter) {
+      if (
+        selectedCorridorFilter !== "ALL" &&
+        corridorName !== selectedCorridorFilter
+      ) {
         return false;
       }
 
-      if (selectedUrgencyFilter !== "ALL" && t.urgency !== selectedUrgencyFilter) return false;
-      if (selectedStatusFilter !== "ALL" && t.task_status !== selectedStatusFilter) return false;
-      if (selectedAssetFilter !== "ALL" && String(t.asset) !== selectedAssetFilter) return false;
+      if (
+        selectedUrgencyFilter !== "ALL" &&
+        t.urgency !== selectedUrgencyFilter
+      )
+        return false;
+      if (
+        selectedStatusFilter !== "ALL" &&
+        t.task_status !== selectedStatusFilter
+      )
+        return false;
+      if (
+        selectedAssetFilter !== "ALL" &&
+        String(t.asset) !== selectedAssetFilter
+      )
+        return false;
 
       return true;
     });
@@ -1413,13 +1789,22 @@ export default function MaintenancePage() {
   // Metric Summary
   const stats = useMemo(() => {
     const total = tasksPage?.count ?? 0;
-    const pendingCount = tasks.filter((t) => t.task_status === MaintenanceStatus.PENDING).length;
-    const scheduledCount = tasks.filter((t) => t.task_status === MaintenanceStatus.SCHEDULED).length;
-    const completedCount = tasks.filter((t) => t.task_status === MaintenanceStatus.COMPLETED).length;
-    const criticalCount = tasks.filter(
-      (t) => t.urgency === MaintenancePriority.CRITICAL || t.risk_rating >= 8
+    const pendingCount = tasks.filter(
+      (t) => t.task_status === MaintenanceStatus.PENDING,
     ).length;
-    const totalMinutes = tasks.reduce((sum, t) => sum + (t.estimated_duration || 0), 0);
+    const scheduledCount = tasks.filter(
+      (t) => t.task_status === MaintenanceStatus.SCHEDULED,
+    ).length;
+    const completedCount = tasks.filter(
+      (t) => t.task_status === MaintenanceStatus.COMPLETED,
+    ).length;
+    const criticalCount = tasks.filter(
+      (t) => t.urgency === MaintenancePriority.CRITICAL || t.risk_rating >= 8,
+    ).length;
+    const totalMinutes = tasks.reduce(
+      (sum, t) => sum + (t.estimated_duration || 0),
+      0,
+    );
 
     return {
       total,
@@ -1434,10 +1819,30 @@ export default function MaintenancePage() {
   const isSaving = createTaskMutation.isPending || updateTaskMutation.isPending;
   const isDeleting = deleteTaskMutation.isPending;
 
+  const lifecycleTheme =
+    lifecycleMode === "cancel"
+      ? {
+          notice: "border-red-200 bg-red-50 text-red-800",
+          action: "bg-red-600 hover:bg-red-700",
+        }
+      : lifecycleMode === "complete"
+        ? {
+            notice: "border-emerald-200 bg-emerald-50 text-emerald-800",
+            action: "bg-emerald-600 hover:bg-emerald-700",
+          }
+        : {
+            notice: "border-amber-200 bg-amber-50 text-amber-900",
+            action: "bg-amber-600 hover:bg-amber-700",
+          };
+
   if (isPageLoading) {
     return (
       <div className="min-h-screen bg-brand-tertiary flex flex-col font-sans">
-        <VerticalNavbar activeTab={activeNavTab} onTabChange={setActiveNavTab} unreadCount={1} />
+        <VerticalNavbar
+          activeTab={activeNavTab}
+          onTabChange={setActiveNavTab}
+          unreadCount={1}
+        />
         <MaintenancePageSkeleton />
       </div>
     );
@@ -1445,18 +1850,22 @@ export default function MaintenancePage() {
 
   return (
     <div className="min-h-screen bg-brand-tertiary text-brand-secondary flex flex-col font-sans selection:bg-brand-primary/20 selection:text-brand-primary">
-      <VerticalNavbar activeTab={activeNavTab} onTabChange={setActiveNavTab} unreadCount={1} />
+      <VerticalNavbar
+        activeTab={activeNavTab}
+        onTabChange={setActiveNavTab}
+        unreadCount={1}
+      />
 
       <div className="flex-1 flex pl-0 lg:pl-64 pt-14 lg:pt-0 animate-fade-in-up">
         <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-7 flex flex-col space-y-5 max-w-[1600px] mx-auto w-full">
-
           {/* Toast Notification Banner */}
           {toastMessage && (
             <div
-              className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl border transition-all animate-in fade-in slide-in-from-top-3 ${toastMessage.type === "success"
-                ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                : "bg-red-50 border-red-200 text-red-800"
-                }`}
+              className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl border transition-all animate-in fade-in slide-in-from-top-3 ${
+                toastMessage.type === "success"
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                  : "bg-red-50 border-red-200 text-red-800"
+              }`}
             >
               {toastMessage.type === "success" ? (
                 <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
@@ -1485,7 +1894,8 @@ export default function MaintenancePage() {
                 </h1>
               </div>
               <p className="text-xs text-brand-muted mt-1 font-medium">
-                Manage preventive block tasks, asset risk ratings, urgency queues, and maintenance timelines.
+                Manage preventive block tasks, asset risk ratings, urgency
+                queues, and maintenance timelines.
               </p>
             </div>
 
@@ -1508,9 +1918,13 @@ export default function MaintenancePage() {
                 {loadingTasks ? (
                   <Skeleton className="h-8 w-14 my-0.5 rounded-lg" />
                 ) : (
-                  <div className="text-2xl font-black text-brand-secondary tracking-tight">{stats.total}</div>
+                  <div className="text-2xl font-black text-brand-secondary tracking-tight">
+                    {stats.total}
+                  </div>
                 )}
-                <div className="text-[11px] text-brand-muted mt-0.5 font-medium">Across all assets</div>
+                <div className="text-[11px] text-brand-muted mt-0.5 font-medium">
+                  Across all assets
+                </div>
               </div>
             </div>
 
@@ -1525,9 +1939,13 @@ export default function MaintenancePage() {
                 {loadingTasks ? (
                   <Skeleton className="h-8 w-14 my-0.5 rounded-lg" />
                 ) : (
-                  <div className="text-2xl font-black text-brand-secondary/80 tracking-tight">{stats.completedCount}</div>
+                  <div className="text-2xl font-black text-brand-secondary/80 tracking-tight">
+                    {stats.completedCount}
+                  </div>
                 )}
-                <div className="text-[11px] text-brand-muted mt-0.5 font-medium">Finished successfully</div>
+                <div className="text-[11px] text-brand-muted mt-0.5 font-medium">
+                  Finished successfully
+                </div>
               </div>
             </div>
 
@@ -1542,9 +1960,13 @@ export default function MaintenancePage() {
                 {loadingTasks ? (
                   <Skeleton className="h-8 w-14 my-0.5 rounded-lg" />
                 ) : (
-                  <div className="text-2xl font-black text-black tracking-tight">{stats.scheduledCount}</div>
+                  <div className="text-2xl font-black text-black tracking-tight">
+                    {stats.scheduledCount}
+                  </div>
                 )}
-                <div className="text-[11px] text-brand-muted mt-0.5 font-medium">Ready for dispatch</div>
+                <div className="text-[11px] text-brand-muted mt-0.5 font-medium">
+                  Ready for dispatch
+                </div>
               </div>
             </div>
 
@@ -1559,9 +1981,13 @@ export default function MaintenancePage() {
                 {loadingTasks ? (
                   <Skeleton className="h-8 w-14 my-0.5 rounded-lg" />
                 ) : (
-                  <div className="text-2xl font-black text-black tracking-tight">{stats.criticalCount}</div>
+                  <div className="text-2xl font-black text-black tracking-tight">
+                    {stats.criticalCount}
+                  </div>
                 )}
-                <div className="text-[11px] text-brand-muted mt-0.5 font-medium">High risk or urgent</div>
+                <div className="text-[11px] text-brand-muted mt-0.5 font-medium">
+                  High risk or urgent
+                </div>
               </div>
             </div>
 
@@ -1577,10 +2003,13 @@ export default function MaintenancePage() {
                   <Skeleton className="h-8 w-20 my-0.5 rounded-lg" />
                 ) : (
                   <div className="text-2xl font-black text-brand-secondary tracking-tight">
-                    {Math.floor(stats.totalMinutes / 60)}h {stats.totalMinutes % 60}m
+                    {Math.floor(stats.totalMinutes / 60)}h{" "}
+                    {stats.totalMinutes % 60}m
                   </div>
                 )}
-                <div className="text-[11px] text-brand-muted mt-0.5 font-medium">Estimated track occupancy</div>
+                <div className="text-[11px] text-brand-muted mt-0.5 font-medium">
+                  Estimated track occupancy
+                </div>
               </div>
             </div>
           </section>
@@ -1588,7 +2017,6 @@ export default function MaintenancePage() {
           {/* Filtering and Controls Bar */}
           <section className="p-4 sm:p-5 rounded-2xl bg-brand-surface border border-brand-border shadow-sm space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-center">
-
               {/* Search Bar */}
               <div className="lg:col-span-3 relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
@@ -1603,16 +2031,26 @@ export default function MaintenancePage() {
 
               {/* Corridor / Section Filter Dropdown */}
               <div className="lg:col-span-3">
-                <Select value={selectedCorridorFilter} onValueChange={(val) => val && setSelectedCorridorFilter(val)}>
+                <Select
+                  value={selectedCorridorFilter}
+                  onValueChange={(val) => val && setSelectedCorridorFilter(val)}
+                >
                   <SelectTrigger className="w-full bg-brand-surface border border-brand-border hover:border-brand-primary/50 text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none font-bold shadow-2xs cursor-pointer">
                     <SelectValue placeholder="All Corridors" />
                   </SelectTrigger>
                   <SelectContent className="bg-brand-surface border-brand-border text-brand-secondary max-h-60 overflow-y-auto shadow-xl rounded-xl p-1.5">
-                    <SelectItem value="ALL" className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">
+                    <SelectItem
+                      value="ALL"
+                      className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary"
+                    >
                       All Corridors ({availableCorridors.length})
                     </SelectItem>
                     {availableCorridors.map((c) => (
-                      <SelectItem key={c.key} value={c.key} className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">
+                      <SelectItem
+                        key={c.key}
+                        value={c.key}
+                        className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary"
+                      >
                         {c.label}
                       </SelectItem>
                     ))}
@@ -1622,28 +2060,54 @@ export default function MaintenancePage() {
 
               {/* Status Filter Dropdown */}
               <div className="lg:col-span-3">
-                <Select value={selectedStatusFilter} onValueChange={(val) => val && setSelectedStatusFilter(val)}>
+                <Select
+                  value={selectedStatusFilter}
+                  onValueChange={(val) => val && setSelectedStatusFilter(val)}
+                >
                   <SelectTrigger className="w-full bg-brand-surface border border-brand-border hover:border-brand-primary/50 text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none font-bold shadow-2xs cursor-pointer">
                     <SelectValue placeholder="All Statuses" />
                   </SelectTrigger>
                   <SelectContent className="bg-brand-surface border-brand-border text-brand-secondary max-h-60 overflow-y-auto shadow-xl rounded-xl p-1.5">
-                    <SelectItem value="ALL" className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">All Statuses</SelectItem>
-                    <SelectItem value={MaintenanceStatus.PENDING} className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">
+                    <SelectItem
+                      value="ALL"
+                      className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary"
+                    >
+                      All Statuses
+                    </SelectItem>
+                    <SelectItem
+                      value={MaintenanceStatus.PENDING}
+                      className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary"
+                    >
                       {MAINTENANCE_STATUS_LABELS[MaintenanceStatus.PENDING]}
                     </SelectItem>
-                    <SelectItem value={MaintenanceStatus.SCHEDULED} className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">
+                    <SelectItem
+                      value={MaintenanceStatus.SCHEDULED}
+                      className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary"
+                    >
                       {MAINTENANCE_STATUS_LABELS[MaintenanceStatus.SCHEDULED]}
                     </SelectItem>
-                    <SelectItem value={MaintenanceStatus.ACTIVE} className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">
+                    <SelectItem
+                      value={MaintenanceStatus.ACTIVE}
+                      className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary"
+                    >
                       {MAINTENANCE_STATUS_LABELS[MaintenanceStatus.ACTIVE]}
                     </SelectItem>
-                    <SelectItem value={MaintenanceStatus.COMPLETED} className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">
+                    <SelectItem
+                      value={MaintenanceStatus.COMPLETED}
+                      className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary"
+                    >
                       {MAINTENANCE_STATUS_LABELS[MaintenanceStatus.COMPLETED]}
                     </SelectItem>
-                    <SelectItem value={MaintenanceStatus.CANCELLED} className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">
+                    <SelectItem
+                      value={MaintenanceStatus.CANCELLED}
+                      className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary"
+                    >
                       {MAINTENANCE_STATUS_LABELS[MaintenanceStatus.CANCELLED]}
                     </SelectItem>
-                    <SelectItem value={MaintenanceStatus.DELAYED} className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">
+                    <SelectItem
+                      value={MaintenanceStatus.DELAYED}
+                      className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary"
+                    >
                       {MAINTENANCE_STATUS_LABELS[MaintenanceStatus.DELAYED]}
                     </SelectItem>
                   </SelectContent>
@@ -1652,14 +2116,26 @@ export default function MaintenancePage() {
 
               {/* Target Asset Filter Dropdown */}
               <div className="lg:col-span-3">
-                <Select value={selectedAssetFilter} onValueChange={(val) => val && setSelectedAssetFilter(val)}>
+                <Select
+                  value={selectedAssetFilter}
+                  onValueChange={(val) => val && setSelectedAssetFilter(val)}
+                >
                   <SelectTrigger className="w-full bg-brand-surface border border-brand-border hover:border-brand-primary/50 text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none font-bold shadow-2xs cursor-pointer">
                     <SelectValue placeholder="All Assets" />
                   </SelectTrigger>
                   <SelectContent className="bg-brand-surface border-brand-border text-brand-secondary max-h-60 overflow-y-auto shadow-xl rounded-xl p-1.5">
-                    <SelectItem value="ALL" className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">All Assets</SelectItem>
+                    <SelectItem
+                      value="ALL"
+                      className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary"
+                    >
+                      All Assets
+                    </SelectItem>
                     {assets.map((a) => (
-                      <SelectItem key={a.id} value={String(a.id)} className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary">
+                      <SelectItem
+                        key={a.id}
+                        value={String(a.id)}
+                        className="rounded-lg px-3 py-2 text-xs font-medium cursor-pointer focus:bg-brand-blue-light/50 focus:text-brand-primary"
+                      >
                         {a.asset_title} (#{a.id})
                       </SelectItem>
                     ))}
@@ -1667,8 +2143,6 @@ export default function MaintenancePage() {
                 </Select>
               </div>
             </div>
-
-
           </section>
 
           {/* Task List Content */}
@@ -1694,7 +2168,9 @@ export default function MaintenancePage() {
                   className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-brand-secondary text-xs font-bold shadow-xs transition-all cursor-pointer shrink-0 whitespace-nowrap disabled:opacity-50"
                   title="Refresh maintenance tasks"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 text-brand-primary ${refetchingTasks ? "animate-spin" : ""}`} />
+                  <RefreshCw
+                    className={`w-3.5 h-3.5 text-brand-primary ${refetchingTasks ? "animate-spin" : ""}`}
+                  />
                   <span>Refresh</span>
                 </button>
                 <button
@@ -1708,7 +2184,7 @@ export default function MaintenancePage() {
             </div>
 
             {/* View Switching */}
-            {(loadingTasks || loadingAssets || refetchingTasks) ? (
+            {loadingTasks || loadingAssets || refetchingTasks ? (
               <MaintenanceTasksTableSkeleton />
             ) : filteredTasks.length === 0 ? (
               <div className="py-16 text-center text-brand-muted">
@@ -1718,7 +2194,8 @@ export default function MaintenancePage() {
                     No maintenance tasks found
                   </div>
                   <p className="text-xs text-brand-muted max-w-md">
-                    Schedule preventive maintenance or block windows for your assets.
+                    Schedule preventive maintenance or block windows for your
+                    assets.
                   </p>
                   <button
                     onClick={handleOpenCreateModal}
@@ -1754,19 +2231,30 @@ export default function MaintenancePage() {
                                   Criticality
                                 </PopoverTitle>
                                 <PopoverDescription className="text-[11px] leading-relaxed text-brand-muted">
-                                  This label shows the task's risk/severity level selected when the maintenance task is created or edited. It is not calculated from the table data.
+                                  This label shows the task's risk/severity
+                                  level selected when the maintenance task is
+                                  created or edited. It is not calculated from
+                                  the table data.
                                 </PopoverDescription>
                               </PopoverHeader>
                               <p className="text-[11px] leading-relaxed text-brand-muted">
-                                Labels are based on the selected rating: Critical (8–10), High (6–7), Moderate (4–5), and Low (1–3).
+                                Labels are based on the selected rating:
+                                Critical (8–10), High (6–7), Moderate (4–5), and
+                                Low (1–3).
                               </p>
                             </PopoverContent>
                           </Popover>
                         </div>
                       </th>
-                      <th className="py-3 px-4 text-center font-semibold">Task Code</th>
-                      <th className="py-3 px-4 text-center font-semibold">Target Asset</th>
-                      <th className="py-3 px-4 text-center font-semibold">Corridor</th>
+                      <th className="py-3 px-4 text-center font-semibold">
+                        Task Code
+                      </th>
+                      <th className="py-3 px-4 text-center font-semibold">
+                        Target Asset
+                      </th>
+                      <th className="py-3 px-4 text-center font-semibold">
+                        Corridor
+                      </th>
                       <th className="py-3 px-4 text-center font-semibold">
                         <div className="flex items-center justify-center gap-1">
                           <span>Block Window</span>
@@ -1786,58 +2274,94 @@ export default function MaintenancePage() {
                                   Block Window
                                 </PopoverTitle>
                                 <PopoverDescription className="text-[11px] leading-relaxed text-brand-muted">
-                                  This shows the reserved corridor time and date for the maintenance task. No train movement is scheduled during this period.
+                                  This shows the reserved corridor time and date
+                                  for the maintenance task. No train movement is
+                                  scheduled during this period.
                                 </PopoverDescription>
                               </PopoverHeader>
                               <p className="text-[11px] leading-relaxed text-brand-muted">
-                                Select the AI logo beside the time to view an AI-recommended alternative slot when one is available.
+                                Select the AI logo beside the time to view an
+                                AI-recommended alternative slot when one is
+                                available.
                               </p>
                             </PopoverContent>
                           </Popover>
                         </div>
                       </th>
-                      <th className="py-3 px-4 text-center font-semibold">Status</th>
-                      <th className="py-3 px-4 text-right font-semibold">Actions</th>
+                      <th className="py-3 px-4 text-center font-semibold">
+                        Status
+                      </th>
+                      <th className="py-3 px-4 text-right font-semibold">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-border/60 text-brand-secondary">
                     {filteredTasks.map((task, index) => {
-                      const urgKey = (task.urgency as MaintenancePriority) || MaintenancePriority.MEDIUM;
-                      const statKey = (task.task_status as MaintenanceStatus) || MaintenanceStatus.PENDING;
-                      const urg = URGENCY_CONFIG[urgKey] || URGENCY_CONFIG[MaintenancePriority.MEDIUM];
-                      const stat = STATUS_CONFIG[statKey] || STATUS_CONFIG[MaintenanceStatus.PENDING];
+                      const urgKey =
+                        (task.urgency as MaintenancePriority) ||
+                        MaintenancePriority.MEDIUM;
+                      const statKey =
+                        (task.task_status as MaintenanceStatus) ||
+                        MaintenanceStatus.PENDING;
+                      const urg =
+                        URGENCY_CONFIG[urgKey] ||
+                        URGENCY_CONFIG[MaintenancePriority.MEDIUM];
+                      const stat =
+                        STATUS_CONFIG[statKey] ||
+                        STATUS_CONFIG[MaintenanceStatus.PENDING];
                       const taskAsset = assets.find((a) => a.id === task.asset);
-                      const corridorName = task.section_name || taskAsset?.section_name || "General Corridor";
-                      const isLastItem = index >= Math.max(1, filteredTasks.length - 3) || (filteredTasks.length <= 4 && index >= 2);
+                      const corridorName =
+                        task.section_name ||
+                        taskAsset?.section_name ||
+                        "General Corridor";
+                      const isLastItem =
+                        index >= Math.max(1, filteredTasks.length - 3) ||
+                        (filteredTasks.length <= 4 && index >= 2);
 
                       const secId = taskAsset?.section;
-                      const secName = task.section_name || taskAsset?.section_name;
+                      const secName =
+                        task.section_name || taskAsset?.section_name;
                       const matchingBw = task.block_window
                         ? {
-                          id: task.block_window.id,
-                          section: Number(task.block_window.section || secId || 1),
-                          start_time: task.block_window.start_time,
-                          end_time: task.block_window.end_time,
-                          status: task.block_window.status || "RESERVED",
-                        }
+                            id: task.block_window.id,
+                            section: Number(
+                              task.block_window.section || secId || 1,
+                            ),
+                            start_time: task.block_window.start_time,
+                            end_time: task.block_window.end_time,
+                            status: task.block_window.status || "RESERVED",
+                          }
                         : blockWindows.find((bw) => {
-                          if (bw.task && bw.task === task.id) return true;
-                          if (bw.task_id && bw.task_id === task.task_code) return true;
-                          if (bw.task_code && bw.task_code === task.task_code) return true;
-                          return false;
-                        });
+                            if (bw.task && bw.task === task.id) return true;
+                            if (bw.task_id && bw.task_id === task.task_code)
+                              return true;
+                            if (bw.task_code && bw.task_code === task.task_code)
+                              return true;
+                            return false;
+                          });
 
                       const hasAllocatedWindow = Boolean(matchingBw);
-                      const effectiveStatKey = (statKey === MaintenanceStatus.COMPLETED || statKey === MaintenanceStatus.CANCELLED)
-                        ? statKey
-                        : (statKey === MaintenanceStatus.PENDING && hasAllocatedWindow ? MaintenanceStatus.SCHEDULED : statKey);
-                      const effectiveStat = STATUS_CONFIG[effectiveStatKey] || stat;
-                      const isActiveMaintenance = effectiveStatKey === MaintenanceStatus.ACTIVE;
+                      const effectiveStatKey =
+                        statKey === MaintenanceStatus.COMPLETED ||
+                        statKey === MaintenanceStatus.CANCELLED
+                          ? statKey
+                          : statKey === MaintenanceStatus.PENDING &&
+                              hasAllocatedWindow
+                            ? MaintenanceStatus.SCHEDULED
+                            : statKey;
+                      const effectiveStat =
+                        STATUS_CONFIG[effectiveStatKey] || stat;
+                      const isActiveMaintenance =
+                        effectiveStatKey === MaintenanceStatus.ACTIVE;
+                      const sharedBlockId =
+                        task.shared_block_window_id ??
+                        sharedBlockIdByTaskCode[task.task_code];
 
                       return (
                         <React.Fragment key={task.id}>
                           <tr className="hover:bg-brand-tertiary/60 transition-colors group">
-                              {/* Criticality Score / Index */}
+                            {/* Criticality Score / Index */}
                             <td className="py-3.5 px-4 text-center">
                               <div className="inline-flex items-center justify-center">
                                 {(() => {
@@ -1845,12 +2369,24 @@ export default function MaintenancePage() {
 
                                   const riskStyle =
                                     score >= 8
-                                      ? { label: "Critical", className: "text-red-700" }
+                                      ? {
+                                          label: "Critical",
+                                          className: "text-red-700",
+                                        }
                                       : score >= 6
-                                        ? { label: "High", className: "text-orange-700" }
+                                        ? {
+                                            label: "High",
+                                            className: "text-orange-700",
+                                          }
                                         : score >= 4
-                                          ? { label: "Moderate", className: "text-amber-700" }
-                                          : { label: "Low", className: "text-emerald-700" };
+                                          ? {
+                                              label: "Moderate",
+                                              className: "text-amber-700",
+                                            }
+                                          : {
+                                              label: "Low",
+                                              className: "text-emerald-700",
+                                            };
 
                                   return (
                                     <span
@@ -1863,7 +2399,14 @@ export default function MaintenancePage() {
                               </div>
                             </td>
                             <td className="py-3.5 px-4 text-center font-semibold text-brand-primary text-xs lg:text-sm">
-                              {task.task_code}
+                              <div className="flex flex-col items-center gap-1">
+                                <span>{task.task_code}</span>
+                                {task.shared_block_window_id && (
+                                  <span className="rounded-full bg-brand-blue-light px-2 py-0.5 text-[10px] font-bold text-brand-primary">
+                                    Shared block #{task.shared_block_window_id}
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="py-3.5 px-4 text-center">
                               <div className="font-semibold text-brand-secondary">
@@ -1883,15 +2426,20 @@ export default function MaintenancePage() {
                                 (() => {
                                   const slotInfo = formatWindowSlot(
                                     matchingBw.start_time,
-                                    matchingBw.end_time
+                                    matchingBw.end_time,
                                   );
 
                                   const showAiBot =
-                                    effectiveStatKey !== MaintenanceStatus.COMPLETED &&
-                                    effectiveStatKey !== MaintenanceStatus.CANCELLED &&
+                                    effectiveStatKey !==
+                                      MaintenanceStatus.COMPLETED &&
+                                    effectiveStatKey !==
+                                      MaintenanceStatus.CANCELLED &&
                                     !isActiveMaintenance &&
-                                    task.task_status !== MaintenanceStatus.COMPLETED &&
-                                    task.task_status !== MaintenanceStatus.CANCELLED;
+                                    !sharedBlockId &&
+                                    task.task_status !==
+                                      MaintenanceStatus.COMPLETED &&
+                                    task.task_status !==
+                                      MaintenanceStatus.CANCELLED;
 
                                   return (
                                     <div className="inline-flex items-center justify-center gap-2.5 min-w-[170px]">
@@ -1910,23 +2458,25 @@ export default function MaintenancePage() {
                                         {showAiBot && (
                                           <button
                                             type="button"
-                                            onClick={() => handleToggleAiRecommendation(task)}
-                                            className={`w-9 h-9 flex items-center justify-center rounded-lg border shadow-xs transition-all cursor-pointer ${expandedAiTaskId === task.id
-                                              ? "bg-gray-900 text-white border-gray-900 shadow-sm"
-                                              : "bg-gray-100 hover:bg-gray-200 border-gray-300 text-gray-900"
-                                              }`}
+                                            onClick={() =>
+                                              handleToggleAiRecommendation(task)
+                                            }
+                                            className={`w-9 h-9 flex items-center justify-center rounded-lg border shadow-xs transition-all cursor-pointer ${
+                                              expandedAiTaskId === task.id
+                                                ? "bg-gray-900 text-white border-gray-900 shadow-sm"
+                                                : "bg-gray-100 hover:bg-gray-200 border-gray-300 text-gray-900"
+                                            }`}
                                             title="AI Recommended Slot"
                                             aria-label="AI Recommended Slot"
                                           >
-                                            <Image
-                                              src="/ai.svg"
+                                            <AiLogo
+                                              size={24}
                                               alt="AI recommendation"
-                                              width={24}
-                                              height={24}
-                                              className={`h-16 w-16 object-contain ${expandedAiTaskId === task.id
-                                                ? "brightness-0 invert"
-                                                : ""
-                                                }`}
+                                              className={`h-16 w-16 object-contain ${
+                                                expandedAiTaskId === task.id
+                                                  ? "brightness-0 invert"
+                                                  : ""
+                                              }`}
                                             />
                                           </button>
                                         )}
@@ -1939,8 +2489,10 @@ export default function MaintenancePage() {
                               ) : (
                                 <div className="inline-flex flex-col items-center gap-1.5">
                                   <button
-                                    onClick={() => handleOpenBlockWindowModal(task)}
-                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-bold text-[11px] shadow-xs transition-colors cursor-pointer"
+                                    onClick={() =>
+                                      handleOpenBlockWindowModal(task)
+                                    }
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-violet-500 hover:bg-violet-600 active:bg-violet-700 text-white font-bold text-[11px] shadow-xs transition-colors cursor-pointer"
                                   >
                                     <Plus className="w-3 h-3" />
                                     <span>Add Block Window</span>
@@ -1949,12 +2501,11 @@ export default function MaintenancePage() {
                               )}
                             </td>
 
-
-                           {/* Status */}
+                            {/* Status */}
                             <td className="py-3.5 px-4 text-center">
                               <div className="flex items-center justify-center">
                                 <span
-                                  className={`inline-flex items-center justify-center gap-1.5 w-[108px] h-[28px] rounded-md text-[10px] font-semibold border ${effectiveStat.badge}`}
+                                  className={`inline-flex min-w-[156px] w-auto items-center justify-center gap-1.5 px-2.5 h-[28px] rounded-md text-[10px] font-semibold border ${effectiveStat.badge}`}
                                 >
                                   <effectiveStat.icon className="w-3.5 h-3.5 text-white shrink-0" />
                                   <span className="whitespace-nowrap">
@@ -1963,7 +2514,7 @@ export default function MaintenancePage() {
                                 </span>
                               </div>
                             </td>
-                            {/* Actions - all actions are inside the vertical ellipsis */}
+                            {/* Secondary task actions */}
                             <td className="py-3.5 px-4 text-center">
                               <div className="flex items-center justify-end gap-1.5">
                                 <DropdownMenu>
@@ -1980,9 +2531,12 @@ export default function MaintenancePage() {
                                     sideOffset={6}
                                     className="w-56 bg-brand-surface border-brand-border text-brand-secondary shadow-xl rounded-xl p-1.5 z-50"
                                   >
-                                     {effectiveStatKey === MaintenanceStatus.SCHEDULED && (
+                                    {effectiveStatKey ===
+                                      MaintenanceStatus.SCHEDULED && (
                                       <DropdownMenuItem
-                                        onClick={() => openLifecycleModal(task, "start")}
+                                        onClick={() =>
+                                          openLifecycleModal(task, "start")
+                                        }
                                         className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-amber-50 text-sm font-semibold text-amber-700 cursor-pointer focus:bg-amber-50 focus:text-amber-700"
                                       >
                                         <Wrench className="w-4 h-4 text-amber-700" />
@@ -1990,29 +2544,51 @@ export default function MaintenancePage() {
                                       </DropdownMenuItem>
                                     )}
 
-                                      {/* Complete Task */}
-                                    {(effectiveStatKey === MaintenanceStatus.ACTIVE ||
-                                      (effectiveStatKey === MaintenanceStatus.DELAYED && Boolean(task.started_at))) && (
-                                        <DropdownMenuItem
-                                          onClick={() => openLifecycleModal(task, "complete")}
-                                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-emerald-50 text-sm font-semibold text-emerald-700 cursor-pointer focus:bg-emerald-50 focus:text-emerald-700"
-                                        >
-                                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                                          <span>Complete Task</span>
-                                        </DropdownMenuItem>
-                                      )}
+                                    {/* Complete Task */}
+                                    {(effectiveStatKey ===
+                                      MaintenanceStatus.ACTIVE ||
+                                      (effectiveStatKey ===
+                                        MaintenanceStatus.DELAYED &&
+                                        Boolean(task.started_at))) && (
+                                      <DropdownMenuItem
+                                        onClick={() =>
+                                          openLifecycleModal(task, "complete")
+                                        }
+                                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-emerald-50 text-sm font-semibold text-emerald-700 cursor-pointer focus:bg-emerald-50 focus:text-emerald-700"
+                                      >
+                                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                        <span>Complete Task</span>
+                                      </DropdownMenuItem>
+                                    )}
 
                                     {/* Cancel Task */}
-                                    {effectiveStatKey !== MaintenanceStatus.COMPLETED &&
-                                      effectiveStatKey !== MaintenanceStatus.CANCELLED && (
+                                    {effectiveStatKey !==
+                                      MaintenanceStatus.COMPLETED &&
+                                      effectiveStatKey !==
+                                        MaintenanceStatus.CANCELLED && (
                                         <DropdownMenuItem
-                                          onClick={() => openLifecycleModal(task, "cancel")}
+                                          onClick={() =>
+                                            openLifecycleModal(task, "cancel")
+                                          }
                                           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-red-700 cursor-pointer"
                                         >
                                           <XCircle className="w-4 h-4 text-red-700" />
                                           <span>Cancel Task</span>
                                         </DropdownMenuItem>
                                       )}
+
+                                         {sharedBlockId && (
+                                      <DropdownMenuItem
+                                        onClick={() =>
+                                          setViewingSharedBlockId(sharedBlockId)
+                                        }
+                                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary cursor-pointer focus:bg-brand-tertiary focus:text-brand-secondary"
+                                      >
+                                        <Calendar className="w-4 h-4 text-brand-primary" />
+                                        <span>View Shared Block</span>
+                                      </DropdownMenuItem>
+                                    )}
+
 
                                     {/* View Details - always available */}
                                     <DropdownMenuItem
@@ -2022,15 +2598,19 @@ export default function MaintenancePage() {
                                       <Eye className="w-4 h-4 text-black" />
                                       <span>View Details</span>
                                     </DropdownMenuItem>
-                                   
 
                                     {/* Edit Task + Block Window */}
-                                    {!isActiveMaintenance &&
-                                      effectiveStatKey !== MaintenanceStatus.COMPLETED &&
-                                      effectiveStatKey !== MaintenanceStatus.CANCELLED && (
+                                    {!sharedBlockId &&
+                                      !isActiveMaintenance &&
+                                      effectiveStatKey !==
+                                        MaintenanceStatus.COMPLETED &&
+                                      effectiveStatKey !==
+                                        MaintenanceStatus.CANCELLED && (
                                         <>
                                           <DropdownMenuItem
-                                            onClick={() => handleOpenEditModal(task)}
+                                            onClick={() =>
+                                              handleOpenEditModal(task)
+                                            }
                                             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary cursor-pointer focus:bg-brand-tertiary focus:text-brand-secondary"
                                           >
                                             <Edit2 className="w-4 h-4 text-brand-secondary" />
@@ -2038,7 +2618,12 @@ export default function MaintenancePage() {
                                           </DropdownMenuItem>
 
                                           <DropdownMenuItem
-                                            onClick={() => handleOpenBlockWindowModal(task, matchingBw)}
+                                            onClick={() =>
+                                              handleOpenBlockWindowModal(
+                                                task,
+                                                matchingBw,
+                                              )
+                                            }
                                             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary cursor-pointer focus:bg-brand-tertiary focus:text-brand-secondary"
                                           >
                                             <Calendar className="w-4 h-4 text-brand-secondary" />
@@ -2053,109 +2638,187 @@ export default function MaintenancePage() {
                           </tr>
 
                           {/* Inline AI Recommendation Expanded Panel (Not in Dialogue) */}
-                          {expandedAiTaskId === task.id && statKey !== MaintenanceStatus.PENDING && statKey !== MaintenanceStatus.COMPLETED && statKey !== MaintenanceStatus.CANCELLED && effectiveStatKey !== MaintenanceStatus.COMPLETED && effectiveStatKey !== MaintenanceStatus.CANCELLED && Boolean(matchingBw) && (
-                            <tr key={`ai-${task.id}`} className="bg-gray-50 border-b border-gray-200">
-                              <td colSpan={7} className="p-3.5">
-                                {loadingAiTaskId === task.id ? (
-                                  <div className="p-4 rounded-2xl bg-white border border-gray-300 flex items-center justify-center gap-2 text-xs font-bold text-gray-900 shadow-xs">
-                                    <RefreshCw className="w-4 h-4 text-gray-900 animate-spin" />
-                                    <span>Evaluating AI Slot Optimisation...</span>
-                                  </div>
-                                ) : (
-                                  <div className="p-4.5 rounded-2xl bg-white border border-gray-300 text-left space-y-2 shadow-sm">
-                                    {/* Header */}
-                                    <div className="flex items-center justify-between flex-wrap">
-                                      <div className="flex items-center text-xs font-bold text-brand-secondary">
-                                        <Image
-                                          src="/ai.svg"
-                                          alt=""
-                                          width={16}
-                                          height={16}
-                                          className="h-12 w-12 object-contain"
-                                        />
-                                        <span>Sanket AI</span>
-                                      </div>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleToggleAiRecommendation(task, true)}
-                                        disabled={loadingAiTaskId === task.id}
-                                        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-[11px] font-bold text-gray-900 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
-                                        title="Refresh AI slot recommendation"
-                                      >
-                                        <RefreshCw className={`h-3.5 w-3.5 ${loadingAiTaskId === task.id ? "animate-spin" : ""}`} />
-                                        Refresh
-                                      </button>
+                          {expandedAiTaskId === task.id &&
+                            !sharedBlockId &&
+                            statKey !== MaintenanceStatus.PENDING &&
+                            statKey !== MaintenanceStatus.COMPLETED &&
+                            statKey !== MaintenanceStatus.CANCELLED &&
+                            effectiveStatKey !== MaintenanceStatus.COMPLETED &&
+                            effectiveStatKey !== MaintenanceStatus.CANCELLED &&
+                            Boolean(matchingBw) && (
+                              <tr
+                                key={`ai-${task.id}`}
+                                className="bg-gray-50 border-b border-gray-200"
+                              >
+                                <td colSpan={7} className="p-3.5">
+                                  {loadingAiTaskId === task.id ? (
+                                    <div className="p-4 rounded-2xl bg-white border border-gray-300 flex items-center justify-center gap-2 text-xs font-bold text-gray-900 shadow-xs">
+                                      <RefreshCw className="w-4 h-4 text-gray-900 animate-spin" />
+                                      <span>
+                                        Evaluating AI Slot Optimisation...
+                                      </span>
                                     </div>
-
-                                    {/* User-facing recommendation summary */}
-                                    <p className="text-xs text-brand-secondary font-medium leading-relaxed">
-                                      {aiRecommendationsMap[task.id]?.recommended_slot
-                                        ? "Your current block window is conflict-free. An alternative scheduling option is available below for your review."
-                                        : "Your current block window is conflict-free. No alternative scheduling option is available at this time."}
-                                    </p>
-                                    {aiRecommendationsMap[task.id]?.recommended_slot ? (
-                                      <div className="pt-3 border-t border-gray-200 flex items-center justify-between flex-wrap gap-4">
-                                        {/* Slot Comparison */}
-                                        <div className="flex items-center gap-6 text-xs">
-                                          <div>
-                                            <span className="text-[10px] font-bold uppercase text-brand-muted block mb-0.5">Current Slot</span>
-                                            <span className="font-mono font-bold text-brand-secondary">
-                                              {matchingBw ? (
-                                                (() => {
-                                                  const curInfo = formatWindowSlot(matchingBw.start_time, matchingBw.end_time);
-                                                  return `${curInfo.time} · ${curInfo.date}`;
-                                                })()
-                                              ) : (
-                                                aiRecommendationsMap[task.id]?.current_slot || "Pending Allocation"
-                                              )}
-                                            </span>
-                                          </div>
-
-                                          <div>
-                                            <span className="text-[10px] font-bold uppercase text-gray-900 block mb-0.5 flex items-center gap-1">
-                                           AI Recommended
-                                            </span>
-                                            <span className="font-mono font-bold text-gray-900 text-sm">
-                                              {(() => {
-                                                const recSlot = aiRecommendationsMap[task.id]?.recommended_slot;
-                                                if (!recSlot) return null;
-                                                const recInfo = formatWindowSlot(recSlot.start, recSlot.end);
-                                                return `${recInfo.time} (${recSlot.duration_minutes} min) · ${recInfo.date}`;
-                                              })()}
-                                            </span>
-                                          </div>
+                                  ) : (
+                                    <div className="p-4.5 rounded-2xl bg-white border border-gray-300 text-left space-y-2 shadow-sm">
+                                      {/* Header */}
+                                      <div className="flex items-center justify-between flex-wrap">
+                                        <div className="flex items-center text-xs font-bold text-brand-secondary">
+                                          <AiLogo
+                                            size={16}
+                                            alt=""
+                                            className="h-12 w-12 object-contain"
+                                          />
+                                          <span>Sanket AI</span>
                                         </div>
-
-                                        {/* Accept AI Slot Button */}
                                         <button
                                           type="button"
-                                          onClick={() => handleAcceptAiSlot(task, aiRecommendationsMap[task.id]?.recommended_slot)}
-                                          disabled={schedulingSlot !== null}
-                                          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 active:bg-black text-white font-bold text-xs shadow-md shadow-gray-900/20 transition-all cursor-pointer disabled:opacity-60"
+                                          onClick={() =>
+                                            handleToggleAiRecommendation(
+                                              task,
+                                              true,
+                                            )
+                                          }
+                                          disabled={loadingAiTaskId === task.id}
+                                          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-[11px] font-bold text-gray-900 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                          title="Refresh AI slot recommendation"
                                         >
-                                          {schedulingSlot === aiRecommendationsMap[task.id]?.recommended_slot?.start ? (
-                                            <>
-                                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                              <span>Applying AI Slot...</span>
-                                            </>
-                                          ) : (
-                                            <>
-                                              <ArrowRight className="w-4 h-4 text-white" />
-                                              <span>Accept AI Slot</span>
-                                            </>
-                                          )}
+                                          <RefreshCw
+                                            className={`h-3.5 w-3.5 ${loadingAiTaskId === task.id ? "animate-spin" : ""}`}
+                                          />
+                                          Refresh
                                         </button>
                                       </div>
-                                    ) : (
-                                      <div className="pt-2 border-t border-gray-200 text-xs font-semibold text-brand-secondary">
-                                        No conflict-free AI recommendation found for this corridor on the target date.
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </td>
-                            </tr>
-                          )}
+
+                                      {/* User-facing recommendation summary */}
+                                      <p className="text-xs text-brand-secondary font-medium leading-relaxed">
+                                        {aiRecommendationsMap[task.id]
+                                          ?.recommended_slot
+                                          ? "Your current block window is conflict-free. An alternative scheduling option is available below for your review."
+                                          : "Your current block window is conflict-free. No alternative scheduling option is available at this time."}
+                                      </p>
+                                      {aiRecommendationsMap[task.id]
+                                        ?.recommended_slot ? (
+                                        <div className="pt-3 border-t border-gray-200 flex items-center justify-between flex-wrap gap-4">
+                                          {/* Slot Comparison */}
+                                          <div className="flex items-center gap-6 text-xs">
+                                            <div>
+                                              <span className="text-[10px] font-bold uppercase text-brand-muted block mb-0.5">
+                                                Current Slot
+                                              </span>
+                                              <span className="font-mono font-bold text-brand-secondary">
+                                                {matchingBw
+                                                  ? (() => {
+                                                      const curInfo =
+                                                        formatWindowSlot(
+                                                          matchingBw.start_time,
+                                                          matchingBw.end_time,
+                                                        );
+                                                      return `${curInfo.time} · ${curInfo.date}`;
+                                                    })()
+                                                  : aiRecommendationsMap[
+                                                      task.id
+                                                    ]?.current_slot ||
+                                                    "Pending Allocation"}
+                                              </span>
+                                            </div>
+
+                                            <div>
+                                              <span className="text-[10px] font-bold uppercase text-gray-900 block mb-0.5 flex items-center gap-1">
+                                                AI Recommended
+                                              </span>
+                                              <span className="font-mono font-bold text-gray-900 text-sm">
+                                                {(() => {
+                                                  const recSlot =
+                                                    aiRecommendationsMap[
+                                                      task.id
+                                                    ]?.recommended_slot;
+                                                  if (!recSlot) return null;
+                                                  const recInfo =
+                                                    formatWindowSlot(
+                                                      recSlot.start,
+                                                      recSlot.end,
+                                                    );
+                                                  return `${recInfo.time} (${recSlot.duration_minutes} min) · ${recInfo.date}`;
+                                                })()}
+                                              </span>
+                                            </div>
+                                          </div>
+
+                                          <div className="flex items-center gap-2">
+                                            <Select value={String(nearbyDays)} onValueChange={(value) => setNearbyDays(Number(value))}>
+                                              <SelectTrigger disabled={combinedRecommendationMutation.isPending} aria-label="Nearby task range in days" className="h-auto gap-1 rounded-xl border-gray-300 bg-white px-2.5 py-2 text-[11px] font-bold text-gray-700 shadow-none focus:ring-0 disabled:cursor-not-allowed">
+                                                <span>Nearby</span>
+                                                <SelectValue />
+                                              </SelectTrigger>
+                                              <SelectContent className="bg-brand-surface text-brand-secondary opacity-100 shadow-xl ring-brand-border">
+                                                {[1, 2, 3, 5, 7].map((days) => <SelectItem key={days} value={String(days)}>{days}d</SelectItem>)}
+                                              </SelectContent>
+                                            </Select>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                handleGetCombinedRecommendation(
+                                                  task.task_code,
+                                                )
+                                              }
+                                              disabled={
+                                                combinedRecommendationMutation.isPending
+                                              }
+                                              className="flex items-center gap-2 rounded-xl border border-brand-primary bg-brand-primary px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
+                                            >
+                                              {combinedRecommendationMutation.isPending ? (
+                                                <RefreshCw className="size-4 animate-spin" />
+                                              ) : (
+                                                ""
+                                              )}
+                                              <span>
+                                                {combinedRecommendationMutation.isPending
+                                                  ? "Finding shared slot…"
+                                                  : "Find Shared Slot"}
+                                              </span>
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                handleAcceptAiSlot(
+                                                  task,
+                                                  aiRecommendationsMap[task.id]
+                                                    ?.recommended_slot,
+                                                )
+                                              }
+                                              disabled={schedulingSlot !== null}
+                                              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 active:bg-black text-white font-bold text-xs shadow-md shadow-gray-900/20 transition-all cursor-pointer disabled:opacity-60"
+                                            >
+                                              {schedulingSlot ===
+                                              aiRecommendationsMap[task.id]
+                                                ?.recommended_slot?.start ? (
+                                                <>
+                                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                                  <span>
+                                                    Applying AI Slot...
+                                                  </span>
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <ArrowRight className="w-4 h-4 text-white" />
+                                                  <span>Accept AI Slot</span>
+                                                </>
+                                              )}
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className="pt-2 border-t border-gray-200 text-xs font-semibold text-brand-secondary">
+                                          No conflict-free AI recommendation
+                                          found for this corridor on the target
+                                          date.
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            )}
                         </React.Fragment>
                       );
                     })}
@@ -2167,9 +2830,19 @@ export default function MaintenancePage() {
               <div className="flex flex-col gap-3 border-t border-brand-border px-4 py-3 text-xs sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3 text-brand-muted">
                   <span className="font-medium">
-                    Showing <strong className="text-brand-secondary">{(currentPage - 1) * pageSize + 1}</strong> to{" "}
-                    <strong className="text-brand-secondary">{Math.min(currentPage * pageSize, tasksPage.count)}</strong> of{" "}
-                    <strong className="text-brand-secondary">{tasksPage.count}</strong> maintenance tasks
+                    Showing{" "}
+                    <strong className="text-brand-secondary">
+                      {(currentPage - 1) * pageSize + 1}
+                    </strong>{" "}
+                    to{" "}
+                    <strong className="text-brand-secondary">
+                      {Math.min(currentPage * pageSize, tasksPage.count)}
+                    </strong>{" "}
+                    of{" "}
+                    <strong className="text-brand-secondary">
+                      {tasksPage.count}
+                    </strong>{" "}
+                    maintenance tasks
                   </span>
                   <label className="flex items-center gap-2 border-l border-brand-border pl-3">
                     Rows:
@@ -2191,7 +2864,9 @@ export default function MaintenancePage() {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                    onClick={() =>
+                      setCurrentPage((page) => Math.max(1, page - 1))
+                    }
                     disabled={!tasksPage.previous || fetchingTasks}
                     className="rounded-lg border border-brand-border p-2 text-brand-secondary transition-colors hover:bg-brand-tertiary disabled:cursor-not-allowed disabled:opacity-40"
                     aria-label="Previous page"
@@ -2200,10 +2875,28 @@ export default function MaintenancePage() {
                   </button>
                   {Array.from({ length: totalPages }).map((_, index) => {
                     const page = index + 1;
-                    if (page === 1 || page === totalPages || (page >= currentPage - 1 && page <= currentPage + 1)) {
-                      return <button key={page} type="button" onClick={() => setCurrentPage(page)} className={`h-8 min-w-8 rounded-lg px-2 font-bold transition-colors ${currentPage === page ? "bg-brand-primary text-white" : "border border-brand-border text-brand-secondary hover:bg-brand-tertiary"}`}>{page}</button>;
+                    if (
+                      page === 1 ||
+                      page === totalPages ||
+                      (page >= currentPage - 1 && page <= currentPage + 1)
+                    ) {
+                      return (
+                        <button
+                          key={page}
+                          type="button"
+                          onClick={() => setCurrentPage(page)}
+                          className={`h-8 min-w-8 rounded-lg px-2 font-bold transition-colors ${currentPage === page ? "bg-brand-primary text-white" : "border border-brand-border text-brand-secondary hover:bg-brand-tertiary"}`}
+                        >
+                          {page}
+                        </button>
+                      );
                     }
-                    if (page === currentPage - 2 || page === currentPage + 2) return <span key={page} className="px-0.5 text-brand-muted">…</span>;
+                    if (page === currentPage - 2 || page === currentPage + 2)
+                      return (
+                        <span key={page} className="px-0.5 text-brand-muted">
+                          …
+                        </span>
+                      );
                     return null;
                   })}
                   <button
@@ -2233,9 +2926,10 @@ export default function MaintenancePage() {
                 </div>
                 <div>
                   <h3 className="text-base font-extrabold text-brand-secondary">
-                    {editingTask ? `Edit Task ${editingTask.task_code}` : "Schedule Maintenance Task"}
+                    {editingTask
+                      ? `Edit Task ${editingTask.task_code}`
+                      : "Schedule Maintenance Task"}
                   </h3>
-
                 </div>
               </div>
               <button
@@ -2256,7 +2950,9 @@ export default function MaintenancePage() {
                     type="text"
                     placeholder="e.g. TMS-001"
                     value={formData.task_code}
-                    onChange={(e) => setFormData({ ...formData, task_code: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, task_code: e.target.value })
+                    }
                     required
                     className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none font-bold shadow-2xs"
                   />
@@ -2268,7 +2964,12 @@ export default function MaintenancePage() {
                   </label>
                   <select
                     value={formData.asset}
-                    onChange={(e) => setFormData({ ...formData, asset: Number(e.target.value) })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        asset: Number(e.target.value),
+                      })
+                    }
                     required
                     className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none cursor-pointer font-bold shadow-2xs"
                   >
@@ -2277,10 +2978,19 @@ export default function MaintenancePage() {
                     </option>
                     {assets.map((a) => (
                       <option key={a.id} value={a.id}>
-                        {a.asset_title} (#{a.id})
+                        {a.asset_title} (#{a.id}) —{" "}
+                        {a.section_name || `Corridor / Section #${a.section}`}
                       </option>
                     ))}
                   </select>
+                  {formData.asset > 0 && (
+                    <p className="mt-1 text-[11px] font-medium text-brand-muted">
+                      Corridor:{" "}
+                      {assets.find((asset) => asset.id === formData.asset)
+                        ?.section_name ||
+                        `Section #${assets.find((asset) => asset.id === formData.asset)?.section}`}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -2292,7 +3002,9 @@ export default function MaintenancePage() {
                   rows={2}
                   placeholder="Describe maintenance scope, required track possession, personnel..."
                   value={formData.details || ""}
-                  onChange={(e) => setFormData({ ...formData, details: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, details: e.target.value })
+                  }
                   className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2 outline-none font-medium shadow-2xs"
                 />
               </div>
@@ -2303,13 +3015,26 @@ export default function MaintenancePage() {
                 </label>
                 <select
                   value={formData.urgency}
-                  onChange={(e) => setFormData({ ...formData, urgency: e.target.value as MaintenancePriority })}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      urgency: e.target.value as MaintenancePriority,
+                    })
+                  }
                   className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2.5 outline-none cursor-pointer font-bold shadow-2xs"
                 >
-                  <option value={MaintenancePriority.CRITICAL}>{MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.CRITICAL]}</option>
-                  <option value={MaintenancePriority.HIGH}>{MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.HIGH]}</option>
-                  <option value={MaintenancePriority.MEDIUM}>{MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.MEDIUM]}</option>
-                  <option value={MaintenancePriority.LOW}>{MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.LOW]}</option>
+                  <option value={MaintenancePriority.CRITICAL}>
+                    {MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.CRITICAL]}
+                  </option>
+                  <option value={MaintenancePriority.HIGH}>
+                    {MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.HIGH]}
+                  </option>
+                  <option value={MaintenancePriority.MEDIUM}>
+                    {MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.MEDIUM]}
+                  </option>
+                  <option value={MaintenancePriority.LOW}>
+                    {MAINTENANCE_PRIORITY_LABELS[MaintenancePriority.LOW]}
+                  </option>
                 </select>
               </div>
 
@@ -2323,7 +3048,12 @@ export default function MaintenancePage() {
                     min={5}
                     step={5}
                     value={formData.estimated_duration}
-                    onChange={(e) => setFormData({ ...formData, estimated_duration: Number(e.target.value) })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        estimated_duration: Number(e.target.value),
+                      })
+                    }
                     required
                     className="w-full bg-brand-surface border border-brand-border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2 outline-none font-mono font-bold shadow-2xs"
                   />
@@ -2332,7 +3062,6 @@ export default function MaintenancePage() {
                 <div>
                   <label className="font-extrabold text-brand-secondary block mb-1">
                     Completion Deadline{" "}
-
                   </label>
                   <input
                     type="date"
@@ -2347,10 +3076,11 @@ export default function MaintenancePage() {
                         setFormData({ ...formData, deadline: val });
                       }
                     }}
-                    className={`w-full bg-brand-surface border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2 outline-none cursor-pointer font-bold shadow-2xs ${deadlineError
-                      ? "border-red-400 focus:border-red-500"
-                      : "border-brand-border"
-                      }`}
+                    className={`w-full bg-brand-surface border focus:border-brand-primary text-brand-secondary text-xs rounded-xl px-3.5 py-2 outline-none cursor-pointer font-bold shadow-2xs ${
+                      deadlineError
+                        ? "border-red-400 focus:border-red-500"
+                        : "border-brand-border"
+                    }`}
                   />
                   {deadlineError && (
                     <p className="text-[10px] text-red-500 font-semibold mt-0.5">
@@ -2375,7 +3105,12 @@ export default function MaintenancePage() {
                   max={10}
                   step={1}
                   value={formData.risk_rating}
-                  onChange={(e) => setFormData({ ...formData, risk_rating: Number(e.target.value) })}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      risk_rating: Number(e.target.value),
+                    })
+                  }
                   className="w-full accent-brand-primary cursor-pointer h-2 bg-brand-border rounded-lg"
                 />
               </div>
@@ -2393,7 +3128,11 @@ export default function MaintenancePage() {
                   disabled={isSaving}
                   className="px-4 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-xs font-bold text-white shadow-xs transition-all disabled:opacity-50 cursor-pointer"
                 >
-                  {isSaving ? "Saving..." : editingTask ? "Update Task" : "Save Task"}
+                  {isSaving
+                    ? "Saving..."
+                    : editingTask
+                      ? "Update Task"
+                      : "Save Task"}
                 </button>
               </div>
             </form>
@@ -2402,6 +3141,158 @@ export default function MaintenancePage() {
       )}
 
       {/* MODAL 2: Inspect Task Details */}
+      {viewingSharedBlockId && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="shared-block-title"
+            className="w-full max-w-xl rounded-2xl border border-brand-border bg-brand-surface p-6 shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-brand-border pb-4">
+              <div>
+                <p className="text-xs font-bold text-brand-primary">
+                  Shared maintenance block
+                </p>
+                <h2
+                  id="shared-block-title"
+                  className="mt-1 text-lg font-extrabold text-brand-secondary"
+                >
+                  Block window #{viewingSharedBlockId}
+                </h2>
+              </div>
+              <button
+                onClick={() => setViewingSharedBlockId(null)}
+                className="text-lg font-bold text-brand-muted hover:text-brand-secondary cursor-pointer"
+                aria-label="Close shared block"
+              >
+                ✕
+              </button>
+            </div>
+            {sharedBlockQuery.isLoading ? (
+              <div className="flex justify-center py-8">
+                <Spinner className="size-6 text-brand-primary" />
+              </div>
+            ) : sharedBlockQuery.isError || !sharedBlockQuery.data ? (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-800">
+                {sharedBlockQuery.error instanceof Error
+                  ? sharedBlockQuery.error.message
+                  : "Unable to load this shared block."}
+              </div>
+            ) : (
+              <div className="mt-4 rounded-xl border border-gray-700 bg-gray-900 p-4">
+                <p className="text-[11px] font-bold text-gray-400">
+                  Shared block window
+                </p>
+                <p className="mt-1 font-mono text-sm font-bold text-white">
+                  {formatIstDateTime(sharedBlockQuery.data.start_time)} –{" "}
+                  {formatIstDateTime(sharedBlockQuery.data.end_time)} IST
+                </p>
+                <p className="mt-2 text-xs font-medium text-gray-300">
+                  {sharedBlockQuery.data.section_name ||
+                    `Section #${sharedBlockQuery.data.section}`}{" "}
+                  · {sharedBlockQuery.data.status}
+                </p>
+              </div>
+            )}
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setViewingSharedBlockId(null)}
+                className="rounded-xl border border-brand-border px-4 py-2 text-xs font-bold text-brand-secondary hover:bg-brand-tertiary cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {combinedRecommendation && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="combined-recommendation-title"
+            className="w-full max-w-2xl rounded-2xl border border-brand-border bg-brand-surface p-6 shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-brand-border pb-4">
+              <div>
+                <p className="inline-flex items-center text-xs font-bold text-brand-secondary">
+                  <AiLogo size={18} className="size-[36px]" /> Sanket AI
+                </p>
+                <h2
+                  id="combined-recommendation-title"
+                  className="mt-1 text-lg font-extrabold text-brand-secondary"
+                >
+                  Combined block recommendation
+                </h2>
+                <p className="mt-1 text-xs text-brand-muted">
+                  Eligible tasks in this corridor, due within {nearbyDays} day{nearbyDays === 1 ? "" : "s"}, are shown below.
+                </p>
+              </div>
+              <button
+                onClick={() => setCombinedRecommendation(null)}
+                className="text-lg font-bold text-brand-muted hover:text-brand-secondary cursor-pointer"
+                aria-label="Close recommendation"
+              >
+                ✕
+              </button>
+            </div>
+            {hasSharedRecommendation(combinedRecommendation) ? (
+              <>
+                {(() => {
+                  const suggestedWindow = getSuggestedCombinedWindow(
+                    combinedRecommendation,
+                  );
+                  return suggestedWindow ? (
+                <div className="mt-4 rounded-xl border border-gray-700 bg-gray-900 p-4">
+                  <p className="text-[11px] font-bold text-gray-400">
+                    Suggested shared block window
+                  </p>
+                  <p className="mt-1 font-mono text-sm font-bold text-white">
+                    {formatIstDateTime(suggestedWindow.start_time)} –{" "}
+                    {formatIstDateTime(suggestedWindow.end_time)} IST
+                  </p>
+                </div>
+                  ) : null;
+                })()}
+                <div className="mt-5">
+                    <h3 className="text-sm font-extrabold text-brand-secondary">
+                      Tasks to combine ({combinedRecommendation.task_count})
+                    </h3>
+                    <ul className="mt-2 space-y-2">
+                      {combinedRecommendation.tasks.map((task) => (
+                          <li
+                            key={task.id}
+                            className="rounded-lg border border-brand-border bg-brand-tertiary px-3 py-2"
+                          >
+                            <p className="text-xs font-bold text-brand-secondary">
+                              {task.task_id} · {task.asset}
+                            </p>
+                            <p className="mt-0.5 text-[11px] text-brand-muted">
+                              {task.duration_minutes} minutes · Due{" "}
+                              {task.due_date}
+                            </p>
+                          </li>
+                      ))}
+                    </ul>
+                </div>
+              </>
+            ) : (
+              <div className="mt-4 rounded-xl border border-brand-border bg-brand-tertiary p-4 text-sm text-brand-secondary">
+                <h3 className="font-extrabold">No compatible maintenance tasks nearby</h3>
+                <p className="mt-2 text-brand-muted">{combinedRecommendation.message || "No compatible nearby maintenance tasks were found."}</p>
+                <p className="mt-2 text-brand-muted">A shared block requires at least {combinedRecommendation.minimum_task_count ?? 2} eligible tasks on different assets in the same corridor section.</p>
+              </div>
+            )}
+            <div className="mt-6 flex justify-end gap-2 border-t border-brand-border pt-4">
+              <button onClick={() => setCombinedRecommendation(null)} className="rounded-xl border border-brand-border px-4 py-2 text-xs font-bold text-brand-secondary hover:bg-brand-tertiary cursor-pointer">Close</button>
+              {hasSharedRecommendation(combinedRecommendation) && <button onClick={() => combinedRecommendationTaskId && handleApplyCombinedRecommendation(combinedRecommendationTaskId)} disabled={applyCombinedRecommendationMutation.isPending} className="inline-flex items-center gap-2 rounded-xl bg-brand-primary px-4 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50 cursor-pointer">{applyCombinedRecommendationMutation.isPending ? "Creating shared block…" : "Create shared block"}</button>}
+            </div>
+          </section>
+        </div>
+      )}
+
       {inspectingTask && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="bg-brand-surface border border-brand-border rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-4">
@@ -2414,7 +3305,9 @@ export default function MaintenancePage() {
                   <h3 className="text-base font-extrabold text-brand-secondary">
                     {inspectingTask.task_code}
                   </h3>
-                  <span className="text-xs text-brand-muted">Task ID #{inspectingTask.id}</span>
+                  <span className="text-xs text-brand-muted">
+                    Task ID #{inspectingTask.id}
+                  </span>
                 </div>
               </div>
               <button
@@ -2427,77 +3320,236 @@ export default function MaintenancePage() {
 
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
-                <span className="text-brand-muted block text-xs font-semibold">Target Asset</span>
-                <span className="font-bold text-brand-secondary mt-0.5 block">{inspectingTask.asset_name || `Asset #${inspectingTask.asset}`}</span>
-              </div>
-              <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
-                <span className="text-brand-muted block text-xs font-semibold">Corridor / Section</span>
-                <span className="font-bold text-brand-secondary mt-0.5 block flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-brand-primary shrink-0" />
-                  {inspectingTask.section_name || assets.find((a) => a.id === inspectingTask.asset)?.section_name || "General Corridor"}
+                <span className="text-brand-muted block text-xs font-semibold">
+                  Target Asset
+                </span>
+                <span className="font-bold text-brand-secondary mt-0.5 block">
+                  {inspectingTask.asset_name ||
+                    `Asset #${inspectingTask.asset}`}
                 </span>
               </div>
               <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
-                <span className="text-brand-muted block text-xs font-semibold">Urgency</span>
-                <span className="font-bold text-brand-primary mt-0.5 block">{inspectingTask.urgency}</span>
+                <span className="text-brand-muted block text-xs font-semibold">
+                  Corridor / Section
+                </span>
+                <span className="font-bold text-brand-secondary mt-0.5 block flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-brand-primary shrink-0" />
+                  {inspectingTask.section_name ||
+                    assets.find((a) => a.id === inspectingTask.asset)
+                      ?.section_name ||
+                    "General Corridor"}
+                </span>
               </div>
               <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
-                <span className="text-brand-muted block text-xs font-semibold">Duration</span>
-                <span className="font-bold text-brand-secondary mt-0.5 block font-mono">{inspectingTask.estimated_duration} mins</span>
+                <span className="text-brand-muted block text-xs font-semibold">
+                  Urgency
+                </span>
+                <span className="font-bold text-brand-primary mt-0.5 block">
+                  {inspectingTask.urgency}
+                </span>
               </div>
               <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
-                <span className="text-brand-muted block text-xs font-semibold">Deadline</span>
-                <span className="font-bold text-brand-secondary mt-0.5 block font-mono">{formatDate(inspectingTask.deadline)}</span>
+                <span className="text-brand-muted block text-xs font-semibold">
+                  Duration
+                </span>
+                <span className="font-bold text-brand-secondary mt-0.5 block font-mono">
+                  {inspectingTask.estimated_duration} mins
+                </span>
+              </div>
+              <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border">
+                <span className="text-brand-muted block text-xs font-semibold">
+                  Deadline
+                </span>
+                <span className="font-bold text-brand-secondary mt-0.5 block font-mono">
+                  {formatDate(inspectingTask.deadline)}
+                </span>
               </div>
               {inspectingTask.details && (
                 <div className="col-span-2 p-3 rounded-xl bg-brand-tertiary border border-brand-border">
-                  <span className="text-brand-muted block text-xs font-semibold">Work Scope Details</span>
-                  <span className="font-medium text-brand-secondary mt-0.5 block">{inspectingTask.details}</span>
+                  <span className="text-brand-muted block text-xs font-semibold">
+                    Work Scope Details
+                  </span>
+                  <span className="font-medium text-brand-secondary mt-0.5 block">
+                    {inspectingTask.details}
+                  </span>
                 </div>
               )}
             </div>
 
+            {inspectingTask.shared_block_window_id && (
+              <div
+                className={`rounded-xl border p-3 text-xs ${lifecycleTheme.notice}`}
+              >
+                <p className="font-extrabold">
+                  This task is part of a shared maintenance block.
+                </p>
+                <p className="mt-1 font-medium">
+                  Starting, completing, or cancelling this task updates all
+                  tasks linked to this block.
+                </p>
+              </div>
+            )}
+
             {/* Phase 3 AI Continuous Monitoring for this task */}
             {(() => {
-              const taskAsset = assets.find((a) => a.id === inspectingTask.asset);
+              const taskAsset = assets.find(
+                (a) => a.id === inspectingTask.asset,
+              );
               const secId = taskAsset?.section;
-              const secName = inspectingTask.section_name || taskAsset?.section_name;
+              const secName =
+                inspectingTask.section_name || taskAsset?.section_name;
               const matchingBw = inspectingTask.block_window
                 ? {
-                  id: inspectingTask.block_window.id,
-                  section: Number(inspectingTask.block_window.section || secId || 1),
-                  start_time: inspectingTask.block_window.start_time,
-                  end_time: inspectingTask.block_window.end_time,
-                  status: inspectingTask.block_window.status || "RESERVED",
-                }
+                    id: inspectingTask.block_window.id,
+                    section: Number(
+                      inspectingTask.block_window.section || secId || 1,
+                    ),
+                    start_time: inspectingTask.block_window.start_time,
+                    end_time: inspectingTask.block_window.end_time,
+                    status: inspectingTask.block_window.status || "RESERVED",
+                  }
                 : blockWindows.find((bw) => {
-                  if (bw.task && bw.task === inspectingTask.id) return true;
-                  if (bw.task_id && bw.task_id === inspectingTask.task_code) return true;
-                  if (bw.task_code && bw.task_code === inspectingTask.task_code) return true;
-                  return false;
-                });
-
+                    if (bw.task && bw.task === inspectingTask.id) return true;
+                    if (bw.task_id && bw.task_id === inspectingTask.task_code)
+                      return true;
+                    if (
+                      bw.task_code &&
+                      bw.task_code === inspectingTask.task_code
+                    )
+                      return true;
+                    return false;
+                  });
 
               return (
                 <div className="space-y-3">
                   <div className="rounded-xl border border-brand-border bg-brand-tertiary p-3 text-xs">
-                    <p className="font-bold text-brand-secondary">Execution evidence</p>
-                    {inspectingTask.started_at && <p className="mt-1 text-brand-secondary">Started: {formatIstDateTime(inspectingTask.started_at)} IST</p>}
-                    {inspectingTask.completion_remark && <p className="mt-1 text-brand-secondary">Completion{inspectingTask.completed_at ? ` (${formatIstDateTime(inspectingTask.completed_at)} IST)` : ""}: {inspectingTask.completion_remark}</p>}
-                    {inspectingTask.cancellation_remark && <p className="mt-1 text-brand-secondary">Cancellation{inspectingTask.cancelled_at ? ` (${formatIstDateTime(inspectingTask.cancelled_at)} IST)` : ""}: {inspectingTask.cancellation_remark}</p>}
-                    {inspectingTask.is_delayed && <p className="mt-1 font-bold text-red-700">Deadline warning: task is delayed.</p>}
-                    {inspectingTask.checklist && inspectingTask.checklist.length > 0 && <details className="mt-2 text-brand-secondary"><summary className="cursor-pointer font-semibold">Start checklist</summary><ul className="mt-1 list-disc pl-4">{inspectingTask.checklist.map((item, index) => <li key={`${item.item}-${index}`}>{item.item}: {item.completed ? "completed" : "not completed"}</li>)}</ul></details>}
-                    {inspectingTask.block_window && <p className="mt-2 text-brand-secondary">Block window: {inspectingTask.block_window.section_name || `Section #${inspectingTask.block_window.section}`} · {formatIstDateTime(inspectingTask.block_window.start_time)} – {formatIstDateTime(inspectingTask.block_window.end_time)} IST</p>}
+                    <p className="font-bold text-brand-secondary">
+                      Execution evidence
+                    </p>
+                    {inspectingTask.started_at && (
+                      <p className="mt-1 text-brand-secondary">
+                        Started: {formatIstDateTime(inspectingTask.started_at)}{" "}
+                        IST
+                      </p>
+                    )}
+                    {inspectingTask.completion_remark && (
+                      <p className="mt-1 text-brand-secondary">
+                        Completion
+                        {inspectingTask.completed_at
+                          ? ` (${formatIstDateTime(inspectingTask.completed_at)} IST)`
+                          : ""}
+                        : {inspectingTask.completion_remark}
+                      </p>
+                    )}
+                    {inspectingTask.cancellation_remark && (
+                      <p className="mt-1 text-brand-secondary">
+                        Cancellation
+                        {inspectingTask.cancelled_at
+                          ? ` (${formatIstDateTime(inspectingTask.cancelled_at)} IST)`
+                          : ""}
+                        : {inspectingTask.cancellation_remark}
+                      </p>
+                    )}
+                    {inspectingTask.is_delayed && (
+                      <p className="mt-1 font-bold text-red-700">
+                        Deadline warning: task is delayed.
+                      </p>
+                    )}
+                    {inspectingTask.checklist &&
+                      inspectingTask.checklist.length > 0 && (
+                        <details className="mt-2 text-brand-secondary">
+                          <summary className="cursor-pointer font-semibold">
+                            Start checklist
+                          </summary>
+                          <ul className="mt-1 list-disc pl-4">
+                            {inspectingTask.checklist.map((item, index) => (
+                              <li key={`${item.item}-${index}`}>
+                                {item.item}:{" "}
+                                {item.completed ? "completed" : "not completed"}
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
+                    {inspectingTask.block_window && (
+                      <p className="mt-2 text-brand-secondary">
+                        Block window:{" "}
+                        {inspectingTask.block_window.section_name ||
+                          `Section #${inspectingTask.block_window.section}`}{" "}
+                        ·{" "}
+                        {formatIstDateTime(
+                          inspectingTask.block_window.start_time,
+                        )}{" "}
+                        –{" "}
+                        {formatIstDateTime(
+                          inspectingTask.block_window.end_time,
+                        )}{" "}
+                        IST
+                      </p>
+                    )}
                   </div>
                   <div className="rounded-xl border border-brand-border bg-brand-surface p-3 text-xs">
-                    <p className="font-bold text-brand-secondary">Maintenance audit log</p>
-                    {maintenanceLogsQuery.isLoading ? <p className="mt-2 text-brand-muted">Loading audit history…</p> : maintenanceLogsQuery.isError ? <button onClick={() => maintenanceLogsQuery.refetch()} className="mt-2 font-bold text-brand-primary underline cursor-pointer">Retry loading logs</button> : maintenanceLogsQuery.data?.length ? <ol className="mt-3 space-y-3 border-l border-brand-border pl-3">{maintenanceLogsQuery.data.map((log) => <li key={log.id} className="relative"><span className="absolute -left-[17px] top-1 h-2 w-2 rounded-full bg-brand-primary" /><p className="font-semibold text-brand-secondary">{log.event} · {log.status}</p><p className="text-brand-muted">{formatIstDateTime(log.logged_at)} IST</p>{log.remark && <p className="mt-1 text-brand-secondary">{log.remark}</p>}{log.details?.checklist && <details className="mt-1"><summary className="cursor-pointer text-brand-primary">Checklist evidence</summary><ul className="list-disc pl-4 text-brand-secondary">{log.details.checklist.map((item, index) => <li key={`${item.item}-${index}`}>{item.item}: {item.completed ? "completed" : "not completed"}</li>)}</ul></details>}</li>)}</ol> : <p className="mt-2 text-brand-muted">No audit events have been recorded.</p>}
+                    <p className="font-bold text-brand-secondary">
+                      Maintenance audit log
+                    </p>
+                    {maintenanceLogsQuery.isLoading ? (
+                      <p className="mt-2 text-brand-muted">
+                        Loading audit history…
+                      </p>
+                    ) : maintenanceLogsQuery.isError ? (
+                      <button
+                        onClick={() => maintenanceLogsQuery.refetch()}
+                        className="mt-2 font-bold text-brand-primary underline cursor-pointer"
+                      >
+                        Retry loading logs
+                      </button>
+                    ) : maintenanceLogsQuery.data?.length ? (
+                      <ol className="mt-3 space-y-3 border-l border-brand-border pl-3">
+                        {maintenanceLogsQuery.data.map((log) => (
+                          <li key={log.id} className="relative">
+                            <span className="absolute -left-[17px] top-1 h-2 w-2 rounded-full bg-brand-primary" />
+                            <p className="font-semibold text-brand-secondary">
+                              {log.event} · {log.status}
+                            </p>
+                            <p className="text-brand-muted">
+                              {formatIstDateTime(log.logged_at)} IST
+                            </p>
+                            {log.remark && (
+                              <p className="mt-1 text-brand-secondary">
+                                {log.remark}
+                              </p>
+                            )}
+                            {log.details?.checklist && (
+                              <details className="mt-1">
+                                <summary className="cursor-pointer text-brand-primary">
+                                  Checklist evidence
+                                </summary>
+                                <ul className="list-disc pl-4 text-brand-secondary">
+                                  {log.details.checklist.map((item, index) => (
+                                    <li key={`${item.item}-${index}`}>
+                                      {item.item}:{" "}
+                                      {item.completed
+                                        ? "completed"
+                                        : "not completed"}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </details>
+                            )}
+                          </li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <p className="mt-2 text-brand-muted">
+                        No audit events have been recorded.
+                      </p>
+                    )}
                   </div>
                 </div>
               );
             })()}
 
-            <div className="pt-2 flex justify-end">
+            <div className="pt-2 flex flex-wrap justify-end gap-2">
               <button
                 onClick={() => setInspectingTask(null)}
                 className="px-4 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-brand-secondary transition-colors cursor-pointer"
@@ -2511,11 +3563,108 @@ export default function MaintenancePage() {
 
       {lifecycleTask && lifecycleMode && (
         <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <form onSubmit={handleLifecycleSubmit} className="w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto space-y-4 rounded-2xl border border-brand-border bg-brand-surface p-6 shadow-2xl">
-            <div><h3 className="text-base font-extrabold text-brand-secondary">{lifecycleMode === "start" ? "Start maintenance" : lifecycleMode === "complete" ? "Complete maintenance" : "Cancel maintenance"}</h3><p className="mt-1 text-xs text-brand-muted">{lifecycleTask.task_code}</p></div>
-            {lifecycleMode === "start" ? <div className="space-y-3">{startChecklist.map((entry, index) => <label key={entry.item} className="flex items-center gap-3 rounded-xl border border-brand-border p-3 text-sm font-semibold text-brand-secondary"><Checkbox checked={entry.completed} onCheckedChange={(checked) => setStartChecklist((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, completed: checked === true } : item))} />{entry.item}</label>)}</div> : <textarea value={lifecycleRemark} onChange={(event) => setLifecycleRemark(event.target.value)} required placeholder={lifecycleMode === "complete" ? "Describe the completed work and restoration." : "Give the cancellation reason."} className="min-h-28 w-full rounded-xl border border-brand-border bg-brand-tertiary p-3 text-sm text-brand-secondary outline-none focus:border-brand-primary" />}
-            {lifecycleError && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-700">{lifecycleError}</div>}
-            <div className="flex justify-end gap-2"><button type="button" onClick={() => { setLifecycleTask(null); setLifecycleMode(null); setLifecycleError(null); }} className="rounded-lg border border-brand-border px-3 py-2 text-xs font-bold text-brand-secondary cursor-pointer">Back</button><button type="submit" disabled={startMaintenanceMutation.isPending || completeMaintenanceMutation.isPending || cancelMaintenanceMutation.isPending || (lifecycleMode === "start" && !startChecklist.every((item) => item.completed))} className="rounded-lg bg-brand-primary px-3 py-2 text-xs font-bold text-white disabled:opacity-50 cursor-pointer">{startMaintenanceMutation.isPending || completeMaintenanceMutation.isPending || cancelMaintenanceMutation.isPending ? "Saving…" : "Confirm"}</button></div>
+          <form
+            onSubmit={handleLifecycleSubmit}
+            className="w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto space-y-4 rounded-2xl border border-brand-border bg-brand-surface p-6 shadow-2xl"
+          >
+            <div>
+              <h3 className="text-base font-extrabold text-brand-secondary">
+                {lifecycleMode === "start"
+                  ? "Start maintenance"
+                  : lifecycleMode === "complete"
+                    ? "Complete maintenance"
+                    : "Cancel maintenance"}
+              </h3>
+              <p className="mt-1 text-xs text-brand-muted">
+                {lifecycleTask.task_code}
+              </p>
+            </div>
+            {lifecycleTask.shared_block_window_id && (
+              <div className="rounded-xl border border-green-200 bg-green-200 p-3 text-xs text-green-700">
+                <p className="font-extrabold">
+                  This is a shared maintenance block.
+                </p>
+                <p className="mt-1 font-medium">
+                  This action will update all tasks linked to this block.
+                </p>
+              </div>
+            )}
+            {lifecycleMode === "start" ? (
+              <div className="space-y-3">
+                {startChecklist.map((entry, index) => (
+                  <label
+                    key={entry.item}
+                    className="flex items-center gap-3 rounded-xl border border-brand-border p-3 text-sm font-semibold text-brand-secondary"
+                  >
+                    <Checkbox
+                      checked={entry.completed}
+                      onCheckedChange={(checked) =>
+                        setStartChecklist((items) =>
+                          items.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? { ...item, completed: checked === true }
+                              : item,
+                          ),
+                        )
+                      }
+                    />
+                    {entry.item}
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <textarea
+                value={lifecycleRemark}
+                onChange={(event) => setLifecycleRemark(event.target.value)}
+                required
+                placeholder={
+                  lifecycleMode === "complete"
+                    ? "Describe the completed work and restoration."
+                    : "Give the cancellation reason."
+                }
+                className="min-h-28 w-full rounded-xl border border-brand-border bg-brand-tertiary p-3 text-sm text-brand-secondary outline-none focus:border-brand-primary"
+              />
+            )}
+            {lifecycleError && (
+              <div
+                role="alert"
+                className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-700"
+              >
+                {lifecycleError}
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setLifecycleTask(null);
+                  setLifecycleMode(null);
+                  setLifecycleError(null);
+                }}
+                className="rounded-lg border border-brand-border px-3 py-2 text-xs font-bold text-brand-secondary cursor-pointer"
+              >
+                {lifecycleTask.shared_block_window_id ? "Cancel" : "Back"}
+              </button>
+              <button
+                type="submit"
+                disabled={
+                  startMaintenanceMutation.isPending ||
+                  completeMaintenanceMutation.isPending ||
+                  cancelMaintenanceMutation.isPending ||
+                  (lifecycleMode === "start" &&
+                    !startChecklist.every((item) => item.completed))
+                }
+                className={`rounded-lg px-3 py-2 text-xs font-bold text-white disabled:opacity-50 cursor-pointer ${lifecycleTheme.action}`}
+              >
+                {startMaintenanceMutation.isPending ||
+                completeMaintenanceMutation.isPending ||
+                cancelMaintenanceMutation.isPending
+                  ? "Saving…"
+                  : lifecycleTask.shared_block_window_id
+                    ? "Continue"
+                    : "Confirm"}
+              </button>
+            </div>
           </form>
         </div>
       )}
@@ -2529,9 +3678,15 @@ export default function MaintenancePage() {
                 <AlertTriangle className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-base font-extrabold text-brand-secondary">Confirm Delete</h3>
+                <h3 className="text-base font-extrabold text-brand-secondary">
+                  Confirm Delete
+                </h3>
                 <p className="text-xs text-brand-muted mt-0.5">
-                  Are you sure you want to delete task <span className="font-bold text-brand-secondary">&quot;{deletingTask.task_code}&quot;</span>?
+                  Are you sure you want to delete task{" "}
+                  <span className="font-bold text-brand-secondary">
+                    &quot;{deletingTask.task_code}&quot;
+                  </span>
+                  ?
                 </p>
               </div>
             </div>
@@ -2569,7 +3724,8 @@ export default function MaintenancePage() {
                     Timetable Conflict Detector
                   </h3>
                   <p className="text-xs text-brand-muted">
-                    Simulate maintenance block windows against active train movements
+                    Simulate maintenance block windows against active train
+                    movements
                   </p>
                 </div>
               </div>
@@ -2588,7 +3744,9 @@ export default function MaintenancePage() {
                     Railway Section
                   </label>
                   <div className="w-full px-3 py-2 rounded-xl bg-brand-tertiary border border-brand-border text-brand-secondary text-xs font-semibold">
-                    {sections.find((sec) => Number(sec.id) === Number(conflictForm.section))?.section_name || `Section #${conflictForm.section}`}
+                    {sections.find(
+                      (sec) => Number(sec.id) === Number(conflictForm.section),
+                    )?.section_name || `Section #${conflictForm.section}`}
                   </div>
                 </div>
 
@@ -2601,7 +3759,9 @@ export default function MaintenancePage() {
                       <input
                         ref={startDateTimeRef}
                         type="datetime-local"
-                        value={conflictForm.maintenance_start.replace(" ", "T").substring(0, 16)}
+                        value={conflictForm.maintenance_start
+                          .replace(" ", "T")
+                          .substring(0, 16)}
                         min={minStartDateTime}
                         max={maxMaintenanceDateTime}
                         onChange={(e) => {
@@ -2612,12 +3772,29 @@ export default function MaintenancePage() {
                           // If start is valid and current end is <= new start, advance end time cleanly
                           if (value) {
                             const sDate = new Date(value);
-                            const eDate = new Date(conflictForm.maintenance_end.replace(" ", "T"));
-                            if (!Number.isNaN(sDate.getTime()) && (!conflictForm.maintenance_end || eDate <= sDate)) {
-                              const autoEnd = new Date(sDate.getTime() + 2 * 60 * 60 * 1000);
-                              const maxLimit = new Date(currentNow.getFullYear(), currentNow.getMonth(), currentNow.getDate() + 30, 23, 59);
-                              const safeEnd = autoEnd > maxLimit ? maxLimit : autoEnd;
-                              nextEnd = formatDateTimeLocal(safeEnd).replace("T", " ");
+                            const eDate = new Date(
+                              conflictForm.maintenance_end.replace(" ", "T"),
+                            );
+                            if (
+                              !Number.isNaN(sDate.getTime()) &&
+                              (!conflictForm.maintenance_end || eDate <= sDate)
+                            ) {
+                              const autoEnd = new Date(
+                                sDate.getTime() + 2 * 60 * 60 * 1000,
+                              );
+                              const maxLimit = new Date(
+                                currentNow.getFullYear(),
+                                currentNow.getMonth(),
+                                currentNow.getDate() + 30,
+                                23,
+                                59,
+                              );
+                              const safeEnd =
+                                autoEnd > maxLimit ? maxLimit : autoEnd;
+                              nextEnd = formatDateTimeLocal(safeEnd).replace(
+                                "T",
+                                " ",
+                              );
                             }
                           }
 
@@ -2627,21 +3804,28 @@ export default function MaintenancePage() {
                             maintenance_end: nextEnd,
                           }));
 
-                          const valRes = validateMaintenanceTimes(value, nextEnd, currentNow);
+                          const valRes = validateMaintenanceTimes(
+                            value,
+                            nextEnd,
+                            currentNow,
+                          );
                           setConflictStartError(valRes.startError);
                           setConflictEndError(valRes.endError);
                           if (conflictError) setConflictError(null);
                         }}
-                        className={`w-full px-3 py-2 pr-20 rounded-xl bg-brand-tertiary border text-brand-secondary text-xs font-mono font-semibold focus:outline-hidden cursor-pointer transition-colors ${conflictStartError
-                          ? "border-red-400 bg-red-50/40 focus:border-red-500"
-                          : "border-brand-border focus:border-brand-primary"
-                          }`}
+                        className={`w-full px-3 py-2 pr-20 rounded-xl bg-brand-tertiary border text-brand-secondary text-xs font-mono font-semibold focus:outline-hidden cursor-pointer transition-colors ${
+                          conflictStartError
+                            ? "border-red-400 bg-red-50/40 focus:border-red-500"
+                            : "border-brand-border focus:border-brand-primary"
+                        }`}
                       />
                       <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 bg-brand-tertiary">
                         <button
                           type="button"
                           onClick={() => {
-                            const input = startDateTimeRef.current as (HTMLInputElement & { showPicker?: () => void }) | null;
+                            const input = startDateTimeRef.current as
+                              | (HTMLInputElement & { showPicker?: () => void })
+                              | null;
                             input?.showPicker?.();
                           }}
                           className="p-1.5 rounded-md hover:bg-brand-border transition-colors cursor-pointer"
@@ -2652,7 +3836,9 @@ export default function MaintenancePage() {
                         <button
                           type="button"
                           onClick={() => {
-                            const input = startDateTimeRef.current as (HTMLInputElement & { showPicker?: () => void }) | null;
+                            const input = startDateTimeRef.current as
+                              | (HTMLInputElement & { showPicker?: () => void })
+                              | null;
                             input?.showPicker?.();
                           }}
                           className="p-1.5 rounded-md hover:bg-brand-border transition-colors cursor-pointer"
@@ -2668,7 +3854,10 @@ export default function MaintenancePage() {
                         <span>{conflictStartError}</span>
                       </span>
                     ) : (
-                      <span className="text-[10px] text-brand-muted mt-1 block">Present/future time only • Automatically selected from the task corridor block window</span>
+                      <span className="text-[10px] text-brand-muted mt-1 block">
+                        Present/future time only • Automatically selected from
+                        the task corridor block window
+                      </span>
                     )}
                   </div>
 
@@ -2680,7 +3869,9 @@ export default function MaintenancePage() {
                       <input
                         ref={endDateTimeRef}
                         type="datetime-local"
-                        value={conflictForm.maintenance_end.replace(" ", "T").substring(0, 16)}
+                        value={conflictForm.maintenance_end
+                          .replace(" ", "T")
+                          .substring(0, 16)}
                         min={minEndDateTime}
                         max={maxMaintenanceDateTime}
                         onChange={(e) => {
@@ -2691,21 +3882,28 @@ export default function MaintenancePage() {
                             maintenance_end: formattedVal,
                           }));
 
-                          const valRes = validateMaintenanceTimes(conflictForm.maintenance_start, value, currentNow);
+                          const valRes = validateMaintenanceTimes(
+                            conflictForm.maintenance_start,
+                            value,
+                            currentNow,
+                          );
                           setConflictStartError(valRes.startError);
                           setConflictEndError(valRes.endError);
                           if (conflictError) setConflictError(null);
                         }}
-                        className={`w-full px-3 py-2 pr-20 rounded-xl bg-brand-tertiary border text-brand-secondary text-xs font-mono font-semibold focus:outline-hidden cursor-pointer transition-colors ${conflictEndError
-                          ? "border-red-400 bg-red-50/40 focus:border-red-500"
-                          : "border-brand-border focus:border-brand-primary"
-                          }`}
+                        className={`w-full px-3 py-2 pr-20 rounded-xl bg-brand-tertiary border text-brand-secondary text-xs font-mono font-semibold focus:outline-hidden cursor-pointer transition-colors ${
+                          conflictEndError
+                            ? "border-red-400 bg-red-50/40 focus:border-red-500"
+                            : "border-brand-border focus:border-brand-primary"
+                        }`}
                       />
                       <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 bg-brand-tertiary">
                         <button
                           type="button"
                           onClick={() => {
-                            const input = endDateTimeRef.current as (HTMLInputElement & { showPicker?: () => void }) | null;
+                            const input = endDateTimeRef.current as
+                              | (HTMLInputElement & { showPicker?: () => void })
+                              | null;
                             input?.showPicker?.();
                           }}
                           className="p-1.5 rounded-md hover:bg-brand-border transition-colors cursor-pointer"
@@ -2716,7 +3914,9 @@ export default function MaintenancePage() {
                         <button
                           type="button"
                           onClick={() => {
-                            const input = endDateTimeRef.current as (HTMLInputElement & { showPicker?: () => void }) | null;
+                            const input = endDateTimeRef.current as
+                              | (HTMLInputElement & { showPicker?: () => void })
+                              | null;
                             input?.showPicker?.();
                           }}
                           className="p-1.5 rounded-md hover:bg-brand-border transition-colors cursor-pointer"
@@ -2732,7 +3932,10 @@ export default function MaintenancePage() {
                         <span>{conflictEndError}</span>
                       </span>
                     ) : (
-                      <span className="text-[10px] text-brand-muted mt-1 block">Must be after start time • Automatically selected from the task corridor block window</span>
+                      <span className="text-[10px] text-brand-muted mt-1 block">
+                        Must be after start time • Automatically selected from
+                        the task corridor block window
+                      </span>
                     )}
                   </div>
                 </div>
@@ -2748,7 +3951,10 @@ export default function MaintenancePage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={checkConflictMutation.isPending || Boolean(conflictStartError || conflictEndError)}
+                  disabled={
+                    checkConflictMutation.isPending ||
+                    Boolean(conflictStartError || conflictEndError)
+                  }
                   className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 text-xs font-bold text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   {checkConflictMutation.isPending ? (
@@ -2771,8 +3977,12 @@ export default function MaintenancePage() {
               <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs flex items-start gap-2.5 animate-in fade-in duration-200 shadow-xs">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
-                  <div className="font-bold text-emerald-900">Corridor Block Reserved!</div>
-                  <div className="mt-0.5 text-emerald-700">{scheduledSuccessMsg}</div>
+                  <div className="font-bold text-emerald-900">
+                    Corridor Block Reserved!
+                  </div>
+                  <div className="mt-0.5 text-emerald-700">
+                    {scheduledSuccessMsg}
+                  </div>
                 </div>
               </div>
             )}
@@ -2797,10 +4007,12 @@ export default function MaintenancePage() {
                       <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
                       <div>
                         <div className="font-extrabold text-sm text-red-900">
-                          Traffic Conflict Detected ({conflictResult.conflict_count} Collisions)
+                          Traffic Conflict Detected (
+                          {conflictResult.conflict_count} Collisions)
                         </div>
                         <p className="mt-0.5 text-red-700">
-                          Active scheduled train movements intersect with this requested maintenance window.
+                          Active scheduled train movements intersect with this
+                          requested maintenance window.
                         </p>
                       </div>
                     </div>
@@ -2817,7 +4029,9 @@ export default function MaintenancePage() {
                           >
                             <div>
                               <div className="font-bold text-brand-secondary flex items-center gap-1.5">
-                                <span className="font-mono text-red-700 font-bold">{c.train_number}</span>
+                                <span className="font-mono text-red-700 font-bold">
+                                  {c.train_number}
+                                </span>
                                 <span>-</span>
                                 <span>{c.train_name}</span>
                               </div>
@@ -2841,7 +4055,9 @@ export default function MaintenancePage() {
                         Corridor Clear - No Conflict Detected
                       </div>
                       <p className="mt-0.5 text-emerald-700">
-                        Zero scheduled train movements collide with this maintenance window on Section #{conflictForm.section}. Safe for track occupancy.
+                        Zero scheduled train movements collide with this
+                        maintenance window on Section #{conflictForm.section}.
+                        Safe for track occupancy.
                       </p>
                     </div>
                   </div>
@@ -2866,12 +4082,16 @@ export default function MaintenancePage() {
                     Feasible Maintenance Window Finder
                   </h3>
                   <p className="text-xs text-brand-muted">
-                    Calculate available conflict-free intervals inside corridor block windows
+                    Calculate available conflict-free intervals inside corridor
+                    block windows
                   </p>
                 </div>
               </div>
               <button
-                onClick={() => { setIsFeasibleModalOpen(false); setCreatedBlockWindowId(null); }}
+                onClick={() => {
+                  setIsFeasibleModalOpen(false);
+                  setCreatedBlockWindowId(null);
+                }}
                 className="text-brand-muted hover:text-brand-secondary text-lg font-bold cursor-pointer"
               >
                 ✕
@@ -2913,7 +4133,10 @@ export default function MaintenancePage() {
                       min={todayInIst()}
                       max={getDateBounds("block-windows").max}
                       onChange={(e) => {
-                        setFeasibleForm((prev) => ({ ...prev, date: e.target.value }));
+                        setFeasibleForm((prev) => ({
+                          ...prev,
+                          date: e.target.value,
+                        }));
                         setFeasibleResult(null);
                         setFeasibleError(null);
                       }}
@@ -2926,7 +4149,10 @@ export default function MaintenancePage() {
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => { setIsFeasibleModalOpen(false); setCreatedBlockWindowId(null); }}
+                  onClick={() => {
+                    setIsFeasibleModalOpen(false);
+                    setCreatedBlockWindowId(null);
+                  }}
                   className="px-4 py-2 rounded-xl bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-xs font-bold text-brand-secondary transition-colors cursor-pointer"
                 >
                   Cancel
@@ -2956,8 +4182,12 @@ export default function MaintenancePage() {
               <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs flex items-start gap-2.5 animate-in fade-in duration-200 shadow-xs">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
-                  <div className="font-bold text-emerald-900">Corridor Block Reserved!</div>
-                  <div className="mt-0.5 text-emerald-700">{scheduledSuccessMsg}</div>
+                  <div className="font-bold text-emerald-900">
+                    Corridor Block Reserved!
+                  </div>
+                  <div className="mt-0.5 text-emerald-700">
+                    {scheduledSuccessMsg}
+                  </div>
                 </div>
               </div>
             )}
@@ -2966,14 +4196,16 @@ export default function MaintenancePage() {
             {createdBlockWindowId && (
               <div className="space-y-2">
                 <div className="flex items-center gap-1.5 text-[11px] font-semibold text-brand-muted">
-                
                   <span>Live AI Monitoring · auto-refreshes every 60 s</span>
                 </div>
                 <AIBlockRecommendationBanner
                   blockWindowId={createdBlockWindowId}
                   taskId={feasibleForm.task_id || undefined}
                   onSlotUpdated={() => {
-                    showToast("success", "Block window rescheduled to AI-recommended slot.");
+                    showToast(
+                      "success",
+                      "Block window rescheduled to AI-recommended slot.",
+                    );
                   }}
                 />
               </div>
@@ -2995,39 +4227,60 @@ export default function MaintenancePage() {
               <div className="space-y-3 pt-2 border-t border-brand-border">
                 <div className="grid grid-cols-3 gap-2 text-xs">
                   <div className="p-2.5 rounded-xl bg-brand-tertiary border border-brand-border col-span-1">
-                    <span className="text-brand-muted block text-xs font-semibold">Section</span>
+                    <span className="text-brand-muted block text-xs font-semibold">
+                      Section
+                    </span>
                     <span className="font-bold text-brand-secondary mt-0.5 block truncate">
                       {feasibleResult.section.name}
                     </span>
                     <span className="text-[10px] text-brand-muted font-mono">
-                      {feasibleResult.section.source_code} → {feasibleResult.section.destination_code}
+                      {feasibleResult.section.source_code} →{" "}
+                      {feasibleResult.section.destination_code}
                     </span>
                   </div>
                   <div className="p-2.5 rounded-xl bg-brand-tertiary border border-brand-border">
-                    <span className="text-brand-muted block text-xs font-semibold">Required Time</span>
-                    <span className="font-bold text-brand-primary mt-0.5 block font-mono">{feasibleResult.required_duration_minutes} mins</span>
+                    <span className="text-brand-muted block text-xs font-semibold">
+                      Required Time
+                    </span>
+                    <span className="font-bold text-brand-primary mt-0.5 block font-mono">
+                      {feasibleResult.required_duration_minutes} mins
+                    </span>
                   </div>
                   <div className="p-2.5 rounded-xl bg-brand-tertiary border border-brand-border">
-                    <span className="text-brand-muted block text-xs font-semibold">Corridor Status</span>
-                    <span className={`font-bold mt-0.5 block ${feasibleResult.feasible ? "text-emerald-600" : "text-red-600"}`}>
+                    <span className="text-brand-muted block text-xs font-semibold">
+                      Corridor Status
+                    </span>
+                    <span
+                      className={`font-bold mt-0.5 block ${feasibleResult.feasible ? "text-emerald-600" : "text-red-600"}`}
+                    >
                       {feasibleResult.feasible ? "FEASIBLE" : "INFEASIBLE"}
                     </span>
                   </div>
                 </div>
 
-                {feasibleResult.feasible && feasibleResult.windows && feasibleResult.windows.length > 0 ? (
+                {feasibleResult.feasible &&
+                feasibleResult.windows &&
+                feasibleResult.windows.length > 0 ? (
                   <div className="space-y-2">
                     <div className="text-xs font-bold text-brand-secondary flex items-center justify-between">
                       <span>Available Feasible Windows:</span>
-                      <span className="text-emerald-600 font-bold text-[11px]">{feasibleResult.windows.length} slot(s) found</span>
+                      <span className="text-emerald-600 font-bold text-[11px]">
+                        {feasibleResult.windows.length} slot(s) found
+                      </span>
                     </div>
 
                     <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
                       {feasibleResult.windows
                         .slice()
-                        .sort((a, b) => (b.decision_score ?? 0) - (a.decision_score ?? 0))
+                        .sort(
+                          (a, b) =>
+                            (b.decision_score ?? 0) - (a.decision_score ?? 0),
+                        )
                         .map((w, idx) => {
-                          const scorePercent = w.decision_score != null ? Math.round(w.decision_score * 100) : null;
+                          const scorePercent =
+                            w.decision_score != null
+                              ? Math.round(w.decision_score * 100)
+                              : null;
                           const slotTime = formatWindowSlot(w.start, w.end);
 
                           return (
@@ -3046,7 +4299,9 @@ export default function MaintenancePage() {
                                     </span>
                                   </div>
                                   <div className="text-[11px] text-emerald-800 mt-1 font-medium">
-                                    Sufficient clearance for {feasibleResult.required_duration_minutes}-minute work.
+                                    Sufficient clearance for{" "}
+                                    {feasibleResult.required_duration_minutes}
+                                    -minute work.
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
@@ -3064,12 +4319,15 @@ export default function MaintenancePage() {
                               {scorePercent != null && (
                                 <div className="pt-2 border-t border-emerald-200/70 flex items-center justify-between gap-2">
                                   <div className="flex items-center gap-2">
-                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${scorePercent >= 70
-                                      ? "bg-red-50 text-red-700 border-red-200"
-                                      : scorePercent >= 40
-                                        ? "bg-amber-50 text-amber-800 border-amber-200"
-                                        : "bg-emerald-50 text-emerald-800 border-emerald-200"
-                                      }`}>
+                                    <span
+                                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                        scorePercent >= 70
+                                          ? "bg-red-50 text-red-700 border-red-200"
+                                          : scorePercent >= 40
+                                            ? "bg-amber-50 text-amber-800 border-amber-200"
+                                            : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                      }`}
+                                    >
                                       Risk Factor: {scorePercent}%
                                     </span>
                                     <span className="text-[10px] text-gray-500 font-medium hidden sm:inline">
@@ -3084,12 +4342,13 @@ export default function MaintenancePage() {
                                   <div className="flex items-center gap-2 w-32">
                                     <div className="w-full bg-emerald-200/80 rounded-full h-1.5 overflow-hidden">
                                       <div
-                                        className={`h-1.5 rounded-full ${scorePercent >= 70
-                                          ? "bg-red-500"
-                                          : scorePercent >= 40
-                                            ? "bg-amber-500"
-                                            : "bg-emerald-600"
-                                          }`}
+                                        className={`h-1.5 rounded-full ${
+                                          scorePercent >= 70
+                                            ? "bg-red-500"
+                                            : scorePercent >= 40
+                                              ? "bg-amber-500"
+                                              : "bg-emerald-600"
+                                        }`}
                                         style={{ width: `${scorePercent}%` }}
                                       />
                                     </div>
@@ -3128,9 +4387,14 @@ export default function MaintenancePage() {
                   <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
                     <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                     <div>
-                      <div className="font-bold">No Feasible Slots In This Window</div>
+                      <div className="font-bold">
+                        No Feasible Slots In This Window
+                      </div>
                       <div className="mt-0.5 text-amber-700">
-                        The requested block window does not have a continuous free slot of at least {feasibleResult.required_duration_minutes} minutes without train traffic.
+                        The requested block window does not have a continuous
+                        free slot of at least{" "}
+                        {feasibleResult.required_duration_minutes} minutes
+                        without train traffic.
                       </div>
                     </div>
                   </div>
@@ -3179,10 +4443,18 @@ export default function MaintenancePage() {
               <form onSubmit={handleSubmitBlockWindow} className="space-y-4">
                 {selectedBlockTask && (
                   <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border space-y-1">
-                    <div className="text-[11px] font-bold text-brand-muted uppercase">Target Maintenance Task</div>
+                    <div className="text-[11px] font-bold text-brand-muted uppercase">
+                      Target Maintenance Task
+                    </div>
                     <div className="text-xs font-bold text-brand-secondary flex items-center justify-between">
-                      <span>{selectedBlockTask.task_code} - {selectedBlockTask.asset_name || `Asset #${selectedBlockTask.asset}`}</span>
-                      <span className="font-mono text-brand-primary font-extrabold">{selectedBlockTask.estimated_duration} mins required</span>
+                      <span>
+                        {selectedBlockTask.task_code} -{" "}
+                        {selectedBlockTask.asset_name ||
+                          `Asset #${selectedBlockTask.asset}`}
+                      </span>
+                      <span className="font-mono text-brand-primary font-extrabold">
+                        {selectedBlockTask.estimated_duration} mins required
+                      </span>
                     </div>
                   </div>
                 )}
@@ -3196,12 +4468,25 @@ export default function MaintenancePage() {
                     <select
                       value={blockWindowForm.section}
                       disabled
-                      onChange={(e) => setBlockWindowForm((prev) => ({ ...prev, section: Number(e.target.value) }))}
+                      onChange={(e) =>
+                        setBlockWindowForm((prev) => ({
+                          ...prev,
+                          section: Number(e.target.value),
+                        }))
+                      }
                       className="w-full px-3.5 py-2.5 rounded-xl bg-brand-tertiary/80 border border-brand-border text-brand-secondary text-xs font-semibold outline-none disabled:opacity-80 disabled:cursor-not-allowed shadow-2xs"
                     >
                       {sections.map((sec) => (
                         <option key={sec.id} value={sec.id}>
-                          {sec.section_name || `Section #${sec.id}`} ({sec.source_station_code || sec.origin_station || "SRC"} → {sec.destination_station_code || sec.end_station || "DST"})
+                          {sec.section_name || `Section #${sec.id}`} (
+                          {sec.source_station_code ||
+                            sec.origin_station ||
+                            "SRC"}{" "}
+                          →{" "}
+                          {sec.destination_station_code ||
+                            sec.end_station ||
+                            "DST"}
+                          )
                         </option>
                       ))}
                     </select>
@@ -3217,7 +4502,7 @@ export default function MaintenancePage() {
                         type="datetime-local"
                         value={blockWindowForm.start_time}
                         min={getMinMaintenanceDateTime()}
-                        max={getMaxMaintenanceDateTime()}
+                        max={getBlockWindowDeadlineMax(selectedBlockTask)}
                         onChange={(e) => {
                           const newStart = e.target.value;
                           setBlockWindowForm((prev) => {
@@ -3225,16 +4510,33 @@ export default function MaintenancePage() {
                             if (newStart && updatedEnd) {
                               const sTime = new Date(newStart).getTime();
                               const eTime = new Date(updatedEnd).getTime();
-                              const maxAllowedETime = new Date(toApiTimestamp(getMaxEndTimeForStart(newStart))).getTime();
+                              const maxAllowedETime = new Date(
+                                toApiTimestamp(
+                                  getBlockWindowEndMax(
+                                    newStart,
+                                    selectedBlockTask,
+                                  ),
+                                ),
+                              ).getTime();
 
                               if (eTime <= sTime) {
-                                const durationMins = selectedBlockTask?.estimated_duration || 60;
-                                updatedEnd = formatDateTimeLocal(new Date(sTime + durationMins * 60 * 1000));
+                                const durationMins =
+                                  selectedBlockTask?.estimated_duration || 60;
+                                updatedEnd = formatDateTimeLocal(
+                                  new Date(sTime + durationMins * 60 * 1000),
+                                );
                               } else if (eTime > maxAllowedETime) {
-                                updatedEnd = getMaxEndTimeForStart(newStart);
+                                updatedEnd = getBlockWindowEndMax(
+                                  newStart,
+                                  selectedBlockTask,
+                                );
                               }
                             }
-                            return { ...prev, start_time: newStart, end_time: updatedEnd };
+                            return {
+                              ...prev,
+                              start_time: newStart,
+                              end_time: updatedEnd,
+                            };
                           });
                         }}
                         className="w-full px-3.5 py-2.5 rounded-xl bg-brand-tertiary border border-brand-border hover:border-brand-primary/50 text-brand-secondary text-xs font-mono font-semibold outline-none focus:ring-1 focus:ring-brand-primary/30 transition-colors cursor-pointer"
@@ -3249,14 +4551,33 @@ export default function MaintenancePage() {
                       <input
                         type="datetime-local"
                         value={blockWindowForm.end_time}
-                        min={blockWindowForm.start_time || getMinMaintenanceDateTime()}
-                        max={getMaxEndTimeForStart(blockWindowForm.start_time)}
-                        onChange={(e) => setBlockWindowForm((prev) => ({ ...prev, end_time: e.target.value }))}
+                        min={
+                          blockWindowForm.start_time ||
+                          getMinMaintenanceDateTime()
+                        }
+                        max={getBlockWindowEndMax(
+                          blockWindowForm.start_time,
+                          selectedBlockTask,
+                        )}
+                        onChange={(e) =>
+                          setBlockWindowForm((prev) => ({
+                            ...prev,
+                            end_time: e.target.value,
+                          }))
+                        }
                         className="w-full px-3.5 py-2.5 rounded-xl bg-brand-tertiary border border-brand-border hover:border-brand-primary/50 text-brand-secondary text-xs font-mono font-semibold outline-none focus:ring-1 focus:ring-brand-primary/30 transition-colors cursor-pointer"
                         required
                       />
                     </div>
                   </div>
+                  {selectedBlockTask?.deadline && (
+                    <p className="text-[11px] font-medium text-brand-muted">
+                      Block window must finish by the task deadline:{" "}
+                      <span className="font-bold text-brand-secondary">
+                        {formatDate(selectedBlockTask.deadline)}, 11:59 PM
+                      </span>
+                    </p>
+                  )}
                 </div>
 
                 {/* Standard Backend Conflict Recommendation Banner */}
@@ -3270,26 +4591,44 @@ export default function MaintenancePage() {
                     <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 space-y-2 text-xs">
                       <div className="flex items-center gap-2 text-amber-900 font-extrabold">
                         <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                        <span>Standard Conflict Warning ({standardConflictResult.conflict_count} train conflict{standardConflictResult.conflict_count > 1 ? "s" : ""})</span>
+                        <span>
+                          Standard Conflict Warning (
+                          {standardConflictResult.conflict_count} train conflict
+                          {standardConflictResult.conflict_count > 1 ? "s" : ""}
+                          )
+                        </span>
                       </div>
                       {standardConflictResult.conflicts.length > 0 && (
                         <div className="space-y-1 pl-6">
                           {standardConflictResult.conflicts.map((c) => (
-                            <div key={c.train_number} className="text-[11px] font-medium text-amber-800 flex items-center justify-between">
-                              <span>Train {c.train_number} ({c.train_name})</span>
-                              <span className="font-mono text-amber-700 font-semibold">{formatTimeHHMM(c.entry_time)} – {formatTimeHHMM(c.exit_time)}</span>
+                            <div
+                              key={c.train_number}
+                              className="text-[11px] font-medium text-amber-800 flex items-center justify-between"
+                            >
+                              <span>
+                                Train {c.train_number} ({c.train_name})
+                              </span>
+                              <span className="font-mono text-amber-700 font-semibold">
+                                {formatTimeHHMM(c.entry_time)} –{" "}
+                                {formatTimeHHMM(c.exit_time)}
+                              </span>
                             </div>
                           ))}
                         </div>
                       )}
                       <p className="text-[11px] text-amber-700 font-medium leading-relaxed pt-1 border-t border-amber-200/60">
-                        You can still create this block window manually. Our AI engine will suggest optimal conflict-free slots immediately after creation.
+                        You can still create this block window manually. Our AI
+                        engine will suggest optimal conflict-free slots
+                        immediately after creation.
                       </p>
                     </div>
                   ) : (
                     <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center gap-2 text-xs font-bold text-emerald-800">
                       <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>All Clear: No train movements conflict with the selected timeframe.</span>
+                      <span>
+                        All Clear: No train movements conflict with the selected
+                        timeframe.
+                      </span>
                     </div>
                   )
                 ) : null}
@@ -3320,10 +4659,14 @@ export default function MaintenancePage() {
                   </button>
                   <button
                     type="submit"
-                    disabled={createBlockWindowMutation.isPending || updateBlockWindowMutation.isPending}
+                    disabled={
+                      createBlockWindowMutation.isPending ||
+                      updateBlockWindowMutation.isPending
+                    }
                     className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-primary hover:bg-blue-700 text-xs font-bold text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
                   >
-                    {(createBlockWindowMutation.isPending || updateBlockWindowMutation.isPending) ? (
+                    {createBlockWindowMutation.isPending ||
+                    updateBlockWindowMutation.isPending ? (
                       <>
                         <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                         <span>Saving Window...</span>
@@ -3331,7 +4674,11 @@ export default function MaintenancePage() {
                     ) : (
                       <>
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>{editingBlockWindow ? "Update Block Window" : "Create Block Window"}</span>
+                        <span>
+                          {editingBlockWindow
+                            ? "Update Block Window"
+                            : "Create Block Window"}
+                        </span>
                       </>
                     )}
                   </button>
@@ -3341,9 +4688,13 @@ export default function MaintenancePage() {
               /* Post-Creation AI Optimization Step */
               <div className="space-y-4">
                 <div className="p-3.5 rounded-xl bg-brand-tertiary border border-brand-border space-y-1">
-                  <div className="text-[10px] font-bold uppercase text-brand-muted">Newly Created Block Window #{createdBlockWindowId}</div>
+                  <div className="text-[10px] font-bold uppercase text-brand-muted">
+                    Newly Created Block Window #{createdBlockWindowId}
+                  </div>
                   <div className="text-xs font-bold text-brand-secondary">
-                    {selectedBlockTask?.task_code} - {selectedBlockTask?.asset_name || `Asset #${selectedBlockTask?.asset}`}
+                    {selectedBlockTask?.task_code} -{" "}
+                    {selectedBlockTask?.asset_name ||
+                      `Asset #${selectedBlockTask?.asset}`}
                   </div>
                 </div>
 
@@ -3352,7 +4703,10 @@ export default function MaintenancePage() {
                     blockWindowId={createdBlockWindowId}
                     taskId={selectedBlockTask?.task_code}
                     onSlotUpdated={() => {
-                      showToast("success", "AI recommended slot accepted & block window updated!");
+                      showToast(
+                        "success",
+                        "AI recommended slot accepted & block window updated!",
+                      );
                       setIsBlockWindowModalOpen(false);
                     }}
                   />
