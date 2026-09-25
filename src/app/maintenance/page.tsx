@@ -1727,13 +1727,17 @@ export default function MaintenancePage() {
                 <table className="w-full text-center text-xs">
                   <thead className="bg-brand-surface text-brand-muted font-semibold border-b border-brand-border text-[10px] lg:text-[12px]">
                     <tr>
-                      <th className="py-3 px-4 text-center font-semibold">Task Code</th>
+                      <th className="py-3 px-4 text-left font-semibold">Task Code</th>
                       <th className="py-3 px-4 text-center font-semibold">Target Asset</th>
                       <th className="py-3 px-4 text-center font-semibold">Corridor</th>
-                      <th className="py-3 px-4 text-center font-semibold">Block Window</th>
+                      <th className="py-3 px-4 text-center font-semibold">
+                        <div className="flex items-center justify-center translate-x-[18px]">
+                          <span>Block Window</span>
+                        </div>
+                      </th>
                       <th className="py-3 px-4 text-center font-semibold">Criticality Score</th>
                       <th className="py-3 px-4 text-center font-semibold">Status</th>
-                      <th className="py-3 px-4 text-center font-semibold">Actions</th>
+                      <th className="py-3 px-4 text-right font-semibold">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-border/60 text-brand-secondary">
@@ -1773,7 +1777,7 @@ export default function MaintenancePage() {
                       return (
                         <React.Fragment key={task.id}>
                           <tr className="hover:bg-brand-tertiary/60 transition-colors group">
-                            <td className="py-3.5 px-4 text-center font-semibold text-brand-primary text-xs lg:text-sm">
+                            <td className="py-3.5 px-4 text-left font-semibold text-brand-primary text-xs lg:text-sm">
                               {task.task_code}
                             </td>
                             <td className="py-3.5 px-4 text-center">
@@ -1788,18 +1792,56 @@ export default function MaintenancePage() {
                               </div>
                             </td>
 
+                            {/* Block Window */}
                             <td className="py-3.5 px-4 text-center">
                               {matchingBw ? (
                                 (() => {
-                                  const slotInfo = formatWindowSlot(matchingBw.start_time, matchingBw.end_time);
+                                  const slotInfo = formatWindowSlot(
+                                    matchingBw.start_time,
+                                    matchingBw.end_time
+                                  );
+
+                                  const showAiBot =
+                                    effectiveStatKey !== MaintenanceStatus.COMPLETED &&
+                                    effectiveStatKey !== MaintenanceStatus.CANCELLED &&
+                                    !isActiveMaintenance &&
+                                    task.task_status !== MaintenanceStatus.COMPLETED &&
+                                    task.task_status !== MaintenanceStatus.CANCELLED;
+
                                   return (
-                                    <div className="inline-flex flex-col items-center gap-0.5">
-                                      <span className="font-mono text-xs text-brand-secondary font-bold">
-                                        {slotInfo.time}
-                                      </span>
-                                      <span className="text-[10px] text-brand-muted font-medium">
-                                        {slotInfo.date}
-                                      </span>
+                                    <div className="inline-flex items-center justify-center gap-2.5 min-w-[170px]">
+                                      {/* AI Bot */}
+                                      <div className="w-9 flex-shrink-0 flex items-center justify-center">
+                                        {showAiBot && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleToggleAiRecommendation(task)}
+                                            className={`w-9 h-9 flex items-center justify-center rounded-lg border shadow-xs transition-all cursor-pointer ${expandedAiTaskId === task.id
+                                              ? "bg-brand-primary text-white border-brand-primary shadow-sm"
+                                              : "bg-brand-blue-light/50 hover:bg-brand-blue-light border-brand-primary/30 text-brand-primary"
+                                              }`}
+                                            title="AI Recommended Slot"
+                                            aria-label="AI Recommended Slot"
+                                          >
+                                            <Bot
+                                              className={`w-4 h-4 ${expandedAiTaskId === task.id
+                                                ? "text-white"
+                                                : "text-brand-primary"
+                                                }`}
+                                            />
+                                          </button>
+                                        )}
+                                      </div>
+
+                                      {/* Timing + Date */}
+                                      <div className="w-[105px] flex-shrink-0 flex flex-col items-center justify-center gap-0.5">
+                                        <span className="font-mono text-xs text-brand-secondary font-bold whitespace-nowrap">
+                                          {slotInfo.time}
+                                        </span>
+                                        <span className="text-[10px] text-brand-muted font-medium whitespace-nowrap">
+                                          {slotInfo.date}
+                                        </span>
+                                      </div>
                                     </div>
                                   );
                                 })()
@@ -1807,7 +1849,6 @@ export default function MaintenancePage() {
                                 <span className="text-brand-muted">—</span>
                               ) : (
                                 <div className="inline-flex flex-col items-center gap-1.5">
-
                                   <button
                                     onClick={() => handleOpenBlockWindowModal(task)}
                                     className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-bold text-[11px] shadow-xs transition-colors cursor-pointer"
@@ -1848,127 +1889,104 @@ export default function MaintenancePage() {
                               </div>
                             </td>
 
+                            {/* Status */}
                             <td className="py-3.5 px-4 text-center">
-                              <span
-                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-semibold border ${effectiveStat.badge}`}
-                              >
-                                <effectiveStat.icon className="w-3 h-3 text-white" />
-                                {effectiveStat.label}
-                              </span>
+                              <div className="flex items-center justify-center">
+                                <span
+                                  className={`inline-flex items-center justify-center gap-1.5 w-[108px] h-[28px] rounded-md text-[10px] font-semibold border ${effectiveStat.badge}`}
+                                >
+                                  <effectiveStat.icon className="w-3.5 h-3.5 text-white shrink-0" />
+                                  <span className="whitespace-nowrap">
+                                    {effectiveStat.label}
+                                  </span>
+                                </span>
+                              </div>
                             </td>
+                            {/* Actions - all actions are inside the vertical ellipsis */}
                             <td className="py-3.5 px-4 text-center">
-                              <div className="relative flex items-center justify-end gap-1.5 max-w-[160px] mx-auto">
-
-                                {/* AI Bot - OUTSIDE dropdown */}
-                                {effectiveStatKey !== MaintenanceStatus.COMPLETED &&
-                                  effectiveStatKey !== MaintenanceStatus.CANCELLED &&
-                                  !isActiveMaintenance &&
-                                  task.task_status !== MaintenanceStatus.COMPLETED &&
-                                  task.task_status !== MaintenanceStatus.CANCELLED &&
-                                  Boolean(matchingBw) && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleToggleAiRecommendation(task)}
-                                      className={`p-2 rounded-lg border shadow-xs transition-all cursor-pointer ${expandedAiTaskId === task.id
-                                        ? "bg-brand-primary text-white border-brand-primary shadow-sm"
-                                        : "bg-brand-blue-light/50 hover:bg-brand-blue-light border-brand-primary/30 text-brand-primary"
-                                        }`}
-                                      title="AI Recommended Slot"
-                                      aria-label="AI Recommended Slot"
-                                    >
-                                      <Bot
-                                        className={`w-4 h-4 ${expandedAiTaskId === task.id
-                                          ? "text-white"
-                                          : "text-brand-primary"
-                                          }`}
-                                      />
-                                    </button>
-                                  )}
-
-                                   {/* View Details - OUTSIDE dropdown */}
-                                {!isActiveMaintenance && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setInspectingTask(task)}
-                                    className="p-2 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-black shadow-xs transition-colors cursor-pointer"
-                                    title="View Details"
-                                    aria-label="View Details"
+                              <div className="flex items-center justify-end gap-1.5">
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger
+                                    className="p-2 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-black shadow-xs transition-colors cursor-pointer outline-none focus:ring-2 focus:ring-brand-primary/20"
+                                    title="Actions"
+                                    aria-label="Actions"
                                   >
-                                    <Eye className="w-4 h-4 text-black" />
-                                  </button>
-                                )}
-
-                                {/* Terminal tasks have no available actions. */}
-                                {effectiveStatKey !== MaintenanceStatus.COMPLETED &&
-                                  effectiveStatKey !== MaintenanceStatus.CANCELLED && (
-                                    <DropdownMenu>
-                                      <DropdownMenuTrigger
-                                        className="p-2 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-black shadow-xs transition-colors cursor-pointer outline-none focus:ring-2 focus:ring-brand-primary/20"
-                                        title="Actions"
-                                        aria-label="Actions"
-                                      >
-                                        <MoreVertical className="w-4 h-4" />
-                                      </DropdownMenuTrigger>
+                                    <MoreVertical className="w-4 h-4" />
+                                  </DropdownMenuTrigger>
 
                                   <DropdownMenuContent
                                     align="end"
                                     sideOffset={6}
                                     className="w-56 bg-brand-surface border-brand-border text-brand-secondary shadow-xl rounded-xl p-1.5 z-50"
                                   >
+                                    {/* View Details - always available */}
+                                    <DropdownMenuItem
+                                      onClick={() => setInspectingTask(task)}
+                                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary cursor-pointer focus:bg-brand-tertiary focus:text-brand-secondary"
+                                    >
+                                      <Eye className="w-4 h-4 text-black" />
+                                      <span>View Details</span>
+                                    </DropdownMenuItem>
 
-                                    <>
-                                          {effectiveStatKey === MaintenanceStatus.SCHEDULED && (
-                                            <DropdownMenuItem
-                                              onClick={() => openLifecycleModal(task, "start")}
-                                              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-violet-50 text-sm font-semibold text-violet-700 cursor-pointer focus:bg-violet-50 focus:text-violet-700"
-                                            >
-                                              <Wrench className="w-4 h-4 text-violet-600" />
-                                              <span>Start Maintenance</span>
-                                            </DropdownMenuItem>
-                                          )}
+                                    {/* Start Maintenance */}
+                                    {effectiveStatKey === MaintenanceStatus.SCHEDULED && (
+                                      <DropdownMenuItem
+                                        onClick={() => openLifecycleModal(task, "start")}
+                                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-violet-50 text-sm font-semibold text-violet-700 cursor-pointer focus:bg-violet-50 focus:text-violet-700"
+                                      >
+                                        <Wrench className="w-4 h-4 text-violet-600" />
+                                        <span>Start Maintenance</span>
+                                      </DropdownMenuItem>
+                                    )}
 
-                                          {(effectiveStatKey === MaintenanceStatus.ACTIVE ||
-                                            (effectiveStatKey === MaintenanceStatus.DELAYED && Boolean(task.started_at))) && (
+                                    {/* Complete Task */}
+                                    {(effectiveStatKey === MaintenanceStatus.ACTIVE ||
+                                      (effectiveStatKey === MaintenanceStatus.DELAYED && Boolean(task.started_at))) && (
+                                        <DropdownMenuItem
+                                          onClick={() => openLifecycleModal(task, "complete")}
+                                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-emerald-50 text-sm font-semibold text-emerald-700 cursor-pointer focus:bg-emerald-50 focus:text-emerald-700"
+                                        >
+                                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                          <span>Complete Task</span>
+                                        </DropdownMenuItem>
+                                      )}
+
+                                    {/* Cancel Task */}
+                                    {effectiveStatKey !== MaintenanceStatus.COMPLETED &&
+                                      effectiveStatKey !== MaintenanceStatus.CANCELLED && (
+                                        <DropdownMenuItem
+                                          onClick={() => openLifecycleModal(task, "cancel")}
+                                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-100 text-sm font-semibold text-slate-700 cursor-pointer focus:bg-slate-100 focus:text-slate-700"
+                                        >
+                                          <XCircle className="w-4 h-4 text-slate-600" />
+                                          <span>Cancel Task</span>
+                                        </DropdownMenuItem>
+                                      )}
+
+                                    {/* Edit Task + Block Window */}
+                                    {!isActiveMaintenance &&
+                                      effectiveStatKey !== MaintenanceStatus.COMPLETED &&
+                                      effectiveStatKey !== MaintenanceStatus.CANCELLED && (
+                                        <>
                                           <DropdownMenuItem
-                                            onClick={() => openLifecycleModal(task, "complete")}
-                                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-emerald-50 text-sm font-semibold text-emerald-700 cursor-pointer focus:bg-emerald-50 focus:text-emerald-700"
+                                            onClick={() => handleOpenEditModal(task)}
+                                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary cursor-pointer focus:bg-brand-tertiary focus:text-brand-secondary"
                                           >
-                                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                                            <span>Complete Task</span>
+                                            <Edit2 className="w-4 h-4 text-brand-primary" />
+                                            <span>Edit Task</span>
                                           </DropdownMenuItem>
-                                          )}
 
                                           <DropdownMenuItem
-                                            onClick={() => openLifecycleModal(task, "cancel")}
-                                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-100 text-sm font-semibold text-slate-700 cursor-pointer focus:bg-slate-100 focus:text-slate-700"
+                                            onClick={() => handleOpenBlockWindowModal(task, matchingBw)}
+                                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary cursor-pointer focus:bg-brand-tertiary focus:text-brand-secondary"
                                           >
-                                            <XCircle className="w-4 h-4 text-slate-600" />
-                                            <span>Cancel Task</span>
+                                            <Calendar className="w-4 h-4 text-brand-primary" />
+                                            <span>Block Window</span>
                                           </DropdownMenuItem>
-
-                                          {!isActiveMaintenance && <>
-                                            <DropdownMenuItem
-                                              onClick={() => handleOpenEditModal(task)}
-                                              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary cursor-pointer focus:bg-brand-tertiary focus:text-brand-secondary"
-                                            >
-                                              <Edit2 className="w-4 h-4 text-brand-primary" />
-                                              <span>Edit Task</span>
-                                            </DropdownMenuItem>
-
-                                            <DropdownMenuItem
-                                              onClick={() => handleOpenBlockWindowModal(task, matchingBw)}
-                                              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-tertiary text-sm font-semibold text-brand-secondary cursor-pointer focus:bg-brand-tertiary focus:text-brand-secondary"
-                                            >
-                                              <Calendar className="w-4 h-4 text-brand-primary" />
-                                              <span>Block Window</span>
-                                            </DropdownMenuItem>
-                                          </>}
-                                    </>
-
+                                        </>
+                                      )}
                                   </DropdownMenuContent>
-                                    </DropdownMenu>
-                                  )}
-
+                                </DropdownMenu>
                               </div>
                             </td>
                           </tr>

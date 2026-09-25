@@ -619,7 +619,7 @@ export default function AssetsPage() {
                               </button>
                               <button
                                 onClick={() => handleOpenEditModal(asset)}
-                                className="p-1.5 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-brand-primary shadow-xs transition-colors cursor-pointer"
+                                className="p-1.5 rounded-lg bg-brand-surface hover:bg-brand-tertiary border border-brand-border text-black shadow-xs transition-colors cursor-pointer"
                                 title="Edit"
                               >
                                 <Edit2 className="w-3.5 h-3.5" />
