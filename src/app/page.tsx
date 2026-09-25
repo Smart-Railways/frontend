@@ -163,7 +163,7 @@ export default function Home() {
                 </div>
               </div>
               <p className="text-xs text-brand-muted mt-1.5 font-medium">
-               Real-time pathfinding and automated block scheduling for the Delhi–Mumbai corridor, with a vision for Pan-India expansion.
+             Real-time pathfinding and automated block scheduling across major railway corridors, built to scale Pan-India.
               </p>
             </div>
 

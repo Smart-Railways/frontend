@@ -4,7 +4,7 @@ import React, { useState, useMemo } from "react";
 import {
   ArrowRightLeft,
   MapPin,
-  RotateCcw,
+  Route,
 } from "lucide-react";
 import {
   STATIONS,
@@ -15,9 +15,7 @@ import {
   findRailwayRoute,
 } from "@/data/india-railway-network";
 import { useRailwaySections } from "@/hooks";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -35,6 +33,13 @@ interface HorizontalRouteSelectorProps {
   onSwap: () => void;
   onClear: () => void;
 }
+
+const GLOBAL_CORRIDOR_OPTIONS = [
+  { id: "all", label: "All" },
+  { id: "ndls-mmct", label: "NDLS — Mumbai" },
+  { id: "ndls-hwh", label: "NDLS — Howrah" },
+  { id: "custom", label: "Select corridor" },
+] as const;
 
 function formatStationLabel(station: { name: string; code: string; city?: string }) {
   const rawName = station.city || station.name;
@@ -56,6 +61,11 @@ export function HorizontalRouteSelector({
   onClear,
 }: HorizontalRouteSelectorProps) {
   const [isSwapping, setIsSwapping] = useState(false);
+  const [selectedGlobalCorridorId, setSelectedGlobalCorridorId] = useState<string>(() => {
+    if (sourceId === "ndls" && targetId === "mmct") return "ndls-mmct";
+    if (sourceId === "ndls" && targetId === "hwh") return "ndls-hwh";
+    return "custom";
+  });
 
   // Fetch backend sections
   const { data: backendSections = [] } = useRailwaySections();
@@ -140,17 +150,76 @@ export function HorizontalRouteSelector({
   }, [allCorridors]);
 
   const handleSwapClick = () => {
+    if (selectedGlobalCorridorId) return;
     setIsSwapping(true);
     onSwap();
     setTimeout(() => setIsSwapping(false), 500);
   };
 
+  const handleGlobalCorridorChange = (corridorId: string | null) => {
+    if (!corridorId) return;
+
+    setSelectedGlobalCorridorId(corridorId);
+    if (corridorId === "custom") return;
+    if (corridorId === "all") {
+      onClear();
+      return;
+    }
+
+    const corridor = AVAILABLE_CORRIDORS.find((item) => item.id === `corr-${corridorId}`);
+    if (!corridor) return;
+
+    onSourceChange(corridor.sourceId);
+    onTargetChange(corridor.targetId);
+  };
+
   const selectedSource = getStationById(sourceId);
   const selectedTarget = getStationById(targetId);
-  const hasSelection = Boolean(sourceId || targetId);
+  const isGlobalCorridorLocked = selectedGlobalCorridorId !== "custom";
 
 return (
   <div className="w-full">
+    <div className="mb-2 flex flex-col gap-1.5 px-1 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center gap-2">
+        <Route className="size-3.5 text-brand-primary" />
+        <label
+          htmlFor="global-corridor-selector"
+          className="text-[10px] font-bold uppercase tracking-[0.14em] text-brand-muted"
+        >
+          Global corridor
+        </label>
+      </div>
+      <span className="text-[10px] font-medium text-brand-primary">
+        {isGlobalCorridorLocked ? "Station selectors follow this choice" : "Station selectors are unlocked"}
+      </span>
+    </div>
+
+    <Select
+      value={selectedGlobalCorridorId}
+      onValueChange={handleGlobalCorridorChange}
+    >
+      <SelectTrigger
+        id="global-corridor-selector"
+        aria-label="Select a global railway corridor"
+        className="mb-3 h-10 w-full justify-between border-brand-border bg-brand-surface px-3 text-left text-xs font-semibold text-brand-secondary shadow-xs hover:border-brand-primary/35 sm:max-w-md"
+      >
+        <SelectValue>
+          {GLOBAL_CORRIDOR_OPTIONS.find((option) => option.id === selectedGlobalCorridorId)?.label}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent className="max-h-80 min-w-[min(24rem,calc(100vw-2rem))] rounded-xl border-brand-border bg-brand-surface p-1.5 shadow-xl">
+        {GLOBAL_CORRIDOR_OPTIONS.map((option) => (
+          <SelectItem
+            key={option.id}
+            value={option.id}
+            className="rounded-lg px-3 py-2.5 text-brand-secondary focus:bg-brand-blue-light/50 focus:text-brand-primary"
+          >
+            <span className="font-semibold">{option.label}</span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+
     <div
       className={cn(
         "relative flex flex-col md:flex-row items-stretch md:items-center",
@@ -194,6 +263,7 @@ return (
             <Select
               value={sourceId || ""}
               onValueChange={(val) => val && onSourceChange(val)}
+              disabled={isGlobalCorridorLocked}
             >
               <SelectTrigger
                 className={cn(
@@ -271,7 +341,7 @@ return (
           variant="outline"
           size="icon"
           onClick={handleSwapClick}
-          disabled={!sourceId && !targetId}
+          disabled={isGlobalCorridorLocked || (!sourceId && !targetId)}
           title="Reverse corridor direction"
           aria-label="Reverse corridor direction"
           className={cn(
@@ -332,6 +402,7 @@ return (
             <Select
               value={targetId || ""}
               onValueChange={(val) => val && onTargetChange(val)}
+              disabled={isGlobalCorridorLocked}
             >
               <SelectTrigger
                 className={cn(

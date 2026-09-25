@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import {
   STATIONS,
+  TRACKS,
   RailwayStation,
   findRailwayRoute,
   getStationById,
@@ -36,6 +37,17 @@ interface IndiaLeafletMapProps {
   sourceId: string;
   targetId: string;
   onSelectStation?: (stationId: string) => void;
+}
+
+function formatStationName(station: RailwayStation) {
+  const name = station.name
+    .toLowerCase()
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+
+  return `${name} (${station.code})`;
 }
 
 // Clean, bold Leaflet DivIcons strictly adhering to brand palette
@@ -54,7 +66,7 @@ function createStationIcon(
         <div class="relative flex flex-col items-center -translate-x-1/2 -translate-y-1/2 select-none">
           <div class="w-3.5 h-3.5 rounded-full bg-[#16A34A] border-2 border-white shadow-md mb-0.5"></div>
           <span class="px-2 py-0.5 rounded-md bg-[#FFFDF9] border border-[#E7E2D8] text-[#171A1F] text-[10px] font-extrabold whitespace-nowrap shadow-xs">
-            ${station.name} (${station.code})
+            ${formatStationName(station)}
           </span>
         </div>
       `,
@@ -71,7 +83,7 @@ function createStationIcon(
         <div class="relative flex flex-col items-center -translate-x-1/2 -translate-y-1/2 select-none">
           <div class="w-3.5 h-3.5 rounded-full bg-[#16A34A] border-2 border-white shadow-md mb-0.5"></div>
           <span class="px-2 py-0.5 rounded-md bg-[#FFFDF9] border border-[#E7E2D8] text-[#171A1F] text-[10px] font-extrabold whitespace-nowrap shadow-xs">
-            ${station.name} (${station.code})
+            ${formatStationName(station)}
           </span>
         </div>
       `,
@@ -95,7 +107,7 @@ function createStationIcon(
             <div class="w-1.5 h-1.5 rounded-full bg-white"></div>
           </div>
           <span class="mt-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold whitespace-nowrap shadow-xs" style="background:${bg}; border:1px solid ${border}; color:${color};">
-            ${station.name}
+            ${formatStationName(station)}
           </span>
         </div>
       `,
@@ -112,7 +124,7 @@ function createStationIcon(
         <div class="relative flex flex-col items-center -translate-x-1/2 -translate-y-1/2 group select-none">
           <div class="w-3 h-3 rounded-full bg-[#16A34A] border-2 border-white shadow-sm"></div>
           <span class="mt-1 px-1.5 py-0.5 rounded bg-[#FFFDF9] border border-[#E7E2D8] text-[9px] font-extrabold text-[#171A1F] whitespace-nowrap shadow-xs">
-            ${station.name}
+            ${formatStationName(station)}
           </span>
         </div>
       `,
@@ -343,6 +355,8 @@ export function IndiaLeafletMap({
 
   // Set of station IDs strictly belonging to the active corridor
   const activeStationIdSet = useMemo(() => {
+    if (!sourceId && !targetId) return new Set(STATIONS.map((station) => station.id));
+
     const set = new Set<string>(activeRoute?.stationIds || []);
     if (sourceId) set.add(sourceId);
     if (targetId) set.add(targetId);
@@ -351,7 +365,16 @@ export function IndiaLeafletMap({
 
   // Breakdown active route into individual consecutive segments.
   const routeSegments = useMemo(() => {
-    if (!activeRoute || activeRoute.stationIds.length < 2) return [];
+    const stationPairs = activeRoute
+      ? activeRoute.stationIds.slice(0, -1).map((fromId, index) => ({
+          fromId,
+          toId: activeRoute.stationIds[index + 1],
+        }))
+      : !sourceId && !targetId
+        ? TRACKS.map(({ from: fromId, to: toId }) => ({ fromId, toId }))
+        : [];
+
+    if (!stationPairs.length) return [];
 
     const segments: Array<{
       fromId: string;
@@ -365,9 +388,7 @@ export function IndiaLeafletMap({
       maintenanceStatus?: "ACTIVE" | "SCHEDULED";
     }> = [];
 
-    for (let i = 0; i < activeRoute.stationIds.length - 1; i++) {
-      const fromId = activeRoute.stationIds[i];
-      const toId = activeRoute.stationIds[i + 1];
+    for (const { fromId, toId } of stationPairs) {
       const fromStation = getStationById(fromId);
       const toStation = getStationById(toId);
       if (!fromStation || !toStation) continue;
@@ -436,7 +457,7 @@ export function IndiaLeafletMap({
     }
 
     return segments;
-  }, [activeRoute, maintenanceSections, maintenanceTasks]);
+  }, [activeRoute, maintenanceSections, maintenanceTasks, sourceId, targetId]);
 
   // Coordinates for the highlighted corridor route
   const routeCoordinates: [number, number][] = useMemo(() => {
@@ -485,7 +506,7 @@ export function IndiaLeafletMap({
       >
         <div className="flex items-center gap-1.5">
           <span className="w-4 h-1 rounded bg-[#16A34A]"></span>
-          <span>Normal</span>
+          <span>Clear</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="w-4 h-1.5 rounded bg-[#2563EB]"></span>
@@ -759,7 +780,7 @@ export function IndiaLeafletMap({
             >
               <Tooltip direction="top" offset={[0, -10]} opacity={0.95}>
                 <div className="text-[11px] font-bold text-brand-secondary px-1">
-                  {station.name} ({station.code}) — {station.city}
+                  {formatStationName(station)}
                   {maintenanceStatus && ` [${maintenanceStatus === "ACTIVE" ? "Active" : "Scheduled"} Maintenance]`}
                 </div>
               </Tooltip>
@@ -768,7 +789,7 @@ export function IndiaLeafletMap({
                 <div className="p-1.5 space-y-1.5 text-brand-secondary">
                   <div className="flex items-center justify-between gap-3">
                     <span className="font-extrabold text-xs text-brand-secondary">
-                      {station.name} ({station.code})
+                      {formatStationName(station)}
                     </span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-brand-blue-light text-brand-primary font-bold">
                       Zone {station.zone}

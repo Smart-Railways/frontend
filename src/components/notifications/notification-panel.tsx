@@ -3,19 +3,15 @@
 import React, { useMemo } from "react";
 import Link from "next/link";
 import {
-  Bell,
-  TriangleAlert,
-  Wrench,
-  Info,
   CheckCircle2,
   MapPin,
   Clock,
-  Calendar,
   ExternalLink,
-  PlusCircle,
   RefreshCw,
-  Sparkles,
+  Activity,
   Zap,
+  AlertTriangle,
+  Wrench,
 } from "lucide-react";
 import { useMaintenanceTasks, useBlockWindows, useAssets } from "@/hooks";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -75,6 +71,73 @@ function extractStationIds(text: string): { sourceId?: string; targetId?: string
     return { sourceId: "ndls", targetId: found[0] };
   }
   return {};
+}
+
+// Severity display config
+const severityConfig = {
+  critical: {
+    badge: "bg-red-500 text-white",
+    border: "border-l-red-500",
+    iconBg: "bg-red-50",
+    icon: AlertTriangle,
+    iconColor: "text-red-500",
+    bar: "bg-red-500",
+    accentColor: "#ef4444",
+  },
+  high: {
+    badge: "bg-amber-500 text-white",
+    border: "border-l-amber-500",
+    iconBg: "bg-amber-50",
+    icon: Zap,
+    iconColor: "text-amber-500",
+    bar: "bg-amber-500",
+    accentColor: "#f59e0b",
+  },
+  medium: {
+    badge: "bg-blue-500 text-white",
+    border: "border-l-blue-400",
+    iconBg: "bg-blue-50",
+    icon: Wrench,
+    iconColor: "text-blue-500",
+    bar: "bg-blue-500",
+    accentColor: "#3b82f6",
+  },
+  low: {
+    badge: "bg-slate-500 text-white",
+    border: "border-l-slate-400",
+    iconBg: "bg-slate-50",
+    icon: Wrench,
+    iconColor: "text-slate-500",
+    bar: "bg-slate-400",
+    accentColor: "#94a3b8",
+  },
+};
+
+/**
+ * Alert severity represents the maintenance task's criticality score. Priority
+ * remains a planning field and can legitimately differ from a task's risk.
+ */
+function getAlertSeverity(
+  riskRating: number | null | undefined,
+  urgency: string | null | undefined,
+): RailwayNotification["severity"] {
+  if (typeof riskRating === "number") {
+    if (riskRating >= 8) return "critical";
+    if (riskRating >= 6) return "high";
+    if (riskRating >= 4) return "medium";
+    return "low";
+  }
+
+  switch (urgency?.trim().toUpperCase()) {
+    case "CRITICAL":
+      return "critical";
+    case "HIGH":
+      return "high";
+    case "LOW":
+      return "low";
+    default:
+      return "medium";
+  }
 }
 
 export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) {
@@ -139,8 +202,8 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
           rawTaskId: task.id,
           title: `${taskCodeDisplay}: ${detailsDisplay.slice(0, 52)}${detailsDisplay.length > 52 ? "..." : ""}`,
           description: detailsDisplay,
-          category: task.urgency === "CRITICAL" ? "critical" : "maintenance",
-          severity: task.urgency === "CRITICAL" ? "critical" : task.urgency === "HIGH" ? "high" : "medium",
+          category: task.risk_rating >= 8 ? "critical" : "maintenance",
+          severity: getAlertSeverity(task.risk_rating, task.urgency),
           timestamp: task.logged_at ? new Date(task.logged_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "",
           corridorOrStation: corridorDisplay,
           stationId: targetId || (sourceId !== "ndls" ? sourceId : undefined),
@@ -169,26 +232,32 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
 
   return (
     <aside className="w-80 lg:w-96 shrink-0 bg-brand-tertiary/40 border-l border-brand-border flex flex-col h-screen sticky top-0 overflow-hidden">
-      {/* Header */}
-      <div className="p-4 border-b border-brand-border flex items-center justify-between bg-brand-surface/70 shrink-0">
-        <div className="flex items-center gap-2.5">
-          <div>
-            <div className="flex items-center gap-1.5">
-              <h2 className="text-sm font-extrabold text-brand-secondary tracking-tight">
-                Railway Alerts
-              </h2>
-              <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-brand-blue-light text-brand-primary font-bold border border-brand-primary/20">
-                <span className="w-1.5 h-1.5 rounded-full bg-brand-primary animate-beacon-pulse" />
-                LIVE
-              </span>
-            </div>
-            <span className="text-[11px] text-brand-muted font-medium block">
-              Live Active Maintenance
+
+      {/* ── Header ───────────────────────────────────────────── */}
+      <div className="px-4 py-3.5 border-b border-brand-border flex items-center justify-between bg-brand-surface/80 shrink-0 backdrop-blur-sm">
+        <div className="flex flex-col gap-0.5">
+          {/* Title row — "Railway Alerts" + LIVE pill on same line */}
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-extrabold text-brand-secondary tracking-tight leading-none">
+              Railway Alerts
+            </h2>
+            <span className="inline-flex items-center gap-1 bg-red-50 border border-red-200 text-red-600 text-[10px] font-extrabold px-2 py-0.5 rounded-full leading-none tracking-wide select-none">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-beacon-pulse shrink-0" />
+              LIVE
             </span>
           </div>
+          <span className="text-[11px] text-brand-muted font-medium leading-none mt-0.5">
+            Active Maintenance
+          </span>
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Active count badge */}
+          {!isLoading && allNotifications.length > 0 && (
+            <span className="text-[10px] font-bold bg-brand-primary/10 text-brand-primary px-2 py-0.5 rounded-full border border-brand-primary/20 leading-none">
+              {allNotifications.length} active
+            </span>
+          )}
           <button
             onClick={() => refetch()}
             disabled={isRefetching}
@@ -200,140 +269,168 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
         </div>
       </div>
 
-      {/* Notifications List */}
-      <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-3">
+      {/* ── Notifications List ────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto min-h-0 p-3 space-y-3">
         {(isLoading || isRefetching) ? (
           <div className="space-y-3">
             {Array.from({ length: 3 }).map((_, idx) => (
               <div
                 key={idx}
-                className="p-4 rounded-2xl bg-brand-surface border border-brand-border shadow-xs space-y-3"
+                className="rounded-2xl bg-brand-surface border border-brand-border shadow-xs overflow-hidden"
               >
-                <div className="flex items-center justify-between">
+                <div className="h-0.5 w-full bg-gradient-to-r from-brand-border via-brand-muted/30 to-brand-border" />
+                <div className="p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <Skeleton className="h-5 w-16 rounded-full" />
                     <Skeleton className="h-5 w-20 rounded-md" />
                     <Skeleton className="h-3 w-12 rounded" />
                   </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Skeleton className="h-4 w-48 rounded" />
-                  <Skeleton className="h-3 w-36 rounded" />
-                </div>
-                <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Skeleton className="h-4 w-32 rounded" />
-                    <Skeleton className="h-4 w-14 rounded-md" />
+                  <div className="space-y-1.5">
+                    <Skeleton className="h-4 w-48 rounded" />
+                    <Skeleton className="h-3 w-36 rounded" />
                   </div>
-                  <div className="flex items-center justify-between pt-1 border-t border-brand-border/60">
-                    <Skeleton className="h-3 w-16 rounded" />
-                    <Skeleton className="h-3 w-20 rounded" />
+                  <div className="p-3 rounded-xl bg-brand-tertiary border border-brand-border space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-4 w-32 rounded" />
+                      <Skeleton className="h-4 w-14 rounded-md" />
+                    </div>
+                    <Skeleton className="h-1.5 w-full rounded-full" />
+                    <div className="flex items-center justify-between pt-1 border-t border-brand-border/60">
+                      <Skeleton className="h-3 w-16 rounded" />
+                      <Skeleton className="h-3 w-20 rounded" />
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center justify-between pt-2 border-t border-brand-border/60">
-                  <Skeleton className="h-4 w-28 rounded" />
-                  <Skeleton className="h-3 w-24 rounded" />
+                  <div className="flex items-center justify-between pt-2 border-t border-brand-border/60">
+                    <Skeleton className="h-4 w-28 rounded" />
+                    <Skeleton className="h-3 w-24 rounded" />
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         ) : allNotifications.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 text-center p-4">
-            <CheckCircle2 className="w-8 h-8 text-emerald-500 mb-2 opacity-80" />
-            <span className="text-xs font-bold text-brand-secondary">No Active Maintenance</span>
-            <p className="text-[11px] text-brand-muted mt-1">
-              No maintenance work is currently in progress on the monitored corridors.
-            </p>
+          <div className="flex flex-col items-center justify-center h-52 text-center p-4 gap-3">
+            <div className="w-12 h-12 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center">
+              <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+            </div>
+            <div>
+              <span className="text-xs font-bold text-brand-secondary block">No Active Maintenance</span>
+              <p className="text-[11px] text-brand-muted mt-1 leading-relaxed">
+                No maintenance work is currently in progress on the monitored corridors.
+              </p>
+            </div>
           </div>
         ) : (
           allNotifications.map((notif, idx) => {
+            const sev = severityConfig[notif.severity] ?? severityConfig.medium;
             return (
               <div
                 key={notif.id}
                 onClick={() => handleCardClick(notif)}
                 style={{ animationDelay: `${Math.min(idx * 60, 300)}ms` }}
-                className="smooth-card animate-fade-in-up p-4 rounded-2xl bg-brand-surface border border-brand-border shadow-xs hover:border-brand-primary/40 cursor-pointer space-y-3"
+                className={`smooth-card animate-fade-in-up rounded-2xl border border-brand-border border-l-[3px] ${sev.border} bg-brand-surface shadow-xs hover:border-brand-primary/40 cursor-pointer overflow-hidden`}
               >
-                {/* Top Row: Category badge, Task Code, Time */}
-                <div className="flex items-center justify-between">
+                <div className="p-3.5 space-y-2.5">
+
+                  {/* Row 1: Severity badge · task code · timestamp */}
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`inline-flex items-center gap-1.5 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full shadow-2xs ${
-                      notif.severity === "critical"
-                        ? "bg-red-600 text-white"
-                        : notif.severity === "high"
-                        ? "bg-amber-500 text-white"
-                        : "bg-brand-primary text-white"
-                    }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full bg-white ${notif.severity === "critical" ? "animate-beacon-pulse" : ""}`}></span>
-                      <span>{notif.severity.toUpperCase()}</span>
+                    <span className={`inline-flex items-center gap-1.5 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full tracking-wide leading-none ${sev.badge}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full bg-white/80 ${notif.severity === "critical" ? "animate-beacon-pulse" : ""}`} />
+                      {notif.severity.toUpperCase()}
                     </span>
 
                     {notif.taskCode && (
-                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-brand-secondary text-white">
+                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-brand-secondary text-white tracking-wider leading-none">
                         {notif.taskCode}
                       </span>
                     )}
 
-                    <span className="text-[10px] font-medium text-brand-muted">
+                    <span className="text-[10px] text-brand-muted font-medium ml-auto">
                       {notif.timestamp}
                     </span>
                   </div>
-                </div>
 
-                {/* Title and Subtitle */}
-                <div>
-                  <h4 className="text-xs sm:text-sm font-bold text-brand-secondary">
-                    {notif.title}
-                  </h4>
-                  <p className="text-[11px] text-brand-muted mt-0.5 font-medium leading-snug">
-                    {notif.description}
-                  </p>
-                </div>
+                  {/* Row 2: Icon chip + Title + Description */}
+                  <div className="flex items-start gap-2">
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-bold text-brand-secondary leading-snug">
+                        {notif.title}
+                      </h4>
+                      <p className="text-[10px] text-brand-muted mt-0.5 font-medium leading-snug">
+                        {notif.description}
+                      </p>
+                    </div>
+                  </div>
 
-                {/* Slots & Quick Details Box */}
-                <div className="p-3 rounded-xl bg-brand-tertiary/70 border border-brand-border text-xs space-y-2.5">
-                  {/* Current Slot Info */}
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-[9px] font-bold uppercase text-brand-muted block mb-0.5 tracking-wider">CURRENT SLOT</span>
-                      <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-brand-secondary">
-                        <Clock className="w-3.5 h-3.5 text-brand-primary shrink-0" />
-                        <span>{notif.currentSlot || "Pending Allocation"}</span>
+                  {/* Row 3: Block Slot + Duration + Progress + Status box */}
+                  <div className="rounded-xl bg-brand-tertiary/60 border border-brand-border/80 overflow-hidden">
+                    <div className="px-3 py-2.5 space-y-2">
+
+                      {/* Slot + duration */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="text-[8px] font-bold uppercase tracking-widest text-brand-muted/70 block mb-0.5">
+                            Block Window
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <Clock className="w-3 h-3 text-brand-primary shrink-0" />
+                            <span className={`text-[11px] font-bold leading-none ${
+                              notif.currentSlot
+                                ? "text-brand-secondary font-mono"
+                                : "text-brand-muted italic"
+                            }`}>
+                              {notif.currentSlot || "Pending Allocation"}
+                            </span>
+                          </div>
+                          {notif.currentSlotDate && (
+                            <span className="text-[9px] text-brand-muted mt-0.5 block">
+                              {notif.currentSlotDate}
+                            </span>
+                          )}
+                        </div>
+
+                        {notif.durationMinutes && (
+                          <div className="text-right shrink-0">
+                            <span className="text-[8px] font-bold uppercase tracking-widest text-brand-muted/70 block mb-0.5">
+                              DURATION
+                            </span>
+                            <span className="text-[11px] font-mono font-bold text-brand-secondary bg-brand-surface px-2 py-0.5 rounded-lg border border-brand-border shadow-xs inline-block">
+                              {notif.durationMinutes}m
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Status + View Order */}
+                      <div className="flex items-center justify-between pt-1.5 border-t border-brand-border/50">
+                        <span className="inline-flex items-center gap-1.5 text-[10px] font-bold">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                          </span>
+                          <span className="text-emerald-600 font-bold">{notif.status || "ACTIVE"}</span>
+                        </span>
+
+                        <Link
+                          href="/maintenance"
+                          className="text-brand-secondary hover:text-brand-primary font-bold text-[10px] inline-flex items-center gap-1 transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          View Order
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </Link>
                       </div>
                     </div>
-                    {notif.durationMinutes ? (
-                      <span className="text-[10px] font-mono font-bold text-brand-secondary bg-brand-surface px-2 py-0.5 rounded-md border border-brand-border shadow-2xs">
-                        {notif.durationMinutes} mins
+                  </div>
+
+                  {/* Row 4: Location + Locate CTA */}
+                  <div className="flex items-center justify-between pt-0.5">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <MapPin className="w-3 h-3 text-brand-primary shrink-0" />
+                      <span className="text-[11px] font-semibold text-brand-secondary truncate max-w-[140px]">
+                        {notif.corridorOrStation}
                       </span>
-                    ) : null}
-                  </div>
-
-                  {/* Status & View Order */}
-                  <div className="flex items-center justify-between pt-1 border-t border-brand-border/60 text-xs">
-                    <span className="inline-flex items-center gap-1.5 text-brand-primary font-bold text-[11px]">
-                      <span className="w-1.5 h-1.5 rounded-full bg-brand-primary"></span>
-                      {notif.status || "PENDING"}
-                    </span>
-
-                    <Link
-                      href="/maintenance"
-                      className="text-brand-secondary hover:text-brand-primary font-bold text-[11px] inline-flex items-center gap-1"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <span>View Order</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </Link>
-                  </div>
-                </div>
-
-                {/* Quick Action Shortcuts Bar */}
-                <div className="flex items-center justify-between pt-2 border-t border-brand-border/60 text-xs flex-wrap gap-1.5">
-                  <div className="flex items-center gap-1.5 text-brand-secondary font-bold text-[11px]">
-                    <MapPin className="w-3.5 h-3.5 text-brand-primary shrink-0" />
-                    <span className="truncate max-w-[130px]">{notif.corridorOrStation}</span>
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
+                    </div>
 
                     <button
                       type="button"
@@ -341,7 +438,7 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
                         e.stopPropagation();
                         handleCardClick(notif);
                       }}
-                      className="text-[11px] font-bold text-brand-primary hover:underline ml-1 cursor-pointer"
+                      className="smooth-btn text-[10px] font-bold text-brand-primary hover:bg-brand-primary/5 px-2 py-0.5 rounded-lg border border-brand-primary/25 hover:border-brand-primary/50 transition-all cursor-pointer shrink-0"
                     >
                       Locate →
                     </button>
@@ -352,6 +449,16 @@ export function NotificationPanel({ onSelectCorridor }: NotificationPanelProps) 
           })
         )}
       </div>
+
+      {/* ── Footer: activity bar ──────────────────────────────── */}
+      {!isLoading && allNotifications.length > 0 && (
+        <div className="px-4 py-2.5 border-t border-brand-border bg-brand-surface/60 shrink-0 flex items-center gap-2">
+          <Activity className="w-3 h-3 text-brand-primary animate-pulse" />
+          <span className="text-[10px] text-brand-muted font-medium">
+            Monitoring {allNotifications.length} active work order{allNotifications.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+      )}
     </aside>
   );
 }
