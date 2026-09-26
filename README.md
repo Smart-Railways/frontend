@@ -1,4 +1,4 @@
-# 🚆 Sanket — Smart Indian Railways Traffic & Maintenance Planning System
+# Sanket — Smart Indian Railways Traffic & Maintenance Planning System
 
 > **Next-Generation Intelligent Corridor Monitoring, Multi-Department Asset Management & Automated Maintenance Block Planning System.**  
 > *Developed for Smart India Hackathon (SIH).*
@@ -14,7 +14,7 @@
 
 ---
 
-## 📖 Overview
+## Overview
 
 **Sanket** is a mission-critical operations cockpit engineered for Indian Railways section controllers, station masters, and maintenance engineers. Operating railway networks requires coordinating fast-moving high-priority trains with vital civil, electrical, and signaling maintenance tasks.
 
@@ -22,14 +22,14 @@ Sanket bridges real-time timetable operations, infrastructure condition monitori
 
 ---
 
-## ✨ Core Modules & Features
+## Core Modules & Features
 
-### 1. 🗺️ Corridor GIS & Real-Time Railway Map
+### 1. Corridor GIS & Real-Time Railway Map
 - **Interactive Geospatial View**: Powered by Leaflet & React-Leaflet with optimized CartoDB Dark Matter / Mapbox tile layers.
 - **Corridor & Section Selector**: Switch between railway divisions, sections, and routes dynamically.
 - **Visual Corridor Occupancy**: Real-time rendering of train positions, scheduled corridors, active block windows, and track status.
 
-### 2. 🚆 Train Operations & Traffic Management (`/trains`)
+### 2. Train Operations & Traffic Management (`/trains`)
 - **Multi-Category Fleet Support**: Priority-aware scheduling and movement tracking for:
   - **Vande Bharat** (Priority 10)
   - **Rajdhani Express** (Priority 10)
@@ -40,7 +40,7 @@ Sanket bridges real-time timetable operations, infrastructure condition monitori
 - **Live Movement Tracking**: Paginated, corridor- and date-filtered live train movements with actual/estimated passage times and delay status.
 - **Resilient Live Search**: Case- and punctuation-insensitive matching across train number/name, section, service date, delay, status, and timetable times.
 
-### 3. 🏗️ Infrastructure Asset Management (`/assets`)
+### 3. Infrastructure Asset Management (`/assets`)
 - **Multi-Department Categorization**:
   - **Engineering**: Tracks, rails, sleepers, ballast, civil structures, bridges.
   - **Signal & Telecom (S&T)**: Interlocking, points, signal units, communication nodes.
@@ -48,7 +48,7 @@ Sanket bridges real-time timetable operations, infrastructure condition monitori
 - **Risk Assessment & Condition Scoring**: Risk levels ranging from Low (1) to Extreme (5) with status indicators.
 - **Full Asset Lifecycle CRUD**: Create, edit, inspect, and retire assets with optimistic cache updates.
 
-### 4. 🛠️ Intelligent Maintenance & Block Planning (`/maintenance`)
+### 4. Intelligent Maintenance & Block Planning (`/maintenance`)
 - **Automated Recommendation Engine**: Dedicated AI recommendations banner highlighting optimal, conflict-free block windows.
 - **Task Prioritization**: Support for `CRITICAL`, `HIGH`, `MEDIUM`, and `LOW` urgency tasks with weighted scheduling scores.
 - **End-to-End Plan Lifecycle**:
@@ -58,6 +58,10 @@ Sanket bridges real-time timetable operations, infrastructure condition monitori
        └──> [CANCELLED] └──> [REJECTED]   └──> [CANCELLED]
   ```
 - **Corridor Conflict Prevention**: Automatically cross-references planned maintenance against scheduled trains and block windows to prevent traffic bottlenecks.
+
+### 5. Audit History (`/audit-history`)
+- **Task Event Timeline**: Shows the recorded start, completion, cancellation, and checklist events for a selected maintenance task.
+- **IST Display**: Formats event timestamps for `Asia/Kolkata` operations.
 
 #### Shared maintenance blocks
 
@@ -73,7 +77,7 @@ Shared tasks reuse their normal `block_window` time display, cannot be edited in
 
 ---
 
-## 🛠️ Technology Stack
+## Technology Stack
 
 | Layer | Technologies |
 | :--- | :--- |
@@ -87,7 +91,7 @@ Shared tasks reuse their normal `block_window` time display, cannot be edited in
 
 ---
 
-## 📁 Project Directory Structure
+## Project Directory Structure
 
 ```text
 frontend/
@@ -103,6 +107,7 @@ frontend/
 │   │   └── trains.ts           # Train fleet actions
 │   ├── app/                    # Next.js App Router
 │   │   ├── assets/             # Asset management page & skeletons
+│   │   ├── audit-history/      # Per-task maintenance event timeline
 │   │   ├── maintenance/        # Maintenance planning & approval cockpit
 │   │   ├── maintenance-batches/[batchId]/ # Shared-block batch detail route
 │   │   ├── maintenance-tasks/[taskId]/    # Maintenance task detail route
@@ -129,7 +134,7 @@ frontend/
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -193,7 +198,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser to view the 
 
 ---
 
-## 📜 Available Scripts
+## Available Scripts
 
 In the project directory, you can run:
 
@@ -206,17 +211,17 @@ In the project directory, you can run:
 
 ---
 
-## 🔌 API & Enums Reference
+## API & Enums Reference
 
 The frontend tightly pairs with the Django REST Framework backend models. For a complete dictionary of database choices, weights, status lifecycles, and sample API payloads, refer to:
 
-👉 **[`ENUMS.md`](./ENUMS.md)**
+See **[`ENUMS.md`](./ENUMS.md)** for the complete reference.
 
 Key Enums Covered:
 - **Asset Department**: `ENGINEERING`, `SNT`, `TRACTION`
 - **Maintenance Priority**: `CRITICAL` (Weight 40.0), `HIGH` (30.0), `MEDIUM` (20.0), `LOW` (10.0)
-- **Task Statuses**: `PENDING`, `SCHEDULED`, `COMPLETED`, `CANCELLED`, `DELAYED`
-- **Plan Lifecycle**: `DRAFT` ➔ `PENDING_APPROVAL` ➔ `APPROVED` ➔ `IN_PROGRESS` ➔ `COMPLETED`
+- **Task Statuses**: `PENDING`, `SCHEDULED`, `ACTIVE`, `COMPLETED`, `CANCELLED`, `DELAYED`
+- **Plan Lifecycle**: `DRAFT` → `PENDING_APPROVAL` → `APPROVED` → `IN_PROGRESS` → `COMPLETED`
 - **Train Categories**: `VB`, `SHATABDI`, `RAJDHANI`, `EXPRESS`, `PASSENGER`, `FREIGHT`
 - **Running Days Pattern**: 7-character string (Monday–Sunday, e.g. `1111111`)
 
@@ -257,7 +262,7 @@ Create request uses the same payload with `"apply": true`. The frontend permits 
 
 ---
 
-## 🛡️ Best Practices & Architecture Highlights
+## Best Practices & Architecture Highlights
 
 - **Hydration Safety**: Map and route selectors use client hydration skeletons to prevent SSR mismatches with Leaflet browser APIs.
 - **Optimistic UI Updates**: TanStack Query mutations invalidate and optimistically update asset and task caches immediately upon user actions.
@@ -266,7 +271,7 @@ Create request uses the same payload with `"apply": true`. The frontend permits 
 
 ---
 
-## 👥 Authors & Acknowledgements
+## Authors & Acknowledgements
 
 - Built for the **Smart India Hackathon (SIH)**.
 - Designed and engineered for Indian Railways operational excellence.

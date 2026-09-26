@@ -79,9 +79,9 @@ function DashboardPageSkeleton() {
 }
 
 export default function Home() {
-  // Default premier corridor: New Delhi (NDLS) to Mumbai Central (MMCT)
-  const [sourceId, setSourceId] = useState<string>("ndls");
-  const [targetId, setTargetId] = useState<string>("mmct");
+  // No selected endpoints shows the complete Pan-India network by default.
+  const [sourceId, setSourceId] = useState<string>("");
+  const [targetId, setTargetId] = useState<string>("");
   const [activeNavTab, setActiveNavTab] = useState<string>("dashboard");
   // Show skeleton during client-side hydration — map is expensive to render
   const [mounted, setMounted] = useState<boolean>(false);

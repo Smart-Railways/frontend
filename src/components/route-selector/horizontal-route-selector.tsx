@@ -62,6 +62,7 @@ export function HorizontalRouteSelector({
 }: HorizontalRouteSelectorProps) {
   const [isSwapping, setIsSwapping] = useState(false);
   const [selectedGlobalCorridorId, setSelectedGlobalCorridorId] = useState<string>(() => {
+    if (!sourceId && !targetId) return "all";
     if (sourceId === "ndls" && targetId === "mmct") return "ndls-mmct";
     if (sourceId === "ndls" && targetId === "hwh") return "ndls-hwh";
     return "custom";
