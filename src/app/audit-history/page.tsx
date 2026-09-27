@@ -69,8 +69,8 @@ export default function AuditHistoryPage() {
                 <label htmlFor="audit-task" className="mb-1.5 block text-xs font-medium text-brand-muted">Maintenance task</label>
                 <Select value={selectedTaskId} onValueChange={(value) => setSelectedTaskId(value ?? "")} disabled={tasksQuery.isLoading || tasksQuery.isError}>
                   <SelectTrigger id="audit-task" className="h-10 w-full rounded-md border-brand-border bg-white text-sm text-brand-secondary shadow-none focus:ring-2 focus:ring-brand-primary/15">
-                    <SelectValue placeholder={tasksQuery.isLoading ? "Loading tasks…" : "Choose a task to view its audit history"}>
-                      {() => selectedTask ? `${getTaskName(selectedTask)} · ${selectedTask.task_code}` : undefined}
+                    <SelectValue>
+                      {() => selectedTask ? `${getTaskName(selectedTask)} · ${selectedTask.task_code}` : tasksQuery.isLoading ? "Loading tasks…" : "Select Maintence"}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent className="z-[100] max-h-72 rounded-md border-brand-border bg-brand-surface p-1 text-brand-secondary shadow-lg">
