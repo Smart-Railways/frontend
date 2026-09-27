@@ -2509,7 +2509,6 @@ export default function MaintenancePage() {
                                     title="Schedule a block window before combining maintenance."
                                     className="inline-flex items-center gap-1 rounded-lg border border-brand-border bg-brand-surface px-2.5 py-1 text-[11px] font-bold text-brand-muted opacity-70 cursor-not-allowed"
                                   >
-                                    <Sparkles className="w-3 h-3" />
                                     <span>Combine blocks</span>
                                   </button>
                                 </div>
